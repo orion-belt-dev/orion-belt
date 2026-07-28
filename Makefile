@@ -1,4 +1,5 @@
 .PHONY: build build-server build-client build-agent build-ui test clean install \
+        test-coverage coverage-check coverage-baseline \
         docker-build docker-build-server docker-build-agent docker-build-client \
         docker-push docker-up docker-down docker-logs docker-agent-up docker-agent-down \
         cve packages repos packaging-key sign-artifacts lab-compose-up lab-compose-down lab-bootstrap-admin \
@@ -99,6 +100,14 @@ run-server: build-server
 test-coverage:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out
+
+# Fail if any package's coverage dropped below coverage-baseline.txt
+coverage-check:
+	bash scripts/coverage-check.sh
+
+# Re-record coverage-baseline.txt after adding tests
+coverage-baseline:
+	bash scripts/coverage-check.sh --update
 
 # Format code
 fmt:

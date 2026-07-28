@@ -24,6 +24,20 @@ jobs:
         env:
           ORION_CVE_E2E: "1"
 
+  coverage:
+    name: Coverage ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Coverage is being raised toward ~80% one package per PR; this only
+      # fails when a package drops below what it already achieved.
+      - name: Check coverage against baseline
+        run: make coverage-check
+
   cve:
     name: Zero CVE gate
     runs-on: ubuntu-latest

@@ -20,7 +20,10 @@ func TestShellQuoteNeutralizesShellMetacharacters(t *testing.T) {
 	}
 	for _, path := range dangerous {
 		quoted := shellQuote(path)
-		cmd := exec.Command("/bin/sh", "-c", "echo -n "+quoted)
+		// printf %s rather than `echo -n`: the -n flag is not POSIX, and the
+		// /bin/sh builtin echo on macOS (bash in POSIX mode) prints it
+		// literally instead of suppressing the trailing newline.
+		cmd := exec.Command("/bin/sh", "-c", "printf %s "+quoted)
 		out, err := cmd.Output()
 		if err != nil {
 			t.Fatalf("shellQuote(%q) produced invalid shell syntax: %v", path, err)
