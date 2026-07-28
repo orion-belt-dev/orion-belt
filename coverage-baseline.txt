@@ -1,0 +1,24 @@
+# Per-package statement coverage baseline for the coverage ratchet.
+# Regenerate with: scripts/coverage-check.sh --update
+# A package may never drop below its recorded value; raising it is the goal (~80%).
+pkg/agent	3.8
+pkg/api	8.0
+pkg/auth	24.4
+pkg/authz	95.6
+pkg/ca	76.2
+pkg/client	3.3
+pkg/cliflags	10.0
+pkg/common	34.1
+pkg/cryptutil	86.0
+pkg/database	0.0
+pkg/metrics	100.0
+pkg/notify	57.9
+pkg/plugin	28.5
+pkg/recording	67.9
+pkg/server	8.3
+pkg/version	100.0
+plugins/audit-logger	0.0
+plugins/chatops-access-request	21.4
+plugins/email-notifications	0.0
+plugins/notification	0.0
+plugins/webhook-notifications	0.0

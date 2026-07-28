@@ -95,6 +95,27 @@ go test ./pkg/recording/ -bench=. -benchtime=200ms
 
 Target is higher package coverage over time; new packages should bring tests. Lab depth: [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md). Before a release: [RELEASE_SMOKE.md](RELEASE_SMOKE.md) / `make release-smoke` ([V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md)).
 
+### Coverage ratchet
+
+We are raising unit coverage toward ~80%, one package per PR. `coverage-baseline.txt`
+records what each package currently achieves, and CI fails if any package drops
+below its recorded value — it does **not** require 80% everywhere today.
+
+```bash
+make coverage-check         # what CI runs: fail on any per-package regression
+make coverage-baseline      # re-record after adding tests, then commit the diff
+```
+
+Raising one package is a good first contribution — pick one with a low number in
+`coverage-baseline.txt` (`pkg/database`, `pkg/agent`, and `pkg/client` are the
+largest gaps) and work through it. Two things we ask for:
+
+* **Cover branches, not lines.** Exercise error paths, boundaries, and the
+  behaviour a comment claims — not just the happy path taken for the percentage.
+* **Don't pad.** Error returns that are unreachable by construction (for example
+  `aes.NewCipher` on an already-validated 32-byte key) are fine to leave
+  uncovered. A package sitting below 100% for that reason is expected.
+
 ### Packages & labs
 
 ```bash
