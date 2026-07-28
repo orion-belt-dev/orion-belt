@@ -66,6 +66,24 @@ lab/credentials/
 # Frontend
 web/ui/node_modules/
 web/ui/dist/
-.tools/
+
+# SDK build artifacts (sdk/ is polyglot; bin/ and dist/ above already apply)
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+# .NET
+obj/
+*.pdb
+*.user
+# Node / TypeScript
+node_modules/
+*.tsbuildinfo
 
 .tools/
