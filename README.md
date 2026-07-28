@@ -140,6 +140,8 @@ make build   # Go 1.26.5+ (see go.mod)
 | [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) | Lab path to first recorded session |
 | [SETUP.md](docs/SETUP.md) | Production / package first-run |
 | [SSH_CA.md](docs/SSH_CA.md) | Optional certificate authority |
+| [GO_SDK.md](docs/GO_SDK.md) | Reusable Go SDK for API integrations |
+| [MULTI_LANGUAGE_SDK.md](docs/MULTI_LANGUAGE_SDK.md) | Python / .NET / JS SDK plan |
 | [openssh-clients.md](docs/openssh-clients.md) | Vanilla `ssh` via the gateway |
 | [DEPLOYMENT_HARDENING.md](docs/DEPLOYMENT_HARDENING.md) | Hardening checklist |
 | [OBSERVABILITY.md](docs/OBSERVABILITY.md) | Metrics + logging |

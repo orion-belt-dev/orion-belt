@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orion-belt-sdk"
+version = "0.1.0"
+description = "Python client for the Orion Belt API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Orion Belt Maintainers" }
+]
+
+[project.urls]
+Homepage = "https://github.com/orion-belt-dev/orion-belt"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
