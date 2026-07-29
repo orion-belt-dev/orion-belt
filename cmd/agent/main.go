@@ -5,13 +5,45 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/zrougamed/orion-belt/pkg/agent"
 	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/zrougamed/orion-belt/pkg/tracing"
 	"github.com/zrougamed/orion-belt/pkg/version"
 )
+
+// tracingFlushTimeout bounds how long shutdown waits for buffered spans to
+// reach the collector, so an unreachable collector cannot hang an agent
+// restart.
+const tracingFlushTimeout = 5 * time.Second
+
+// agentServiceName derives the trace service name from the agent's configured
+// name. Every agent reporting as a single "orion-belt-agent" service would
+// make traces from a fleet indistinguishable, which defeats the point of
+// tracing the agent hop at all. An explicit tracing.service_name still wins.
+func agentServiceName(config *common.Config) string {
+	if name := strings.TrimSpace(config.Agent.Name); name != "" {
+		return "orion-belt-agent-" + name
+	}
+	return "orion-belt-agent"
+}
+
+// flushTracing drains buffered spans on shutdown. Safe to defer
+// unconditionally: when tracing is disabled the shutdown func is a no-op.
+func flushTracing(shutdown tracing.ShutdownFunc, logger *common.Logger) {
+	if shutdown == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), tracingFlushTimeout)
+	defer cancel()
+	if err := shutdown(ctx); err != nil {
+		logger.Warn("Error flushing traces: %v", err)
+	}
+}
 
 var (
 	configFile string
@@ -57,6 +89,17 @@ func runAgent(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Fatal("Failed to load config: %v", err)
 	}
+
+	// Start tracing before the agent connects, so the first session the
+	// gateway opens can already be linked. A no-op when tracing.enabled is
+	// false. The agent's service name defaults to include its configured
+	// name, since a trace is only useful if you can tell which agent it hit.
+	shutdownTracing, err := tracing.Init(context.Background(),
+		tracing.FromCommon(config.Tracing, agentServiceName(config), version.Version), logger)
+	if err != nil {
+		logger.Fatal("Failed to initialize tracing: %v", err)
+	}
+	defer flushTracing(shutdownTracing, logger)
 
 	// Create agent
 	agt, err := agent.New(config, logger)
