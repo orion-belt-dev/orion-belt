@@ -6,6 +6,26 @@ import (
 	"time"
 )
 
+// Notification event types. These are the values that appear in a user's
+// event allow-list and in an admin policy's mandatory-event map.
+const (
+	EventAccessRequestApproved = "access_request.approved"
+	EventAccessRequestRejected = "access_request.rejected"
+	EventAccessRequestExpired  = "access_request.expired"
+)
+
+// KnownEventTypes lists the event types this build renders, in stable order,
+// so the admin UI can offer a picker instead of a free-text field. Delivery is
+// not restricted to this list — an unrecognized type still renders via the
+// default branch of Render — but anything outside it has no designed copy.
+func KnownEventTypes() []string {
+	return []string{
+		EventAccessRequestApproved,
+		EventAccessRequestRejected,
+		EventAccessRequestExpired,
+	}
+}
+
 // Render builds title/body for a known notification type.
 func Render(notifType string, data map[string]string) (title, body string) {
 	machine := data["machine"]
