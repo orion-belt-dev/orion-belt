@@ -1246,6 +1246,10 @@ func (s *PostgresStore) UpsertNotificationPrefs(ctx context.Context, prefs *comm
 // GetNotificationPolicy returns the admin-set boundary for user preferences.
 // An install that has never configured one gets the permissive default, which
 // reproduces pre-policy behavior.
+//
+// The row is Normalized on read so a stale unknown channel left in the DB
+// (channel removed in a later build, manual edit) cannot seed the admin UI
+// and then fail the next save with an error that isn't visible on screen.
 func (s *PostgresStore) GetNotificationPolicy(ctx context.Context) (*common.NotificationPolicy, error) {
 	p := &common.NotificationPolicy{}
 	var channels pq.StringArray
@@ -1268,6 +1272,7 @@ func (s *PostgresStore) GetNotificationPolicy(ctx context.Context) (*common.Noti
 	if p.MandatoryEvents == nil {
 		p.MandatoryEvents = map[string][]string{}
 	}
+	p.Normalize()
 	return p, nil
 }
 
