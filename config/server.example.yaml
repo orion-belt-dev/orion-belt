@@ -65,6 +65,29 @@ recording:
   # 32-byte key (raw or base64). Leave empty to store plaintext.
   encryption_key: ""
 
+# Distributed tracing across gateway -> agent -> target, exported over OTLP.
+# Off by default; when disabled no exporter is created and the hot path costs
+# a single atomic load. Enable the matching block in agent.yaml too — both
+# sides are needed for a trace to cover the whole path. See docs/OBSERVABILITY.md.
+tracing:
+  enabled: false
+  # OTLP collector address. Leave empty to use the standard
+  # OTEL_EXPORTER_OTLP_* environment variables instead.
+  endpoint: "otel-collector:4317"
+  # grpc (default) or http
+  protocol: grpc
+  # Plaintext to the collector. Prefer false (TLS) outside a trusted network;
+  # set true only for localhost / mesh plaintext. An http:// endpoint with
+  # insecure: false is rejected at startup.
+  insecure: false
+  # Head sampling, 0.0-1.0. Unset means 1.0. Parent-based, so the gateway's
+  # decision carries to the agent and multi-hop traces stay whole.
+  sample_ratio: 1.0
+  # Defaults to orion-belt-gateway.
+  service_name: ""
+  # Extra OTLP headers, e.g. auth for a hosted collector.
+  headers: {}
+
 plugins:
   audit-logger:
     log_path: "/var/log/orion-belt/audit.log"

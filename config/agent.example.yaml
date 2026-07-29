@@ -19,3 +19,25 @@ auth:
   # empty to keep using TOFU/known_hosts as above. Populated automatically
   # by the generated install script when SSH CA is enabled at install time.
   host_ca_public_key: ""
+
+# Distributed tracing. Enable alongside the gateway's tracing block so spans
+# for this agent join the gateway's trace rather than starting their own; the
+# gateway passes trace context in the SSH channel-open, so no extra network
+# path is involved. Off by default. See docs/OBSERVABILITY.md.
+tracing:
+  enabled: false
+  # OTLP collector address. Leave empty to use the standard
+  # OTEL_EXPORTER_OTLP_* environment variables instead.
+  endpoint: "otel-collector:4317"
+  # grpc (default) or http
+  protocol: grpc
+  # Plaintext to the collector. Prefer false (TLS) outside a trusted network;
+  # set true only for localhost / mesh plaintext. An http:// endpoint with
+  # insecure: false is rejected at startup.
+  insecure: false
+  # Head sampling is normally decided by the gateway and inherited here, so
+  # this only applies to traces this agent roots itself.
+  sample_ratio: 1.0
+  # Defaults to orion-belt-agent-<agent.name>, so a fleet stays distinguishable.
+  service_name: ""
+  headers: {}

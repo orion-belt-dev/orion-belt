@@ -15,7 +15,34 @@ type Config struct {
 	Agent     AgentConfig                       `yaml:"agent,omitempty"`
 	Recording RecordingConfig                   `yaml:"recording,omitempty"`
 	SSHCA     SSHCAConfig                       `yaml:"ssh_ca,omitempty"`
+	Tracing   TracingConfig                     `yaml:"tracing,omitempty"`
 	Plugins   map[string]map[string]interface{} `yaml:"plugins"`
+}
+
+// TracingConfig configures optional OpenTelemetry distributed tracing across
+// the gateway -> agent -> target path, exported over OTLP. Shared by the
+// gateway and the agent: both need to be enabled for a trace to span the whole
+// path, and either can be enabled alone.
+//
+// Disabled unless Enabled is true, in which case no exporter is created and no
+// tracer is installed. See pkg/tracing.
+type TracingConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Endpoint is the OTLP collector address. Empty falls back to the
+	// standard OTEL_EXPORTER_OTLP_* environment variables.
+	Endpoint string `yaml:"endpoint,omitempty"`
+	// Protocol is the OTLP transport: grpc (default) or http.
+	Protocol string `yaml:"protocol,omitempty"`
+	// Insecure disables TLS to the collector (localhost / trusted network).
+	Insecure bool `yaml:"insecure,omitempty"`
+	// ServiceName overrides the default per-binary service name.
+	ServiceName string `yaml:"service_name,omitempty"`
+	// SampleRatio is the head-sampling probability from 0.0 to 1.0. Unset
+	// means 1.0. Sampling is parent-based, so the gateway's decision carries
+	// to the agent and multi-hop traces stay whole.
+	SampleRatio float64 `yaml:"sample_ratio,omitempty"`
+	// Headers are extra OTLP headers, e.g. auth for a hosted collector.
+	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
 // ServerConfig contains server-specific configuration
