@@ -145,6 +145,7 @@ make build   # Go 1.26.5+ (see go.mod)
 | [openssh-clients.md](docs/openssh-clients.md) | Vanilla `ssh` via the gateway |
 | [DEPLOYMENT_HARDENING.md](docs/DEPLOYMENT_HARDENING.md) | Hardening checklist |
 | [OBSERVABILITY.md](docs/OBSERVABILITY.md) | Metrics + logging |
+| [BENCHMARKS.md](docs/BENCHMARKS.md) | Session/throughput benchmarks + perf gate |
 | [OpenAPI](docs/openapi/openapi.yaml) | HTTP/WS API |
 | [ROADMAP.md](docs/ROADMAP.md) | What’s next (OIDC, HA, …) |
 

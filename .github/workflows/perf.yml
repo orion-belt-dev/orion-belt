@@ -1,0 +1,91 @@
+name: Performance benchmarks
+
+# Benchmarks run on a schedule rather than on every PR. GitHub's hosted runners
+# are shared and noisy, so per-PR timing gates fail on unrelated changes; a
+# nightly run against master gives a clean signal and a history to look back
+# through. Use workflow_dispatch to check a branch by hand before merging
+# something performance-sensitive.
+on:
+  schedule:
+    # 03:17 UTC daily — off the hour, where scheduled-job contention is worst.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: 'Re-record perf-baseline.txt from this run instead of gating against it'
+        type: boolean
+        default: false
+      benchtime:
+        description: 'Iterations per benchmark (Go -benchtime)'
+        type: string
+        default: '1000x'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Gateway benchmarks
+    runs-on: ubuntu-latest
+    # The suite is a few minutes; cap it so a hung benchmark cannot burn an
+    # hour of runner time every night.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run benchmarks and check for regressions
+        id: perf
+        env:
+          PERF_BENCHTIME: ${{ inputs.benchtime || '1000x' }}
+          PERF_RAW_OUTPUT: bench-raw.txt
+        run: |
+          if [ "${{ inputs.update_baseline }}" = "true" ]; then
+            bash scripts/perf-check.sh --update
+          else
+            bash scripts/perf-check.sh
+          fi
+
+      # Results tracked over time: every run's raw numbers are retained as an
+      # artifact, and the committed baseline's git history is the long-term
+      # record of where performance has moved.
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_number }}
+          path: |
+            bench-raw.txt
+            perf-baseline.txt
+          retention-days: 90
+
+      - name: Publish results to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Gateway benchmark results"
+            echo
+            echo "Commit \`${GITHUB_SHA::8}\` · benchtime \`${{ inputs.benchtime || '1000x' }}\`"
+            echo
+            echo '```'
+            grep '^Benchmark' bench-raw.txt || echo '(no benchmark output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # When run with update_baseline, the new baseline has to be committed by
+      # hand: this workflow deliberately holds no write permission, so a perf
+      # regression can never quietly re-baseline itself away.
+      - name: Remind about the updated baseline
+        if: inputs.update_baseline == true
+        run: |
+          {
+            echo
+            echo "### Baseline updated"
+            echo
+            echo "Download the \`benchmark-results-${{ github.run_number }}\` artifact and commit"
+            echo "its \`perf-baseline.txt\`, noting in the commit message why the numbers moved."
+          } >> "$GITHUB_STEP_SUMMARY"

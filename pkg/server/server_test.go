@@ -160,12 +160,20 @@ func (f *fakeStore) RevokeSSHCertificate(_ context.Context, serial, revokedBy, r
 	return nil
 }
 
-func testServer(t *testing.T, store *fakeStore) (*Server, *ca.Authority) {
-	t.Helper()
-	logger := common.NewLogger(common.INFO)
+// testServer builds a Server wired to the fake store. It takes testing.TB so
+// the benchmarks in bench_test.go can share the harness with the tests.
+func testServer(tb testing.TB, store *fakeStore) (*Server, *ca.Authority) {
+	tb.Helper()
+	return testServerWithLogger(tb, store, common.NewLogger(common.INFO))
+}
+
+// testServerWithLogger is testServer with the log destination chosen by the
+// caller — the benchmarks discard log output to keep their stdout parseable.
+func testServerWithLogger(tb testing.TB, store *fakeStore, logger *common.Logger) (*Server, *ca.Authority) {
+	tb.Helper()
 	authority, err := ca.New(common.SSHCAConfig{Enabled: true, MasterKey: "0123456789abcdef0123456789abcdef"}, store, logger)
 	if err != nil {
-		t.Fatalf("ca.New: %v", err)
+		tb.Fatalf("ca.New: %v", err)
 	}
 	return &Server{
 		store:         store,
@@ -176,19 +184,19 @@ func testServer(t *testing.T, store *fakeStore) (*Server, *ca.Authority) {
 	}, authority
 }
 
-func genKey(t *testing.T) (ssh.Signer, ssh.PublicKey) {
-	t.Helper()
+func genKey(tb testing.TB) (ssh.Signer, ssh.PublicKey) {
+	tb.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		t.Fatalf("generate key: %v", err)
+		tb.Fatalf("generate key: %v", err)
 	}
 	signer, err := ssh.NewSignerFromKey(priv)
 	if err != nil {
-		t.Fatalf("wrap signer: %v", err)
+		tb.Fatalf("wrap signer: %v", err)
 	}
 	sshPub, err := ssh.NewPublicKey(pub)
 	if err != nil {
-		t.Fatalf("wrap pubkey: %v", err)
+		tb.Fatalf("wrap pubkey: %v", err)
 	}
 	return signer, sshPub
 }
@@ -263,11 +271,11 @@ func dialWithSigner(t *testing.T, srv *Server, sshUser string, signer ssh.Signer
 	}
 }
 
-func mustCertSigner(t *testing.T, cert *ssh.Certificate, key ssh.Signer) ssh.Signer {
-	t.Helper()
+func mustCertSigner(tb testing.TB, cert *ssh.Certificate, key ssh.Signer) ssh.Signer {
+	tb.Helper()
 	signer, err := ssh.NewCertSigner(cert, key)
 	if err != nil {
-		t.Fatalf("NewCertSigner: %v", err)
+		tb.Fatalf("NewCertSigner: %v", err)
 	}
 	return signer
 }

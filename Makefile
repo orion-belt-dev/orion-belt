@@ -1,5 +1,6 @@
 .PHONY: build build-server build-client build-agent build-ui test clean install \
         test-coverage coverage-check coverage-baseline \
+        bench perf-check perf-baseline \
         docker-build docker-build-server docker-build-agent docker-build-client \
         docker-push docker-up docker-down docker-logs docker-agent-up docker-agent-down \
         cve packages repos packaging-key sign-artifacts lab-compose-up lab-compose-down lab-bootstrap-admin \
@@ -108,6 +109,21 @@ coverage-check:
 # Re-record coverage-baseline.txt after adding tests
 coverage-baseline:
 	bash scripts/coverage-check.sh --update
+
+# Run the gateway performance benchmarks once and print the results.
+# For a quick local look; the gate below is what CI runs. See docs/BENCHMARKS.md.
+bench:
+	$(GO) test ./pkg/... -run '^$$' -bench . -benchmem -benchtime=1000x
+
+# Fail if a benchmark regressed beyond tolerance vs perf-baseline.txt
+perf-check:
+	bash scripts/perf-check.sh
+
+# Re-record perf-baseline.txt. Baselines are machine-specific: the committed
+# one comes from the CI runner, so prefer the "Performance benchmarks" workflow
+# with update_baseline=true over running this locally.
+perf-baseline:
+	bash scripts/perf-check.sh --update
 
 # Format code
 fmt:
