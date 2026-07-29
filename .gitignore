@@ -13,6 +13,9 @@ bin/
 *.out
 coverage.out
 
+# Raw benchmark output (scripts/perf-check.sh); perf-baseline.txt IS tracked
+bench-raw.txt
+
 # Go workspace file
 go.work
 

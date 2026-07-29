@@ -23,6 +23,11 @@ jobs:
         run: go test ./pkg/... ./e2e/...
         env:
           ORION_CVE_E2E: "1"
+      # One iteration of every benchmark: too few to time anything, enough to
+      # catch a benchmark that no longer builds or panics. The timing gate runs
+      # nightly in perf.yml, where the runner noise matters less.
+      - name: Benchmark smoke test
+        run: go test ./pkg/... -run '^$' -bench . -benchtime=1x
 
   coverage:
     name: Coverage ratchet

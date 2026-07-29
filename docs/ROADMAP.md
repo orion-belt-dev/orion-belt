@@ -295,7 +295,7 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 - [ ] Integration test suites
 - [x] End-to-end CVE gate (`e2e/cve`, `scripts/cve-check.sh`)
 - [x] Multi-distro e2e lab (compose + QEMU) + [E2E test plan](E2E_TEST_PLAN.md)
-- [ ] Performance benchmarks
+- [x] Performance benchmarks (`pkg/server/bench_test.go`, nightly gate) — [BENCHMARKS.md](BENCHMARKS.md)
 - [x] Architecture Decision Records (ADRs) — started (`docs/adr/`)
 
 **Refactoring**

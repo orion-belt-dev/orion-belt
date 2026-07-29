@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,8 +29,16 @@ type Logger struct {
 
 // NewLogger creates a JSON logger writing to stdout.
 func NewLogger(level LogLevel) *Logger {
+	return NewLoggerTo(level, os.Stdout)
+}
+
+// NewLoggerTo creates a JSON logger writing to w. Useful when log output must
+// not land on stdout — benchmarks discard it so log lines neither pollute
+// machine-readable results nor charge stdout I/O to the measurement, while the
+// formatting cost stays in it.
+func NewLoggerTo(level LogLevel, w io.Writer) *Logger {
 	opts := &slog.HandlerOptions{Level: slogLevel(level)}
-	h := slog.NewJSONHandler(os.Stdout, opts)
+	h := slog.NewJSONHandler(w, opts)
 	return &Logger{
 		level:  level,
 		logger: slog.New(h),

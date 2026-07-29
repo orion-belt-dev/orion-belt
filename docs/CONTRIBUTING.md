@@ -116,6 +116,22 @@ largest gaps) and work through it. Two things we ask for:
   `aes.NewCipher` on an already-validated 32-byte key) are fine to leave
   uncovered. A package sitting below 100% for that reason is expected.
 
+### Performance benchmarks
+
+Session establishment and gateway throughput are benchmarked, gated against
+`perf-baseline.txt`, and run nightly. Every PR runs one iteration of each
+benchmark to catch breakage, but timing is only gated nightly — a busy shared
+runner can't fail your PR.
+
+```bash
+make bench          # run once, print results
+make perf-check     # what the nightly job runs: fail on regression
+```
+
+Worth running locally before merging anything on the auth or proxy path. Full
+details — what's measured, the tolerances, how to re-record the baseline — in
+[BENCHMARKS.md](BENCHMARKS.md).
+
 ### Packages & labs
 
 ```bash
