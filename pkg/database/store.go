@@ -68,6 +68,10 @@ type Store interface {
 	GetNotificationPrefs(ctx context.Context, userID string) (*common.NotificationPrefs, error)
 	UpsertNotificationPrefs(ctx context.Context, prefs *common.NotificationPrefs) error
 
+	// Admin-set boundary that user preferences are resolved within (singleton).
+	GetNotificationPolicy(ctx context.Context) (*common.NotificationPolicy, error)
+	UpsertNotificationPolicy(ctx context.Context, policy *common.NotificationPolicy) error
+
 	// Access request hygiene
 	ExpireStalePendingAccessRequests(ctx context.Context, olderThan time.Duration) (int, error)
 

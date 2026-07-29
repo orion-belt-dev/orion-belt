@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { PluginConfigField, PluginInfo } from "../lib/types";
 import { Badge } from "../components/Badge";
+import { NotificationPolicyCard } from "../components/NotificationPolicyCard";
 import { useToast } from "../components/Toast";
 
 function statusOf(p: PluginInfo): { label: string; kind: "ok" | "warn" | "danger" } {
@@ -370,6 +371,8 @@ export function PluginsPage() {
           <div className="empty">No plugins registered on this server.</div>
         </div>
       ) : null}
+
+      <NotificationPolicyCard />
 
       {plugins.map((p) => (
         <PluginCard key={p.name} plugin={p} />

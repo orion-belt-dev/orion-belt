@@ -207,6 +207,14 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			event_types TEXT[] NOT NULL DEFAULT '{}',
 			updated_at TIMESTAMP NOT NULL
 		)`,
+		// Admin-set boundary for user notification preferences. Singleton:
+		// the CHECK pins it to a single row so there is exactly one policy.
+		`CREATE TABLE IF NOT EXISTS notification_policy (
+			id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+			allowed_channels TEXT[] NOT NULL DEFAULT '{}',
+			mandatory_events JSONB NOT NULL DEFAULT '{}',
+			updated_at TIMESTAMP NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS notifications (
 			id VARCHAR(36) PRIMARY KEY,
 			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1232,6 +1240,59 @@ func (s *PostgresStore) UpsertNotificationPrefs(ctx context.Context, prefs *comm
 		  event_types=EXCLUDED.event_types,
 		  updated_at=NOW()`,
 		prefs.UserID, prefs.InAppEnabled, prefs.EmailEnabled, pq.Array(prefs.EventTypes))
+	return err
+}
+
+// GetNotificationPolicy returns the admin-set boundary for user preferences.
+// An install that has never configured one gets the permissive default, which
+// reproduces pre-policy behavior.
+//
+// The row is Normalized on read so a stale unknown channel left in the DB
+// (channel removed in a later build, manual edit) cannot seed the admin UI
+// and then fail the next save with an error that isn't visible on screen.
+func (s *PostgresStore) GetNotificationPolicy(ctx context.Context) (*common.NotificationPolicy, error) {
+	p := &common.NotificationPolicy{}
+	var channels pq.StringArray
+	var mandatory []byte
+	err := s.db.QueryRowContext(ctx, `
+		SELECT allowed_channels, mandatory_events, updated_at FROM notification_policy WHERE id=1`).
+		Scan(&channels, &mandatory, &p.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return common.DefaultNotificationPolicy(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.AllowedChannels = []string(channels)
+	if len(mandatory) > 0 {
+		if err := json.Unmarshal(mandatory, &p.MandatoryEvents); err != nil {
+			return nil, err
+		}
+	}
+	if p.MandatoryEvents == nil {
+		p.MandatoryEvents = map[string][]string{}
+	}
+	p.Normalize()
+	return p, nil
+}
+
+// UpsertNotificationPolicy replaces the singleton policy row.
+func (s *PostgresStore) UpsertNotificationPolicy(ctx context.Context, policy *common.NotificationPolicy) error {
+	if policy == nil {
+		return fmt.Errorf("policy is required")
+	}
+	mandatory, err := json.Marshal(policy.MandatoryEvents)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO notification_policy (id, allowed_channels, mandatory_events, updated_at)
+		VALUES (1,$1,$2,NOW())
+		ON CONFLICT (id) DO UPDATE SET
+		  allowed_channels=EXCLUDED.allowed_channels,
+		  mandatory_events=EXCLUDED.mandatory_events,
+		  updated_at=NOW()`,
+		pq.Array(policy.AllowedChannels), mandatory)
 	return err
 }
 

@@ -256,6 +256,10 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		admin.PUT("/machines/:id", s.updateMachine)
 		admin.DELETE("/machines/:id", s.deleteMachine)
 
+		// Notification policy (bounds for per-user preferences)
+		admin.GET("/notifications/policy", s.getNotificationPolicy)
+		admin.PUT("/notifications/policy", s.putNotificationPolicy)
+
 		// Permission management
 		admin.GET("/permissions", s.listAllPermissions)
 		admin.POST("/permissions", s.grantPermission)

@@ -5,7 +5,7 @@
 **Base URL:** `/ui/` (served by the gateway; redirects from `/` and `/admin`)  
 **API:** `/api/v1/*` — see [openapi/openapi.yaml](openapi/openapi.yaml)  
 **Status:** React console Phase 2 — **v1.0.0**  
-**Last updated:** July 2026 (live watch, permissions all-grants/edit, notification prefs, usage analytics dashboard)
+**Last updated:** July 2026 (live watch, permissions all-grants/edit, notification prefs + admin notification policy, usage analytics dashboard)
 
 ---
 
@@ -30,6 +30,10 @@ This SRS is the acceptance baseline for UI regressions and for matching OpenAPI 
 - Dashboard usage analytics with selectable window and auto-refresh
 - Visible **build version** so operators can confirm shipped features
 - In-app **notification bell** (access-request approvals and similar)
+- Per-user **notification preferences** bounded by an admin policy: channels the
+  policy disallows render disabled, admin-mandated events render locked on, and
+  a save that had to be adjusted says so (Security → Notifications). Admins edit
+  the policy itself on the Plugins page.
 - Production assets embedded via `go:embed` (`make build-ui` → `web/static`)
 
 ### Non-goals (deferred)

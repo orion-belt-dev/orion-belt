@@ -64,9 +64,25 @@ export function SecurityPage() {
   const notifPrefs = useQuery({
     queryKey: ["notification-prefs"],
     queryFn: () =>
-      api<{ in_app_enabled?: boolean; email_enabled?: boolean; event_types?: string[] }>("/notifications/prefs"),
+      api<{
+        in_app_enabled?: boolean;
+        email_enabled?: boolean;
+        event_types?: string[];
+        allowed_channels?: string[];
+        mandatory_events?: Record<string, string[]>;
+      }>("/notifications/prefs"),
     enabled: tab === "notifications",
   });
+
+  // Admin bounds. Channels absent from allowed_channels can't be enabled;
+  // events listed in mandatory_events are always delivered and are shown
+  // locked rather than hidden, so the user can see why.
+  const allowedChannels = notifPrefs.data?.allowed_channels ?? ["in_app", "email"];
+  const mandatoryEvents = notifPrefs.data?.mandatory_events ?? {};
+  const inAppAllowed = allowedChannels.includes("in_app");
+  const emailAllowed = allowedChannels.includes("email");
+  const mandatoryInApp = mandatoryEvents["in_app"] ?? [];
+  const mandatoryEmail = mandatoryEvents["email"] ?? [];
 
   useEffect(() => {
     if (!notifPrefs.data) return;
@@ -282,7 +298,7 @@ export function SecurityPage() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      await api("/notifications/prefs", {
+      const saved = await api<{ adjusted?: boolean }>("/notifications/prefs", {
         method: "PUT",
         body: JSON.stringify({
           in_app_enabled: notifInApp,
@@ -290,7 +306,14 @@ export function SecurityPage() {
           event_types: events,
         }),
       });
-      toast("Notification preferences saved");
+      // The server clamps preferences into the admin policy, so what was
+      // stored can differ from what was submitted. Say so instead of showing
+      // a plain success and letting the controls silently snap back.
+      toast(
+        saved.adjusted
+          ? "Preferences saved, with some choices adjusted to your administrator's policy"
+          : "Notification preferences saved",
+      );
       void qc.invalidateQueries({ queryKey: ["notification-prefs"] });
     } catch (ex) {
       toast(ex instanceof Error ? ex.message : String(ex), "err");
@@ -665,13 +688,33 @@ export function SecurityPage() {
           ) : (
             <>
               <div className="form-grid">
-                <label className="row" style={{ alignItems: "center", gap: "0.5rem" }}>
-                  <input type="checkbox" checked={notifInApp} onChange={(e) => setNotifInApp(e.target.checked)} />
+                <label
+                  className="row"
+                  style={{ alignItems: "center", gap: "0.5rem", opacity: inAppAllowed ? 1 : 0.55 }}
+                  title={inAppAllowed ? undefined : "Disabled by your administrator's notification policy"}
+                >
+                  <input
+                    type="checkbox"
+                    checked={notifInApp}
+                    disabled={!inAppAllowed || mandatoryInApp.length > 0}
+                    onChange={(e) => setNotifInApp(e.target.checked)}
+                  />
                   In-app notifications
+                  {mandatoryInApp.length > 0 ? <span className="muted"> — required</span> : null}
                 </label>
-                <label className="row" style={{ alignItems: "center", gap: "0.5rem" }}>
-                  <input type="checkbox" checked={notifEmail} onChange={(e) => setNotifEmail(e.target.checked)} />
+                <label
+                  className="row"
+                  style={{ alignItems: "center", gap: "0.5rem", opacity: emailAllowed ? 1 : 0.55 }}
+                  title={emailAllowed ? undefined : "Disabled by your administrator's notification policy"}
+                >
+                  <input
+                    type="checkbox"
+                    checked={notifEmail}
+                    disabled={!emailAllowed || mandatoryEmail.length > 0}
+                    onChange={(e) => setNotifEmail(e.target.checked)}
+                  />
                   Email (stored preference)
+                  {mandatoryEmail.length > 0 ? <span className="muted"> — required</span> : null}
                 </label>
                 <div>
                   <label className="field">Event allow-list (comma-separated, empty = all)</label>
@@ -682,6 +725,18 @@ export function SecurityPage() {
                   />
                 </div>
               </div>
+              {mandatoryInApp.length > 0 || mandatoryEmail.length > 0 ? (
+                <p className="muted" style={{ marginTop: "0.75rem" }}>
+                  Your administrator requires these notifications; they are delivered even if you exclude them above.
+                  {mandatoryInApp.length > 0 ? ` In-app: ${mandatoryInApp.join(", ")}.` : ""}
+                  {mandatoryEmail.length > 0 ? ` Email: ${mandatoryEmail.join(", ")}.` : ""}
+                </p>
+              ) : null}
+              {!inAppAllowed || !emailAllowed ? (
+                <p className="muted" style={{ marginTop: "0.5rem" }}>
+                  Some channels are unavailable under your administrator's notification policy.
+                </p>
+              ) : null}
               <button className="btn sm" type="submit" style={{ marginTop: "0.75rem" }}>
                 Save preferences
               </button>
