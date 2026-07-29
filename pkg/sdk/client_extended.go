@@ -264,6 +264,9 @@ func (c *Client) MarkAllNotificationsRead(ctx context.Context) error {
 }
 
 // GetNotificationPrefs fetches channel preferences for the current user.
+//
+// The server resolves these against an admin policy; use
+// GetNotificationPrefsWithBounds when you need to know what that policy allows.
 func (c *Client) GetNotificationPrefs(ctx context.Context) (*NotificationPrefs, error) {
 	var prefs NotificationPrefs
 	if err := c.Do(ctx, http.MethodGet, "/notifications/prefs", nil, &prefs); err != nil {
@@ -273,8 +276,32 @@ func (c *Client) GetNotificationPrefs(ctx context.Context) (*NotificationPrefs, 
 }
 
 // PutNotificationPrefs upserts channel preferences for the current user.
+//
+// Preferences outside the admin policy are clamped rather than rejected, so
+// what is stored can differ from what was sent. Use PutNotificationPrefsWithBounds
+// to see whether that happened.
 func (c *Client) PutNotificationPrefs(ctx context.Context, prefs NotificationPrefs) (*NotificationPrefs, error) {
 	var out NotificationPrefs
+	if err := c.Do(ctx, http.MethodPut, "/notifications/prefs", prefs, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetNotificationPrefsWithBounds fetches the current user's preferences along
+// with the admin bounds they were resolved within.
+func (c *Client) GetNotificationPrefsWithBounds(ctx context.Context) (*NotificationPrefsResult, error) {
+	var out NotificationPrefsResult
+	if err := c.Do(ctx, http.MethodGet, "/notifications/prefs", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PutNotificationPrefsWithBounds upserts preferences and reports the admin
+// bounds applied, including whether the submission had to be adjusted to fit.
+func (c *Client) PutNotificationPrefsWithBounds(ctx context.Context, prefs NotificationPrefs) (*NotificationPrefsResult, error) {
+	var out NotificationPrefsResult
 	if err := c.Do(ctx, http.MethodPut, "/notifications/prefs", prefs, &out); err != nil {
 		return nil, err
 	}

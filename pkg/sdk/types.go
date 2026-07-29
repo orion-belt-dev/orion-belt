@@ -27,6 +27,27 @@ type Notification = common.Notification
 // NotificationPrefs controls per-user notification channel behavior.
 type NotificationPrefs = common.NotificationPrefs
 
+// NotificationPolicy is the admin-set boundary that per-user preferences are
+// resolved within.
+type NotificationPolicy = common.NotificationPolicy
+
+// NotificationPrefsResult is a user's preferences together with the admin
+// bounds the server applied to them.
+type NotificationPrefsResult struct {
+	NotificationPrefs
+
+	// AllowedChannels lists the channels this user may enable.
+	AllowedChannels []string `json:"allowed_channels"`
+
+	// MandatoryEvents maps a channel to the event types delivered on it
+	// regardless of preference. These cannot be switched off.
+	MandatoryEvents map[string][]string `json:"mandatory_events,omitempty"`
+
+	// Adjusted reports that the submitted preferences were corrected to fit
+	// the policy, so the stored result differs from what was sent.
+	Adjusted bool `json:"adjusted,omitempty"`
+}
+
 // APIKey is a persisted API key record (masked form).
 type APIKey = common.APIKey
 
