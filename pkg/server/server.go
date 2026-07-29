@@ -20,6 +20,10 @@ import (
 	"github.com/zrougamed/orion-belt/pkg/metrics"
 	"github.com/zrougamed/orion-belt/pkg/plugin"
 	"github.com/zrougamed/orion-belt/pkg/recording"
+	"github.com/zrougamed/orion-belt/pkg/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -791,7 +795,12 @@ type ptyRequest struct {
 
 // proxyToMachine proxies a client session to a target machine through an agent
 func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, username string, ptyReq *ptyRequest, remainingReqs <-chan *ssh.Request) {
-	ctx := context.Background()
+	// Root span for the whole gateway -> agent -> target hop. Its context is
+	// what carries trace identity down to the agent, so it has to wrap every
+	// step below rather than just the proxy loop.
+	ctx, span := tracing.Start(context.Background(), "gateway.ssh.session",
+		trace.WithSpanKind(trace.SpanKindServer))
+	defer span.End()
 
 	s.logger.Info("proxyToMachine called: commandLine='%s', user='%s', userID='%s'", commandLine, username, userID)
 
@@ -813,18 +822,36 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 	}
 	s.logger.Info("Gateway user '%s' connecting to '%s@%s'", username, remoteUser, machineName)
 
-	machine, err := s.store.GetMachineByName(ctx, machineName)
+	// Identity of the hop, attached before anything can fail so a rejected
+	// session is still attributable in the trace.
+	tracing.SetAttributes(span,
+		attribute.String("orion.user", username),
+		attribute.String("orion.user_id", userID),
+		attribute.String("orion.target.machine", machineName),
+		attribute.String("orion.target.remote_user", remoteUser),
+		attribute.Bool("orion.session.interactive", remoteCommand == ""),
+	)
+
+	authCtx, authSpan := tracing.Start(ctx, "gateway.authorize")
+	machine, err := s.store.GetMachineByName(authCtx, machineName)
 	if err != nil {
 		s.logger.Error("Machine not found in database: %s (error: %v)", machineName, err)
+		tracing.RecordError(authSpan, err)
+		authSpan.End()
+		tracing.RecordError(span, err)
 		clientChannel.Write([]byte(fmt.Sprintf("Machine not found: %s\n", machineName)))
 		clientChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 1})
 		return
 	}
 
 	s.logger.Info("Machine found: %s (ID: %s, active: %v)", machine.Name, machine.ID, machine.IsActive)
+	tracing.SetAttributes(span, attribute.String("orion.target.machine_id", machine.ID))
 
-	if err := s.authService.CheckPermissionWithRemoteUser(ctx, userID, machine.ID, "ssh", remoteUser); err != nil {
+	if err := s.authService.CheckPermissionWithRemoteUser(authCtx, userID, machine.ID, "ssh", remoteUser); err != nil {
 		s.logger.Warn("Permission denied: %s cannot access %s@%s", username, remoteUser, machineName)
+		tracing.RecordError(authSpan, err)
+		authSpan.End()
+		tracing.RecordError(span, err)
 
 		errorMsg := "\n> Permission denied\n"
 		errorMsg += fmt.Sprintf("   Gateway user: %s\n", username)
@@ -837,12 +864,21 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 		return
 	}
 
+	authSpan.End()
+
 	// Get agent connection
 	s.agentsMu.RLock()
 	agentConn, exists := s.agents[machine.ID]
 	s.agentsMu.RUnlock()
 
 	if !exists || !machine.IsActive {
+		// "Agent not connected" and "machine deactivated" look identical to
+		// the user but mean different things to an operator reading a trace.
+		tracing.SetAttributes(span,
+			attribute.Bool("orion.agent.connected", exists),
+			attribute.Bool("orion.target.active", machine.IsActive),
+		)
+		span.SetStatus(codes.Error, "machine unavailable")
 		clientChannel.Write([]byte("Machine is not available\n"))
 		clientChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 1})
 		return
@@ -872,15 +908,28 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 	s.pluginManager.TriggerHook(ctx, plugin.HookSessionStart, hookCtx)
 	metrics.Default.SessionStarted()
 
+	tracing.SetAttributes(span, attribute.String("orion.session.id", session.ID))
+
 	s.logger.Info("Opening session channel to agent")
 
-	agentChannel, agentReqs, err := agentConn.SSHConn.Conn.OpenChannel("session", nil)
+	// This is the gateway -> agent hop. The span is a client span and its
+	// context is injected into the channel-open extra data, which is what
+	// makes the agent's spans children of this trace rather than a separate
+	// one. Injecting from openCtx (not ctx) means the agent's parent is this
+	// span, so the hop itself shows up as a measurable segment.
+	openCtx, openSpan := tracing.Start(ctx, "gateway.agent.open_channel",
+		trace.WithSpanKind(trace.SpanKindClient))
+	agentChannel, agentReqs, err := agentConn.SSHConn.Conn.OpenChannel("session", tracing.InjectChannelData(openCtx))
 	if err != nil {
 		s.logger.Error("Failed to open session channel: %v", err)
+		tracing.RecordError(openSpan, err)
+		openSpan.End()
+		tracing.RecordError(span, err)
 		clientChannel.Write([]byte(fmt.Sprintf("Failed to connect to machine: %v\n", err)))
 		clientChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 1})
 		return
 	}
+	openSpan.End()
 
 	s.logger.Info("Successfully opened session channel to agent")
 
@@ -911,15 +960,26 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 		}()
 	}
 
+	// The proxy span covers the session body: for an interactive shell that is
+	// the whole time the user is connected, so its duration is session length
+	// rather than a latency measure. The setup spans above are where
+	// connect-time latency shows up.
 	if remoteCommand != "" {
 		s.logger.Info("Executing command on agent: %s", remoteCommand)
 		if strings.Contains(remoteCommand, "scp") {
 			s.logger.Debug("Directing SCP command to agent: %s", remoteCommand)
 		}
+		_, execSpan := tracing.Start(ctx, "gateway.proxy.exec")
+		// The command line can carry credentials in arguments, so record only
+		// its shape — the first word — never the full string.
+		tracing.SetAttributes(execSpan, attribute.String("orion.command", tracing.CommandName(remoteCommand)))
 		s.executeCommand(clientChannel, agentChannel, agentReqs, remoteCommand, remoteUser, sessionRecorder)
+		execSpan.End()
 	} else {
 		s.logger.Info("Starting interactive shell on agent")
+		_, shellSpan := tracing.Start(ctx, "gateway.proxy.shell")
 		s.startInteractiveShell(clientChannel, agentChannel, agentReqs, sessionRecorder, remoteUser)
+		shellSpan.End()
 	}
 
 	endTime := time.Now()
@@ -1263,14 +1323,38 @@ func (s *Server) ResolveMachine(name string) (*common.Machine, error) {
 }
 
 // OpenAgentSession opens a session channel to a connected agent.
+//
+// This is the entry point used by the web terminal and by agent control
+// commands, rather than the OpenSSH proxy path in proxyToMachine. It is
+// instrumented separately so those sessions reach the agent with trace context
+// too; the resulting span is a root unless the caller supplies one via
+// OpenAgentSessionContext.
 func (s *Server) OpenAgentSession(machineID, remoteUser string) (ssh.Channel, <-chan *ssh.Request, error) {
+	return s.OpenAgentSessionContext(context.Background(), machineID, remoteUser)
+}
+
+// OpenAgentSessionContext is OpenAgentSession with an explicit context, so a
+// caller that already has a span (an HTTP handler, say) keeps the agent hop in
+// the same trace instead of starting a disconnected one.
+func (s *Server) OpenAgentSessionContext(ctx context.Context, machineID, remoteUser string) (ssh.Channel, <-chan *ssh.Request, error) {
 	s.agentsMu.RLock()
 	agentConn, exists := s.agents[machineID]
 	s.agentsMu.RUnlock()
 	if !exists {
 		return nil, nil, fmt.Errorf("agent not connected")
 	}
-	return agentConn.SSHConn.Conn.OpenChannel("session", nil)
+
+	openCtx, span := tracing.Start(ctx, "gateway.agent.open_channel",
+		trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+	tracing.SetAttributes(span,
+		attribute.String("orion.target.machine_id", machineID),
+		attribute.String("orion.target.remote_user", remoteUser),
+	)
+
+	channel, reqs, err := agentConn.SSHConn.Conn.OpenChannel("session", tracing.InjectChannelData(openCtx))
+	tracing.RecordError(span, err)
+	return channel, reqs, err
 }
 
 // ListConnectedAgents returns machine IDs of connected agents.
