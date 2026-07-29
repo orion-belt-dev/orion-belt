@@ -97,8 +97,9 @@ func runServer(cmd *cobra.Command, args []string) {
 	shutdownTracing, err := tracing.Init(context.Background(),
 		tracing.FromCommon(config.Tracing, "orion-belt-gateway", version.Version), logger)
 	if err != nil {
-		// A misconfigured collector should be loud at startup rather than
-		// silently producing no traces for weeks.
+		// Config validation failed (missing service name, bad ratio, etc.).
+		// An unreachable collector does not fail Init — OTLP New is
+		// non-blocking — and surfaces later as exporter warnings.
 		logger.Fatal("Failed to initialize tracing: %v", err)
 	}
 	defer flushTracing(shutdownTracing, logger)

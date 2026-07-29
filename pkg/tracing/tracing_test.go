@@ -127,6 +127,60 @@ func TestInitRejectsUnknownProtocol(t *testing.T) {
 	}
 }
 
+func TestInitRejectsHTTPPlaintextWhenSecure(t *testing.T) {
+	withTracingDisabled(t)
+
+	cfg := Config{
+		Enabled:     true,
+		ServiceName: "svc",
+		Protocol:    ProtocolHTTP,
+		Endpoint:    "http://collector:4318",
+		Insecure:    false,
+	}
+	if _, err := Init(context.Background(), cfg, nil); err == nil {
+		t.Fatal("expected http:// with insecure:false to be rejected")
+	}
+}
+
+func TestInitRejectsGRPCURLEndpoint(t *testing.T) {
+	withTracingDisabled(t)
+
+	cfg := Config{
+		Enabled:     true,
+		ServiceName: "svc",
+		Protocol:    ProtocolGRPC,
+		Endpoint:    "http://collector:4317",
+		Insecure:    true,
+	}
+	if _, err := Init(context.Background(), cfg, nil); err == nil {
+		t.Fatal("expected a URL-shaped gRPC endpoint to be rejected")
+	}
+}
+
+func TestInitRejectsDoubleInit(t *testing.T) {
+	withTracingDisabled(t)
+
+	// Point at a reserved TEST-NET address so we never need a real collector.
+	cfg := Config{
+		Enabled:     true,
+		ServiceName: "svc",
+		Protocol:    ProtocolHTTP,
+		Endpoint:    "http://192.0.2.1:4318",
+		Insecure:    true,
+	}
+	shutdown, err := Init(context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatalf("first Init: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = shutdown(context.Background())
+	})
+
+	if _, err := Init(context.Background(), cfg, nil); err == nil {
+		t.Fatal("expected a second Init before Shutdown to fail")
+	}
+}
+
 // When enabled, spans must actually be produced and carry their attributes.
 func TestEnabledStartRecordsSpan(t *testing.T) {
 	recorder := withRecordingTracer(t)
@@ -275,6 +329,19 @@ func TestCommandNameStripsArguments(t *testing.T) {
 		{"password argument dropped", "mysql -u root -phunter2", "mysql"},
 		{"token argument dropped", "curl -H 'Authorization: Bearer sk-secret'", "curl"},
 		{"env-style secret dropped", "deploy --api-key=AKIAIOSFODNN7EXAMPLE", "deploy"},
+		// Env-var assignment prefixes must not be returned as the "program".
+		{"leading env assignment", "PGPASSWORD=hunter2 psql -h db", "psql"},
+		{"leading aws env", "AWS_SECRET_ACCESS_KEY=abc123 aws s3 ls", "aws"},
+		{"multiple leading envs", "FOO=1 BAR=2 true", "true"},
+		{"only env assignments", "FOO=secret BAR=other", ""},
+		{"empty env value", "FOO= psql", "psql"},
+		// Non-space whitespace must still split — a tab must not ship the
+		// whole line (including query tokens) as the program name.
+		{"tab separator", "curl\thttps://x.example/?token=abc", "curl"},
+		{"newline separator", "curl\nhttps://x.example/?token=abc", "curl"},
+		{"caps long name", strings.Repeat("a", maxCommandNameLen+10), strings.Repeat("a", maxCommandNameLen)},
+		{"not an env prefix", "1=foo ls", "1=foo"}, // leading digit is not a NAME
+		{"equals in path kept when sole field", "/tmp/a=b", "/tmp/a=b"},
 	}
 
 	for _, tc := range tests {
@@ -283,8 +350,8 @@ func TestCommandNameStripsArguments(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("CommandName(%q) = %q, want %q", tc.command, got, tc.want)
 			}
-			if tc.want != "" && strings.Contains(got, " ") {
-				t.Errorf("result %q still contains an argument separator", got)
+			if strings.ContainsAny(got, " \t\n\r") {
+				t.Errorf("result %q still contains whitespace", got)
 			}
 		})
 	}

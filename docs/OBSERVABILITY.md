@@ -22,14 +22,16 @@ Both sides read the same `tracing:` block, and each can be enabled independently
 # server.yaml and agent.yaml
 tracing:
   enabled: true
-  endpoint: "otel-collector:4317"   # empty = use OTEL_EXPORTER_OTLP_* env vars
+  endpoint: "otel-collector:4317"   # empty = use OTEL_EXPORTER_OTLP_* env vars; gRPC wants host:port (not a URL)
   protocol: grpc                    # grpc (default) | http
-  insecure: true                    # plaintext to a collector on localhost / trusted network
+  insecure: false                   # set true only for localhost / trusted-network plaintext
   sample_ratio: 1.0                 # 0.0–1.0; unset means 1.0
   service_name: ""                  # optional override
   headers:                          # optional, e.g. a hosted collector's auth
     authorization: "Bearer ..."
 ```
+
+`insecure: false` with an `http://…` endpoint is rejected at startup (the URL scheme would otherwise silently win over the TLS setting). gRPC endpoints must be bare `host:port` — a URL-shaped value is also rejected rather than failing to connect quietly.
 
 Leave `endpoint` empty to configure the collector the standard way instead:
 
@@ -70,7 +72,7 @@ The HTTP API is not instrumented; API requests still carry `request_id` for log 
 
 ### Secrets
 
-Command lines are recorded as the program name only (`orion.command`), never with arguments — spans go off-box to a collector that does not inherit the access controls guarding session recordings. If you add instrumentation, route any command through `tracing.CommandName`.
+Command lines are recorded as the program name only (`orion.command`), never with arguments or leading `NAME=value` env assignments — spans go off-box to a collector that does not inherit the access controls guarding session recordings. If you add instrumentation, route any command through `tracing.CommandName`. Control-plane verbs (`orion.control.command`) record only the matched constant (`orion:ping`, …), never the raw request string.
 
 ### Cost when disabled
 

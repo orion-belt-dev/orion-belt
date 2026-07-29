@@ -76,8 +76,10 @@ tracing:
   endpoint: "otel-collector:4317"
   # grpc (default) or http
   protocol: grpc
-  # Plaintext to the collector — for localhost or a trusted network only.
-  insecure: true
+  # Plaintext to the collector. Prefer false (TLS) outside a trusted network;
+  # set true only for localhost / mesh plaintext. An http:// endpoint with
+  # insecure: false is rejected at startup.
+  insecure: false
   # Head sampling, 0.0-1.0. Unset means 1.0. Parent-based, so the gateway's
   # decision carries to the agent and multi-hop traces stay whole.
   sample_ratio: 1.0

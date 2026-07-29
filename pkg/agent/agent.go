@@ -660,23 +660,26 @@ func (a *Agent) sendExitStatus(channel gossh.Channel, status int) {
 func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel, command string) {
 	_, span := tracing.Start(ctx, "agent.control")
 	defer span.End()
-	// Control verbs (orion:*) are a fixed internal vocabulary with no user
-	// data in them, so the whole command is safe to record.
-	tracing.SetAttributes(span, attribute.String("orion.control.command", command))
 
 	defer channel.Close()
 
 	cmd := strings.TrimSpace(command)
 	var result map[string]interface{}
 	exitStatus := 0
+	// Record only the matched verb constant — never the raw string. Dispatch
+	// is HasPrefix("orion:"), so unvalidated input can carry arbitrary
+	// attacker-controlled content of unbounded length into the collector.
+	var controlVerb string
 
 	switch cmd {
 	case "orion:ping":
+		controlVerb = "orion:ping"
 		result = map[string]interface{}{
 			"ok":   true,
 			"pong": true,
 		}
 	case "orion:health", "orion:status":
+		controlVerb = cmd
 		result = map[string]interface{}{
 			"ok":          true,
 			"status":      "healthy",
@@ -690,6 +693,7 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 			"uptime_hint": "connected",
 		}
 	case "orion:info":
+		controlVerb = "orion:info"
 		result = map[string]interface{}{
 			"ok":         true,
 			"agent":      a.config.Agent.Name,
@@ -702,23 +706,11 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 			"hostname":   hostnameOrEmpty(),
 		}
 	case "orion:restart":
+		controlVerb = "orion:restart"
 		result = map[string]interface{}{
 			"ok":      true,
 			"message": "restart scheduled",
 		}
-		data, _ := json.Marshal(result)
-		channel.Write(append(data, '\n'))
-		a.sendExitStatus(channel, 0)
-		channel.CloseWrite()
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			cmd := exec.Command("systemctl", "restart", "orion-belt-agent")
-			if err := cmd.Start(); err != nil {
-				a.logger.Warn("systemctl restart failed (%v); exiting for process supervisor", err)
-				os.Exit(0)
-			}
-		}()
-		return
 	default:
 		result = map[string]interface{}{
 			"ok":      false,
@@ -731,10 +723,25 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 		exitStatus = 1
 	}
 
+	if controlVerb != "" {
+		tracing.SetAttributes(span, attribute.String("orion.control.command", controlVerb))
+	}
+
 	data, _ := json.Marshal(result)
 	channel.Write(append(data, '\n'))
 	a.sendExitStatus(channel, exitStatus)
 	channel.CloseWrite()
+
+	if controlVerb == "orion:restart" {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			cmd := exec.Command("systemctl", "restart", "orion-belt-agent")
+			if err := cmd.Start(); err != nil {
+				a.logger.Warn("systemctl restart failed (%v); exiting for process supervisor", err)
+				os.Exit(0)
+			}
+		}()
+	}
 }
 
 func hostnameOrEmpty() string {

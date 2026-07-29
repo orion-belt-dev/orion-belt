@@ -16,8 +16,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -34,6 +36,14 @@ import (
 
 	"github.com/zrougamed/orion-belt/pkg/common"
 )
+
+// maxCommandNameLen caps the program name written to orion.command so a
+// pathological absolute path cannot flood the collector.
+const maxCommandNameLen = 128
+
+// exporterShutdownGrace is how long we give the exporter to release its
+// connection after the batch processor's Shutdown has already timed out.
+const exporterShutdownGrace = 2 * time.Second
 
 // Protocol values for Config.Protocol.
 const (
@@ -103,6 +113,13 @@ var enabled atomic.Bool
 // span start.
 var tracerRef atomic.Value // trace.Tracer
 
+// initMu serializes Init/shutdown so a second Init cannot replace the active
+// provider while the first is still live (which would leak its goroutines).
+var initMu sync.Mutex
+
+// initialized is true between a successful enabled Init and its ShutdownFunc.
+var initialized bool
+
 // noopSpan is returned by Start when tracing is off. It is declared with the
 // interface type rather than the concrete one on purpose: returning a concrete
 // struct as trace.Span boxes it into an interface on every call, which showed
@@ -129,16 +146,25 @@ type ShutdownFunc func(context.Context) error
 // OpenTelemetry's built-in no-op implementation stays in place), no exporter
 // connection is made, and the returned shutdown does nothing. Callers can
 // therefore always defer the returned function without checking.
+//
+// Init only validates config and constructs the exporter client — OTLP New is
+// non-blocking, so a typo'd or unreachable endpoint does not fail startup.
+// Export errors are routed to the logger instead. A second Init before the
+// previous ShutdownFunc runs returns an error rather than leaking the old
+// provider.
 func Init(ctx context.Context, cfg Config, logger *common.Logger) (ShutdownFunc, error) {
 	if !cfg.Enabled {
 		return func(context.Context) error { return nil }, nil
 	}
 
-	if cfg.ServiceName == "" {
-		return nil, fmt.Errorf("tracing: service name is required when tracing is enabled")
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
 	}
-	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
-		return nil, fmt.Errorf("tracing: sample_ratio must be between 0.0 and 1.0, got %v", cfg.SampleRatio)
+
+	initMu.Lock()
+	defer initMu.Unlock()
+	if initialized {
+		return nil, fmt.Errorf("tracing: already initialized; call the previous ShutdownFunc first")
 	}
 
 	exporter, err := newExporter(ctx, cfg)
@@ -177,29 +203,78 @@ func Init(ctx context.Context, cfg Config, logger *common.Logger) (ShutdownFunc,
 
 	tracerRef.Store(provider.Tracer(cfg.ServiceName))
 	enabled.Store(true)
+	initialized = true
 
 	if logger != nil {
 		logger.Info("Tracing enabled: service=%s protocol=%s endpoint=%s sample_ratio=%.2f",
 			cfg.ServiceName, protocolOf(cfg), endpointForLog(cfg), ratio)
 	}
 
+	var shutdownOnce sync.Once
+	var shutdownErr error
 	return func(shutdownCtx context.Context) error {
-		// Flip the switch first so in-flight requests stop opening new spans
-		// while the provider is draining.
-		enabled.Store(false)
-		return provider.Shutdown(shutdownCtx)
+		shutdownOnce.Do(func() {
+			// Flip the switch first so in-flight requests stop opening new spans
+			// while the provider is draining.
+			enabled.Store(false)
+			shutdownErr = provider.Shutdown(shutdownCtx)
+			if shutdownErr != nil {
+				// BatchSpanProcessor.Shutdown aborts on ctx cancel before it
+				// reaches exporter.Shutdown, leaving the gRPC ClientConn and
+				// retry goroutines alive. Force the exporter closed so a
+				// timed-out flush actually releases resources.
+				forceCtx, cancel := context.WithTimeout(context.Background(), exporterShutdownGrace)
+				_ = exporter.Shutdown(forceCtx)
+				cancel()
+			}
+			initMu.Lock()
+			initialized = false
+			initMu.Unlock()
+		})
+		return shutdownErr
 	}, nil
+}
+
+// validateConfig rejects combinations that would silently misbehave: missing
+// identity, bad sample ratio, unknown protocol, plaintext despite insecure:
+// false, and URL-shaped gRPC endpoints that WithEndpoint cannot dial.
+func validateConfig(cfg Config) error {
+	if cfg.ServiceName == "" {
+		return fmt.Errorf("tracing: service name is required when tracing is enabled")
+	}
+	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
+		return fmt.Errorf("tracing: sample_ratio must be between 0.0 and 1.0, got %v", cfg.SampleRatio)
+	}
+
+	protocol := protocolOf(cfg)
+	switch protocol {
+	case ProtocolHTTP, ProtocolGRPC:
+	default:
+		return fmt.Errorf("tracing: unknown protocol %q (want %q or %q)", cfg.Protocol, ProtocolGRPC, ProtocolHTTP)
+	}
+
+	ep := strings.TrimSpace(cfg.Endpoint)
+	if protocol == ProtocolHTTP && !cfg.Insecure {
+		if strings.HasPrefix(ep, "http://") {
+			return fmt.Errorf("tracing: endpoint %q uses http:// but insecure is false; set insecure: true for plaintext or use https://", ep)
+		}
+	}
+	if protocol == ProtocolGRPC && ep != "" {
+		if strings.Contains(ep, "://") {
+			return fmt.Errorf("tracing: gRPC endpoint must be host:port, not a URL (%q)", ep)
+		}
+	}
+	return nil
 }
 
 // newExporter builds the OTLP exporter for the configured protocol. An empty
 // endpoint deliberately falls through to the exporter's own environment
 // variable handling (OTEL_EXPORTER_OTLP_ENDPOINT and friends).
+//
+// Both otlptracegrpc.New and otlptracehttp.New are non-blocking: they build a
+// client that connects lazily on the first export. A wrong endpoint therefore
+// does not fail Init — it fails later as export errors routed to the logger.
 func newExporter(ctx context.Context, cfg Config) (*otlptrace.Exporter, error) {
-	// Bound the initial connection attempt so a wrong endpoint fails startup
-	// visibly rather than hanging the process.
-	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
 	switch protocolOf(cfg) {
 	case ProtocolHTTP:
 		opts := []otlptracehttp.Option{}
@@ -212,7 +287,7 @@ func newExporter(ctx context.Context, cfg Config) (*otlptrace.Exporter, error) {
 		if len(cfg.Headers) > 0 {
 			opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
 		}
-		return otlptracehttp.New(dialCtx, opts...)
+		return otlptracehttp.New(ctx, opts...)
 
 	case ProtocolGRPC:
 		opts := []otlptracegrpc.Option{}
@@ -225,9 +300,11 @@ func newExporter(ctx context.Context, cfg Config) (*otlptrace.Exporter, error) {
 		if len(cfg.Headers) > 0 {
 			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
 		}
-		return otlptracegrpc.New(dialCtx, opts...)
+		return otlptracegrpc.New(ctx, opts...)
 
 	default:
+		// validateConfig already rejected unknown protocols; keep the default
+		// arm so a future caller of newExporter alone still gets a clear error.
 		return nil, fmt.Errorf("tracing: unknown protocol %q (want %q or %q)", cfg.Protocol, ProtocolGRPC, ProtocolHTTP)
 	}
 }
@@ -328,12 +405,46 @@ func RecordError(span trace.Span, err error) {
 // put a command on a span: a full command line routinely carries passwords,
 // tokens, and file paths, and spans are shipped off-box to a collector that
 // does not inherit the access controls guarding session recordings.
+//
+// Leading NAME=value tokens (the "VAR=secret cmd" shape common over
+// non-interactive SSH) are skipped so an env-var assignment is never returned
+// as the "program". Splitting uses unicode.IsSpace, so tabs/newlines cannot
+// defeat the strip the way a literal-space-only split would.
 func CommandName(command string) string {
-	command = strings.TrimSpace(command)
-	if i := strings.IndexByte(command, ' '); i >= 0 {
-		return command[:i]
+	fields := strings.FieldsFunc(command, unicode.IsSpace)
+	i := 0
+	for i < len(fields) && isEnvAssignment(fields[i]) {
+		i++
 	}
-	return command
+	if i >= len(fields) {
+		return ""
+	}
+	name := fields[i]
+	if len(name) > maxCommandNameLen {
+		return name[:maxCommandNameLen]
+	}
+	return name
+}
+
+// isEnvAssignment reports whether s looks like a shell NAME=value token
+// (^[A-Za-z_][A-Za-z0-9_]*=), including an empty value ("FOO=").
+func isEnvAssignment(s string) bool {
+	eq := strings.IndexByte(s, '=')
+	if eq <= 0 {
+		return false
+	}
+	name := s[:eq]
+	if c := name[0]; c != '_' && (c < 'A' || (c > 'Z' && c < 'a') || c > 'z') {
+		return false
+	}
+	for i := 1; i < len(name); i++ {
+		c := name[i]
+		if c == '_' || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func firstNonEmpty(values ...string) string {

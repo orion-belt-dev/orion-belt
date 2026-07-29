@@ -63,7 +63,10 @@ func TestOTLPExportDeliversLinkedSpans(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	t.Cleanup(func() { enabled.Store(false) })
+	t.Cleanup(func() {
+		_ = shutdown(context.Background())
+		enabled.Store(false)
+	})
 
 	if !Enabled() {
 		t.Fatal("Init should have enabled tracing")
@@ -159,7 +162,12 @@ func TestExportSurvivesUnreachableCollector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init should not fail merely because the collector is down: %v", err)
 	}
-	t.Cleanup(func() { enabled.Store(false) })
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdown(ctx)
+		enabled.Store(false)
+	})
 
 	_, span := Start(context.Background(), "gateway.ssh.session")
 	span.End()
