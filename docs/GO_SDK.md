@@ -105,7 +105,15 @@ _ = loginResp.APIKey // client stores it automatically
 - Notifications/setup:
 	`ListNotifications`, `GetUnreadNotificationsCount`, `MarkNotificationRead`,
 	`MarkAllNotificationsRead`, `GetNotificationPrefs`, `UpdateNotificationPrefs`,
+	`GetNotificationPrefsWithBounds`, `PutNotificationPrefsWithBounds`,
 	`GetSetupStatus`
+
+	Preferences are resolved against an admin policy server-side: a channel the
+	policy disallows is switched off, and an admin-mandated event is delivered
+	regardless of preference. Saves are **clamped, not rejected**, so what is
+	stored can differ from what was sent. The `…WithBounds` variants return the
+	applied bounds and an `Adjusted` flag reporting whether that happened; the
+	plain variants ignore those fields and stay source-compatible.
 - Plugins/agents (admin):
 	`ListPlugins`, `UpdatePluginConfig`, `EnablePlugin`, `DisablePlugin`,
 	`ListConnectedAgents`, `SendAgentCommand`, `DisconnectAgent`,

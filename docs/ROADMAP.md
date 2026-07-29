@@ -160,7 +160,9 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
   - [x] Access-request / access-granted hooks fired from API
   - [x] Post-auth hook fired after successful SSH auth
   - [ ] Template system for notification content
-  - [ ] User notification preferences management
+  - [x] User notification preferences management (per-user channel/event
+        choices bounded by an admin policy; admin-mandated events cannot be
+        switched off — `GET/PUT /admin/notifications/policy`)
 
 * **Agent Command Interface**
   - [x] Agent control commands: `orion:ping`, `orion:health`, `orion:status`, `orion:info`
@@ -232,7 +234,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 - [ ] HashiCorp Vault integration
 - [ ] Structured logs (Loki/ELK)
 - [ ] OpenTelemetry tracing
-- [ ] Notification templates / user preferences
+- [ ] Notification templates (user preferences shipped — see Notifications & Integrations)
 - [ ] Recording compression
 - [ ] Richer permission editor in UI
 - [x] Machine CRUD in UI

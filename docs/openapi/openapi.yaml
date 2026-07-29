@@ -1726,16 +1726,25 @@ paths:
     get:
       tags: [Notifications]
       summary: Get notification preferences for the current user
+      description: |
+        Returns the caller's preferences alongside the admin bounds they are
+        resolved within. Preferences are clamped to the policy on read, so a
+        policy tightened after they were saved is reflected immediately.
       responses:
         "200":
-          description: Preferences
+          description: Preferences and the admin bounds they were resolved within
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotificationPrefs"
+                $ref: "#/components/schemas/NotificationPrefsResponse"
     put:
       tags: [Notifications]
       summary: Update notification preferences
+      description: |
+        Preferences are clamped into the admin policy rather than rejected: a
+        channel the policy disallows is switched off, and an admin-mandated
+        event has its channel switched on and is folded into the event
+        allow-list. When anything was corrected the response sets `adjusted`.
       requestBody:
         required: true
         content:
@@ -1744,11 +1753,58 @@ paths:
               $ref: "#/components/schemas/NotificationPrefs"
       responses:
         "200":
-          description: Saved
+          description: Saved (possibly adjusted to fit the policy)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotificationPrefs"
+                $ref: "#/components/schemas/NotificationPrefsResponse"
+
+  /api/v1/admin/notifications/policy:
+    get:
+      tags: [Admin, Notifications]
+      summary: Get the notification policy
+      description: Admin/operator only. Also returns the channels and event types this build knows about.
+      responses:
+        "200":
+          description: Policy and the server's known channels/events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policy:
+                    $ref: "#/components/schemas/NotificationPolicy"
+                  known_channels:
+                    type: array
+                    items: { type: string }
+                  known_events:
+                    type: array
+                    items: { type: string }
+        "403": { description: Not an admin or operator }
+    put:
+      tags: [Admin, Notifications]
+      summary: Replace the notification policy
+      description: |
+        Admin/operator only. Channels this build does not implement are
+        rejected rather than dropped silently. On save the policy is
+        normalized: unknown and duplicate channels are removed, empty entries
+        dropped, and any mandated channel promoted into `allowed_channels` so
+        the stored policy cannot contradict itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPolicy"
+      responses:
+        "200":
+          description: Saved, after normalization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPolicy"
+        "400": { description: Unknown notification channel }
+        "403": { description: Not an admin or operator }
 
   /api/v1/ssh-cert/ca:
     get:
@@ -2087,6 +2143,50 @@ components:
           type: array
           items: { type: string }
           description: Empty = all event types
+    NotificationPrefsResponse:
+      description: |
+        A user's preferences together with the admin bounds they were resolved
+        within, so a client can render unavailable and locked controls without
+        a second (admin-only) request.
+      allOf:
+        - $ref: "#/components/schemas/NotificationPrefs"
+        - type: object
+          properties:
+            allowed_channels:
+              type: array
+              items: { type: string, enum: [in_app, email] }
+              description: Channels this user may enable, expanded from the policy
+            mandatory_events:
+              type: object
+              additionalProperties:
+                type: array
+                items: { type: string }
+              description: >-
+                Channel to the event types always delivered on it, regardless of
+                preference. Keys are channel names.
+            adjusted:
+              type: boolean
+              description: >-
+                The submitted preferences were corrected to fit the policy, so
+                what was stored differs from what was sent.
+    NotificationPolicy:
+      type: object
+      description: Admin-set boundary that per-user preferences are resolved within.
+      properties:
+        allowed_channels:
+          type: array
+          items: { type: string, enum: [in_app, email] }
+          description: Channels users may enable. Empty means every known channel.
+        mandatory_events:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string, enum: [in_app, email] }
+          description: >-
+            Event type to the channels it is always delivered on. These cannot
+            be switched off by a user preference. A channel named here is
+            promoted into allowed_channels on save.
+        updated_at: { type: string, format: date-time }
     LoginResponse:
       type: object
       properties:
