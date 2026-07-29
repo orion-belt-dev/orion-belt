@@ -15,8 +15,9 @@ pkg/metrics	100.0
 pkg/notify	75.0
 pkg/plugin	28.5
 pkg/recording	67.9
-pkg/sdk	26.1
+pkg/sdk	26.5
 pkg/server	8.3
+pkg/tracing	79.6
 pkg/version	100.0
 plugins/audit-logger	0.0
 plugins/chatops-access-request	21.4

@@ -7,12 +7,32 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/zrougamed/orion-belt/pkg/common"
 	"github.com/zrougamed/orion-belt/pkg/server"
+	"github.com/zrougamed/orion-belt/pkg/tracing"
 	"github.com/zrougamed/orion-belt/pkg/version"
 )
+
+// tracingFlushTimeout bounds how long shutdown waits for buffered spans to
+// reach the collector. Losing the last few spans is preferable to hanging a
+// restart on an unreachable collector.
+const tracingFlushTimeout = 5 * time.Second
+
+// flushTracing drains buffered spans on shutdown. Safe to defer
+// unconditionally: when tracing is disabled the shutdown func is a no-op.
+func flushTracing(shutdown tracing.ShutdownFunc, logger *common.Logger) {
+	if shutdown == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), tracingFlushTimeout)
+	defer cancel()
+	if err := shutdown(ctx); err != nil {
+		logger.Warn("Error flushing traces: %v", err)
+	}
+}
 
 var (
 	configFile string
@@ -70,6 +90,19 @@ func runServer(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Fatal("Failed to load config: %v", err)
 	}
+
+	// Start tracing before the server so gateway spans exist from the first
+	// session. A no-op when tracing.enabled is false, so this is always safe
+	// to call and always safe to defer.
+	shutdownTracing, err := tracing.Init(context.Background(),
+		tracing.FromCommon(config.Tracing, "orion-belt-gateway", version.Version), logger)
+	if err != nil {
+		// Config validation failed (missing service name, bad ratio, etc.).
+		// An unreachable collector does not fail Init — OTLP New is
+		// non-blocking — and surfaces later as exporter warnings.
+		logger.Fatal("Failed to initialize tracing: %v", err)
+	}
+	defer flushTracing(shutdownTracing, logger)
 
 	// Create server
 	srv, err := server.New(config, logger)

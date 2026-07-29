@@ -20,7 +20,10 @@ import (
 	"github.com/creack/pty"
 	"github.com/zrougamed/orion-belt/pkg/ca"
 	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/zrougamed/orion-belt/pkg/tracing"
 	"github.com/zrougamed/orion-belt/pkg/version"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	gossh "golang.org/x/crypto/ssh"
 )
 
@@ -188,9 +191,25 @@ func (a *Agent) handleChannels(chans <-chan gossh.NewChannel) {
 func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 	a.logger.Info("Accepting session channel")
 
+	// Continue the gateway's trace when it sent context in the channel-open
+	// extra data. Absent or unparseable data yields a plain context and this
+	// session simply roots its own trace, so an older gateway still works.
+	ctx := tracing.ExtractChannelData(context.Background(), newChannel.ExtraData())
+	linked := tracing.HasRemoteParent(ctx)
+
+	ctx, span := tracing.Start(ctx, "agent.session", trace.WithSpanKind(trace.SpanKindServer))
+	defer span.End()
+	tracing.SetAttributes(span,
+		attribute.String("orion.agent.name", a.config.Agent.Name),
+		// Distinguishes a trace stitched to the gateway from one the agent
+		// rooted alone — the quickest way to spot a half-configured fleet.
+		attribute.Bool("orion.trace.linked_to_gateway", linked),
+	)
+
 	channel, requests, err := newChannel.Accept()
 	if err != nil {
 		a.logger.Error("Failed to accept channel: %v", err)
+		tracing.RecordError(span, err)
 		return
 	}
 
@@ -227,7 +246,7 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 
 			req.Reply(true, nil)
 
-			a.startShell(channel, username, ptyReq)
+			a.startShell(ctx, channel, username, ptyReq)
 			channel.Close()
 			return
 
@@ -248,11 +267,11 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 
 			// Server control commands (orion:*) — do not execute as shell
 			if strings.HasPrefix(execCommand, "orion:") {
-				a.handleControlCommand(channel, execCommand)
+				a.handleControlCommand(ctx, channel, execCommand)
 				return
 			}
 
-			a.executeCommand(channel, execCommand, payload.User)
+			a.executeCommand(ctx, channel, execCommand, payload.User)
 			return
 
 		case "env":
@@ -279,7 +298,17 @@ type ptyRequestMsg struct {
 	Modelist string
 }
 
-func (a *Agent) startShell(channel gossh.Channel, username string, ptyReq *ptyRequestMsg) {
+// startShell runs the interactive login shell on the target. The span it opens
+// is the final gateway -> agent -> target hop; its duration is how long the
+// user stayed connected, not a latency figure.
+func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, username string, ptyReq *ptyRequestMsg) {
+	_, span := tracing.Start(ctx, "agent.target.shell")
+	defer span.End()
+	tracing.SetAttributes(span,
+		attribute.String("orion.target.remote_user", username),
+		attribute.Bool("orion.target.pty", ptyReq != nil),
+	)
+
 	a.logger.Info("Starting interactive shell")
 
 	if username == "" {
@@ -488,7 +517,18 @@ func loginShellFromPasswd(passwdPath, username string) string {
 // actually granted access — instead of always running as the agent's own uid.
 // An empty username preserves the previous behavior (run as the agent's identity)
 // for callers that don't carry a remote user, e.g. admin agent control commands.
-func (a *Agent) executeCommand(channel gossh.Channel, command string, username string) {
+// executeCommand runs a one-shot command on the target — the final
+// gateway -> agent -> target hop for non-interactive sessions (including scp).
+func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, command string, username string) {
+	_, span := tracing.Start(ctx, "agent.target.exec")
+	defer span.End()
+	tracing.SetAttributes(span,
+		attribute.String("orion.target.remote_user", username),
+		// Program name only — a full command line can carry secrets, and
+		// spans leave the box for a collector.
+		attribute.String("orion.command", tracing.CommandName(command)),
+	)
+
 	a.logger.Info("Executing command as %q: %s", username, command)
 
 	cmd := exec.Command("/bin/sh", "-c", command)
@@ -617,20 +657,29 @@ func (a *Agent) sendExitStatus(channel gossh.Channel, status int) {
 
 // handleControlCommand processes server→agent management commands.
 // Supported: orion:status, orion:health, orion:info, orion:ping, orion:restart
-func (a *Agent) handleControlCommand(channel gossh.Channel, command string) {
+func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel, command string) {
+	_, span := tracing.Start(ctx, "agent.control")
+	defer span.End()
+
 	defer channel.Close()
 
 	cmd := strings.TrimSpace(command)
 	var result map[string]interface{}
 	exitStatus := 0
+	// Record only the matched verb constant — never the raw string. Dispatch
+	// is HasPrefix("orion:"), so unvalidated input can carry arbitrary
+	// attacker-controlled content of unbounded length into the collector.
+	var controlVerb string
 
 	switch cmd {
 	case "orion:ping":
+		controlVerb = "orion:ping"
 		result = map[string]interface{}{
 			"ok":   true,
 			"pong": true,
 		}
 	case "orion:health", "orion:status":
+		controlVerb = cmd
 		result = map[string]interface{}{
 			"ok":          true,
 			"status":      "healthy",
@@ -644,6 +693,7 @@ func (a *Agent) handleControlCommand(channel gossh.Channel, command string) {
 			"uptime_hint": "connected",
 		}
 	case "orion:info":
+		controlVerb = "orion:info"
 		result = map[string]interface{}{
 			"ok":         true,
 			"agent":      a.config.Agent.Name,
@@ -656,23 +706,11 @@ func (a *Agent) handleControlCommand(channel gossh.Channel, command string) {
 			"hostname":   hostnameOrEmpty(),
 		}
 	case "orion:restart":
+		controlVerb = "orion:restart"
 		result = map[string]interface{}{
 			"ok":      true,
 			"message": "restart scheduled",
 		}
-		data, _ := json.Marshal(result)
-		channel.Write(append(data, '\n'))
-		a.sendExitStatus(channel, 0)
-		channel.CloseWrite()
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			cmd := exec.Command("systemctl", "restart", "orion-belt-agent")
-			if err := cmd.Start(); err != nil {
-				a.logger.Warn("systemctl restart failed (%v); exiting for process supervisor", err)
-				os.Exit(0)
-			}
-		}()
-		return
 	default:
 		result = map[string]interface{}{
 			"ok":      false,
@@ -685,10 +723,25 @@ func (a *Agent) handleControlCommand(channel gossh.Channel, command string) {
 		exitStatus = 1
 	}
 
+	if controlVerb != "" {
+		tracing.SetAttributes(span, attribute.String("orion.control.command", controlVerb))
+	}
+
 	data, _ := json.Marshal(result)
 	channel.Write(append(data, '\n'))
 	a.sendExitStatus(channel, exitStatus)
 	channel.CloseWrite()
+
+	if controlVerb == "orion:restart" {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			cmd := exec.Command("systemctl", "restart", "orion-belt-agent")
+			if err := cmd.Start(); err != nil {
+				a.logger.Warn("systemctl restart failed (%v); exiting for process supervisor", err)
+				os.Exit(0)
+			}
+		}()
+	}
 }
 
 func hostnameOrEmpty() string {

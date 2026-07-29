@@ -16,7 +16,7 @@ Shipped as a stability cut of what’s already on `master` (CA, MFA, JIT, ReBAC,
 - [ ] HashiCorp Vault
 - [ ] Fancier agent remote management (reload, drain, update)
 - [ ] Better unit coverage / integration suites
-- [ ] OpenTelemetry tracing (logs + metrics are in)
+- [x] OpenTelemetry tracing — gateway → agent → target spans over OTLP, off by default ([OBSERVABILITY.md](OBSERVABILITY.md))
 
 ### After v1.0.0
 
@@ -171,7 +171,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 
 * **Observability**
   - [x] Prometheus-format metrics at `GET /metrics`
-  - [ ] OpenTelemetry tracing
+  - [x] OpenTelemetry tracing (OTLP export, W3C context across the agent hop)
   - [ ] Alerting system
 
 ---
@@ -233,8 +233,8 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 
 - [ ] HashiCorp Vault integration
 - [ ] Structured logs (Loki/ELK)
-- [ ] OpenTelemetry tracing
-- [ ] Notification templates (user preferences shipped — see Notifications & Integrations)
+- [x] OpenTelemetry tracing
+- [ ] Notification templates / user preferences
 - [ ] Recording compression
 - [ ] Richer permission editor in UI
 - [x] Machine CRUD in UI
