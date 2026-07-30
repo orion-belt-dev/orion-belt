@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zrougamed/orion-belt/pkg/auth"
-	"github.com/zrougamed/orion-belt/pkg/metrics"
+	"github.com/orion-belt-dev/orion-belt/pkg/auth"
+	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
 )
 
 // pendingEnrollments holds in-progress MFA enrollments (userID -> secret) until confirmed.
@@ -48,7 +48,7 @@ func (s *APIServer) mfaEnroll(c *gin.Context) {
 	}
 
 	pendingEnrollments.Store(userID.(string), map[string]string{
-		"secret":       key.Secret(),
+		"secret":        key.Secret(),
 		"backup_hashes": hashStore,
 	})
 

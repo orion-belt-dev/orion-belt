@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 )
 
 type SlackPlugin struct {

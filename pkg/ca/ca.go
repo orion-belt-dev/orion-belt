@@ -22,9 +22,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/cryptutil"
-	"github.com/zrougamed/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/cryptutil"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
 )
 
 const (
@@ -201,7 +201,8 @@ func (a *Authority) HostCAPublicKey() ssh.PublicKey {
 
 // ExportPublicKeys returns both CA public keys in authorized_keys format,
 // this is what an operator distributes to clients/agents
-//  as trusted CA material.
+//
+//	as trusted CA material.
 func (a *Authority) ExportPublicKeys() (userLine, hostLine string) {
 	if pub := a.UserCAPublicKey(); pub != nil {
 		userLine = string(ssh.MarshalAuthorizedKey(pub))

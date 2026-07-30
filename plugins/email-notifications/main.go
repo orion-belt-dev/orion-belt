@@ -7,7 +7,7 @@ import (
 	"net/smtp"
 	"strings"
 
-	"github.com/zrougamed/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 )
 
 // EmailPlugin sends SMTP notifications for Orion Belt events.

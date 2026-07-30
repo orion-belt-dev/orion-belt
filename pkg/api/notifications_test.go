@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 // An unknown channel in an admin payload must be reported rather than silently

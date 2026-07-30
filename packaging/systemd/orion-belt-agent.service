@@ -1,6 +1,6 @@
 [Unit]
 Description=Orion Belt reverse SSH agent
-Documentation=https://github.com/zrougamed/orion-belt
+Documentation=https://github.com/orion-belt-dev/orion-belt
 After=network-online.target
 Wants=network-online.target
 

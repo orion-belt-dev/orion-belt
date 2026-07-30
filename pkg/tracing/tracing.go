@@ -34,7 +34,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 // maxCommandNameLen caps the program name written to orion.command so a

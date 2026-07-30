@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
