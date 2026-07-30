@@ -3,7 +3,8 @@
         bench perf-check perf-baseline \
         docker-build docker-build-server docker-build-agent docker-build-client \
         docker-push docker-up docker-down docker-logs docker-agent-up docker-agent-down \
-        cve packages repos packaging-key sign-artifacts lab-compose-up lab-compose-down lab-bootstrap-admin \
+        cve packages repos packaging-key sign-artifacts serve-packages publish-packages-pages \
+        lab-compose-up lab-compose-down lab-bootstrap-admin \
         lab-qemu-images lab-qemu-images-refresh lab-qemu-up lab-qemu-down lab-qemu-restart lab-qemu-test \
         lab-qemu-connect-agents lab-qemu-collect-keys lab-qemu-register-agents \
         lab-qemu-clean lab-qemu-start lab-qemu-update
@@ -200,6 +201,17 @@ cve:
 packages:
 	bash scripts/package.sh
 
+# Serve dist/ on :8765 for Add-agent / local installs (ORION_PKG_PORT, ORION_PKG_BUILD=1)
+serve-packages:
+	bash scripts/serve-packages.sh
+
+# Build flat GitHub Pages tree (packages-site/). Push: make publish-packages-pages PUSH=1
+# From release assets: make publish-packages-pages FROM_RELEASE=1
+publish-packages-pages:
+	bash scripts/publish-packages-pages.sh \
+		$(if $(filter 1,$(FROM_RELEASE)),--from-release,) \
+		$(if $(filter 1,$(PUSH)),--push,)
+
 # Build static apt/rpm/apk repos under repos/ (after make packages)
 # Signed: ./scripts/gen-packaging-key.sh && ORION_REQUIRE_SIGN=1 make repos
 repos:
@@ -212,7 +224,6 @@ packaging-key:
 # Detached GPG signatures + SHA256SUMS for dist/
 sign-artifacts:
 	bash scripts/sign-artifacts.sh
-
 lab-compose-up:
 	bash lab/compose/bootstrap-keys.sh
 	docker compose -f lab/compose/docker-compose.yml up -d --build
