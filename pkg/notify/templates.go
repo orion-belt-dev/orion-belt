@@ -16,12 +16,13 @@ const (
 	EventAccessRequestExpired  = "access_request.expired"
 )
 
-// Size limits for admin-supplied copy. The title bound matches the column the
-// rendered notification lands in, so a template that saves cannot produce a
-// notification that fails to insert.
+// Size limits for admin-supplied copy. Title is capped below the DB column so
+// there is headroom for short literal titles; expansion can still overshoot
+// MaxNotificationTitleLen, which Render truncates to before delivery.
 const (
-	MaxTemplateTitleLen = 200
-	MaxTemplateBodyLen  = 4000
+	MaxTemplateTitleLen     = 200
+	MaxTemplateBodyLen      = 4000
+	MaxNotificationTitleLen = 255 // matches notifications.title VARCHAR(255)
 )
 
 // Template is the admin-editable copy for one event type. A stored template
@@ -224,13 +225,16 @@ func (ts TemplateSet) Get(eventType string) *Template {
 //
 // An unrecognized type is still deliverable: it renders as its own type string
 // with whatever body the caller supplied, matching the pre-template fallback.
+//
+// Titles are truncated to MaxNotificationTitleLen so a long machine name or
+// remote_users list cannot push the insert past notifications.title VARCHAR(255).
 func (ts TemplateSet) Render(notifType string, data map[string]string) (title, body string) {
 	tmpl := ts.Get(notifType)
 	if tmpl == nil {
-		return notifType, data["body"]
+		return truncateRunes(notifType, MaxNotificationTitleLen), data["body"]
 	}
 	values := renderData(data)
-	return Expand(tmpl.Title, values), Expand(tmpl.Body, values)
+	return truncateRunes(Expand(tmpl.Title, values), MaxNotificationTitleLen), Expand(tmpl.Body, values)
 }
 
 // Render builds title/body for a known notification type using the built-in
@@ -283,15 +287,39 @@ func renderData(data map[string]string) map[string]string {
 }
 
 // SortTemplates orders templates by the stable catalog order of
-// KnownEventTypes, so a listing does not reshuffle between reads.
+// KnownEventTypes, so a listing does not reshuffle between reads. Unknown
+// event types sort after the catalog rather than colliding at index 0.
 func SortTemplates(templates []*Template) {
-	order := map[string]int{}
-	for i, event := range KnownEventTypes() {
+	known := KnownEventTypes()
+	order := make(map[string]int, len(known))
+	for i, event := range known {
 		order[event] = i
 	}
+	unknown := len(known)
 	sort.SliceStable(templates, func(i, j int) bool {
-		return order[templates[i].EventType] < order[templates[j].EventType]
+		oi, oki := order[templates[i].EventType]
+		oj, okj := order[templates[j].EventType]
+		if !oki {
+			oi = unknown
+		}
+		if !okj {
+			oj = unknown
+		}
+		return oi < oj
 	})
+}
+
+// truncateRunes shortens s to at most max Unicode code points. Postgres
+// VARCHAR(n) counts characters, not bytes.
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
 }
 
 // FormatTTL formats an expiry for notification copy.

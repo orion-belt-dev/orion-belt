@@ -294,6 +294,10 @@ func (s *APIServer) putNotificationTemplate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	s.recordAudit(c, "notification_template.update", "notification_template:"+event, map[string]interface{}{
+		"title": tmpl.Title,
+		"body":  tmpl.Body,
+	})
 
 	def := notify.DefaultTemplate(event)
 	c.JSON(http.StatusOK, templateEntry{
@@ -319,6 +323,7 @@ func (s *APIServer) deleteNotificationTemplate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	s.recordAudit(c, "notification_template.delete", "notification_template:"+event, nil)
 
 	def := notify.DefaultTemplate(event)
 	c.JSON(http.StatusOK, templateEntry{

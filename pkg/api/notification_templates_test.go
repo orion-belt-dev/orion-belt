@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
@@ -36,8 +37,13 @@ func (s *templateStore) ListNotificationTemplates(context.Context) ([]*notify.Te
 }
 
 func (s *templateStore) UpsertNotificationTemplate(_ context.Context, t *notify.Template) error {
+	t.UpdatedAt = time.Now()
 	s.upserted = t
 	s.templates = append(s.templates, t)
+	return nil
+}
+
+func (s *templateStore) CreateAuditLog(context.Context, *common.AuditLog) error {
 	return nil
 }
 
@@ -110,6 +116,29 @@ func TestDeliverNotificationUsesStoredTemplate(t *testing.T) {
 	}
 	if got.Body != "lab-1 is yours for 30m." {
 		t.Errorf("expected the override body, got %q", got.Body)
+	}
+}
+
+// A title that expands past notifications.title VARCHAR(255) must still insert:
+// deliverNotification truncates via Render rather than dropping the notice.
+func TestDeliverNotificationTruncatesOversizedTitle(t *testing.T) {
+	longMachine := strings.Repeat("m", 240)
+	store := &templateStore{templates: []*notify.Template{{
+		EventType: notify.EventAccessRequestApproved,
+		Title:     "Access approved for {{machine}}",
+		Body:      "ok",
+	}}}
+	s := &APIServer{store: store}
+
+	s.deliverNotification(context.Background(), "u1", notify.EventAccessRequestApproved, map[string]string{
+		"machine": longMachine,
+	})
+
+	if len(store.created) != 1 {
+		t.Fatalf("expected one notification, got %d", len(store.created))
+	}
+	if n := len([]rune(store.created[0].Title)); n > notify.MaxNotificationTitleLen {
+		t.Errorf("title length %d exceeds column limit %d", n, notify.MaxNotificationTitleLen)
 	}
 }
 

@@ -186,6 +186,52 @@ func TestExpandLeavesUnknownPlaceholders(t *testing.T) {
 	}
 }
 
+// Expansion of a long machine name must not produce a title that Postgres
+// would reject as value-too-long for notifications.title VARCHAR(255).
+func TestRenderTruncatesTitleToColumnLimit(t *testing.T) {
+	longMachine := strings.Repeat("m", 240)
+	full := Expand("Access approved for {{machine}}", map[string]string{"machine": longMachine})
+	if len([]rune(full)) <= MaxNotificationTitleLen {
+		t.Fatalf("test setup: expected untruncated title over the limit, got %d", len([]rune(full)))
+	}
+
+	set := NewTemplateSet([]*Template{{
+		EventType: EventAccessRequestApproved,
+		Title:     "Access approved for {{machine}}",
+		Body:      "ok",
+	}})
+	title, body := set.Render(EventAccessRequestApproved, map[string]string{
+		"machine": longMachine,
+	})
+	if body != "ok" {
+		t.Errorf("body should be untouched, got %q", body)
+	}
+	if n := len([]rune(title)); n != MaxNotificationTitleLen {
+		t.Errorf("expected title truncated to %d runes, got %d (%q)", MaxNotificationTitleLen, n, title)
+	}
+	if !strings.HasPrefix(title, "Access approved for ") {
+		t.Errorf("expected truncated expanded title, got %q", title)
+	}
+}
+
+func TestSortTemplatesPutsUnknownEventsLast(t *testing.T) {
+	templates := []*Template{
+		{EventType: "stale.from.downgrade"},
+		{EventType: EventAccessRequestApproved},
+		{EventType: EventAccessRequestRejected},
+	}
+	SortTemplates(templates)
+	if templates[0].EventType != EventAccessRequestApproved {
+		t.Errorf("expected approved first, got %q", templates[0].EventType)
+	}
+	if templates[1].EventType != EventAccessRequestRejected {
+		t.Errorf("expected rejected second, got %q", templates[1].EventType)
+	}
+	if templates[2].EventType != "stale.from.downgrade" {
+		t.Errorf("expected unknown last, got %q", templates[2].EventType)
+	}
+}
+
 // Validation is the only thing standing between an admin typo and a broken
 // notification, since a bad placeholder renders as literal braces to a user.
 func TestTemplateValidateRejectsUnknownPlaceholder(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
-	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 )
 
 func init() {
@@ -1337,19 +1337,21 @@ func (s *PostgresStore) ListNotificationTemplates(ctx context.Context) ([]*notif
 }
 
 // UpsertNotificationTemplate stores the copy override for one event type.
+// On success, tmpl.UpdatedAt is set to the timestamp written by the database
+// so the PUT response matches a subsequent GET.
 func (s *PostgresStore) UpsertNotificationTemplate(ctx context.Context, tmpl *notify.Template) error {
 	if tmpl == nil {
 		return fmt.Errorf("template is required")
 	}
-	_, err := s.db.ExecContext(ctx, `
+	return s.db.QueryRowContext(ctx, `
 		INSERT INTO notification_templates (event_type, title, body, updated_at)
 		VALUES ($1,$2,$3,NOW())
 		ON CONFLICT (event_type) DO UPDATE SET
 		  title=EXCLUDED.title,
 		  body=EXCLUDED.body,
-		  updated_at=NOW()`,
-		tmpl.EventType, tmpl.Title, tmpl.Body)
-	return err
+		  updated_at=NOW()
+		RETURNING updated_at`,
+		tmpl.EventType, tmpl.Title, tmpl.Body).Scan(&tmpl.UpdatedAt)
 }
 
 // DeleteNotificationTemplate drops the override for eventType, which reverts
