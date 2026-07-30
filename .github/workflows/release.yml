@@ -93,3 +93,40 @@ jobs:
           name: orion-belt-repos
           path: repos/
           if-no-files-found: warn
+
+      - name: Build packages Pages tree
+        env:
+          ORION_PKG_TAG: ${{ github.ref_name }}
+          ORION_DIST: dist
+          PACKAGES_DEPLOY_KEY: ${{ secrets.PACKAGES_DEPLOY_KEY }}
+        run: |
+          if ls dist/orion-belt-agent*.deb >/dev/null 2>&1; then
+            bash scripts/publish-packages-pages.sh
+          else
+            bash scripts/publish-packages-pages.sh --from-release
+          fi
+          echo "has_deploy_key=false" >> "$GITHUB_OUTPUT"
+          if [ -n "$PACKAGES_DEPLOY_KEY" ]; then
+            echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
+          fi
+        id: packages_pages
+
+      - name: Upload packages-site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orion-belt-packages-site
+          path: packages-site/
+          if-no-files-found: warn
+
+      - name: Push packages-site to orion-belt-dev/packages (gh-pages)
+        if: steps.packages_pages.outputs.has_deploy_key == 'true'
+        env:
+          PACKAGES_DEPLOY_KEY: ${{ secrets.PACKAGES_DEPLOY_KEY }}
+          ORION_PKG_TAG: ${{ github.ref_name }}
+        run: |
+          eval "$(ssh-agent -s)"
+          echo "$PACKAGES_DEPLOY_KEY" | tr -d '\r' | ssh-add -
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          bash scripts/publish-packages-pages.sh --push

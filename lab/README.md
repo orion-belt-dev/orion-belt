@@ -153,6 +153,7 @@ Networking:
 - Management SSH: server `:2200`, agents `:2201`–`:2204`.
 
 `dist/` is served over HTTP on `:8765` so cloud-init can install packages or raw binaries.
+Outside the lab you can run the same mirror with `make serve-packages`, or use the public Pages URL `https://orion-belt-dev.github.io/packages`.
 
 Images: `lab/qemu/images/` (gitignored). Overlays/logs: `lab/qemu/run/`. Credentials: `lab/credentials/` (gitignored).
 

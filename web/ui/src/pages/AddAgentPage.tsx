@@ -13,6 +13,11 @@ import logoSuse from "../assets/distros/suse.png";
 import logoAlpine from "../assets/distros/alpine.png";
 import logoLinux from "../assets/distros/linux.png";
 
+/** Public GitHub Pages mirror (orion-belt-dev/packages). Local: make serve-packages → :8765 */
+const DEFAULT_PACKAGE_BASE_URL = "https://orion-belt-dev.github.io/packages";
+/** Matches the seeded Pages release when the gateway build is untagged/dev. */
+const DEFAULT_PACKAGE_VERSION = "1.0.0";
+
 const OS_OPTIONS = [
   {
     id: "debian",
@@ -68,11 +73,11 @@ export function AddAgentPage() {
   const [env, setEnv] = useState("production");
   const [gw, setGw] = useState(window.location.hostname || "127.0.0.1");
   const [gwPort, setGwPort] = useState(2222);
-  const [pkg, setPkg] = useState(window.location.origin.replace(/:\d+$/, "") + ":8765");
+  const [pkg, setPkg] = useState(DEFAULT_PACKAGE_BASE_URL);
   const [ver, setVer] = useState(() => {
-    let v = version?.version || version?.display || "0.0.0";
+    let v = version?.version || version?.display || DEFAULT_PACKAGE_VERSION;
     if (String(v).startsWith("v")) v = String(v).slice(1);
-    if (v === "dev") v = "0.0.0";
+    if (v === "dev" || v === "0.0.0") v = DEFAULT_PACKAGE_VERSION;
     return String(v);
   });
   const [script, setScript] = useState("");
@@ -176,7 +181,11 @@ export function AddAgentPage() {
           </div>
           <div>
             <label className="field">Package base URL</label>
-            <input value={pkg} onChange={(e) => setPkg(e.target.value)} />
+            <input
+              value={pkg}
+              onChange={(e) => setPkg(e.target.value)}
+              placeholder={DEFAULT_PACKAGE_BASE_URL}
+            />
           </div>
           <div>
             <label className="field">Package version</label>
