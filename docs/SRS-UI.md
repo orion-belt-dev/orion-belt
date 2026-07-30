@@ -5,7 +5,7 @@
 **Base URL:** `/ui/` (served by the gateway; redirects from `/` and `/admin`)  
 **API:** `/api/v1/*` — see [openapi/openapi.yaml](openapi/openapi.yaml)  
 **Status:** React console Phase 2 — **v1.0.0**  
-**Last updated:** July 2026 (live watch, permissions all-grants/edit, notification prefs + admin notification policy, usage analytics dashboard)
+**Last updated:** July 2026 (live watch, permissions all-grants/edit, notification prefs + admin notification policy, admin notification templates, usage analytics dashboard)
 
 ---
 
@@ -34,6 +34,9 @@ This SRS is the acceptance baseline for UI regressions and for matching OpenAPI 
   policy disallows render disabled, admin-mandated events render locked on, and
   a save that had to be adjusted says so (Security → Notifications). Admins edit
   the policy itself on the Plugins page.
+- Admin-editable **notification templates**: the title and body of each event's
+  copy, with the variables that event supplies and a reset to the built-in
+  wording (Plugins page). Edits apply to the next notification delivered.
 - Production assets embedded via `go:embed` (`make build-ui` → `web/static`)
 
 ### Non-goals (deferred)

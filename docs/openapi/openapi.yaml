@@ -1806,6 +1806,89 @@ paths:
         "400": { description: Unknown notification channel }
         "403": { description: Not an admin or operator }
 
+  /api/v1/admin/notifications/templates:
+    get:
+      tags: [Admin, Notifications]
+      summary: List notification templates
+      description: |
+        Admin/operator only. Returns the copy in force for every templatable
+        event: a stored override where one exists, otherwise the built-in
+        default. Each entry also carries the default it can be reset to and the
+        placeholders that event supplies.
+      responses:
+        "200":
+          description: Effective copy for every templatable event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationTemplate"
+        "403": { description: Not an admin or operator }
+
+  /api/v1/admin/notifications/templates/{event}:
+    put:
+      tags: [Admin, Notifications]
+      summary: Replace the copy for one notification event
+      description: |
+        Admin/operator only. Templates are read on every delivery, so the new
+        wording applies to the next notification sent — no restart is needed.
+
+        Copy is trimmed before storage and rejected if it references a
+        placeholder the event does not supply, since an unresolved placeholder
+        would reach the recipient as literal braces.
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string }
+          description: Event type being edited, e.g. `access_request.approved`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, body]
+              properties:
+                event_type:
+                  type: string
+                  description: Optional; must match the path when present.
+                title: { type: string, maxLength: 200 }
+                body: { type: string, maxLength: 4000 }
+      responses:
+        "200":
+          description: Saved, after normalization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplate"
+        "400": { description: Unknown event type, unknown placeholder, or empty copy }
+        "403": { description: Not an admin or operator }
+    delete:
+      tags: [Admin, Notifications]
+      summary: Revert one notification event to its built-in copy
+      description: |
+        Admin/operator only. Removing an override that was never stored is not
+        an error — the caller asked for the default and gets the default.
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The built-in copy now in force
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplate"
+        "400": { description: Unknown event type }
+        "403": { description: Not an admin or operator }
+
   /api/v1/ssh-cert/ca:
     get:
       tags: [SSH CA]
@@ -2186,6 +2269,29 @@ components:
             Event type to the channels it is always delivered on. These cannot
             be switched off by a user preference. A channel named here is
             promoted into allowed_channels on save.
+        updated_at: { type: string, format: date-time }
+    NotificationTemplate:
+      type: object
+      description: >-
+        Admin-editable copy for one event type. Placeholders are written as
+        {{name}} and substituted at delivery time.
+      properties:
+        event_type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        customized:
+          type: boolean
+          description: True when this is a stored override rather than the built-in copy.
+        default_title:
+          type: string
+          description: The built-in title, restored by DELETE.
+        default_body:
+          type: string
+          description: The built-in body, restored by DELETE.
+        placeholders:
+          type: array
+          items: { type: string }
+          description: Placeholder names this event supplies, without braces.
         updated_at: { type: string, format: date-time }
     LoginResponse:
       type: object
