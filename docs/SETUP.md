@@ -93,7 +93,7 @@ orion-belt-server -c /etc/orion-belt/server.yaml setup
 1. Sign in as **admin** or **operator**.
 2. Open **Add agent** in the console.
 3. Choose the target OS (Debian/Ubuntu, RHEL/Rocky, openSUSE, Alpine, or generic Linux).
-4. Set agent name, gateway host (SSH port **2222**), and **package base URL**. The UI defaults to the public mirror [`https://orion-belt-dev.github.io/packages`](https://orion-belt-dev.github.io/packages) (version **1.0.0** when the gateway build is untagged). For a local `dist/` build instead: `make packages && make serve-packages`, then set the base URL to `http://127.0.0.1:8765` (or your host IP).
+4. Set agent name, gateway host (SSH port **2222**), and **package base URL**. The UI defaults to the public mirror [`https://orion-belt-dev.github.io/packages`](https://orion-belt-dev.github.io/packages) and loads **Package version** from that mirror’s `VERSION` file. For a local `dist/` build instead: `make packages && make serve-packages`, then set the base URL to `http://127.0.0.1:8765` (or your host IP).
 5. **Generate install script** — the server registers the agent and returns a root shell script that embeds the agent private key, downloads the package, writes `/etc/orion-belt/agent.yaml`, and starts the service.
 6. Copy or download the script and run it on the target host as root.
 

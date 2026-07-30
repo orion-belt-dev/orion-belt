@@ -62,6 +62,8 @@ lab/credentials/
 .env
 .env.server
 .env.agent
+.env.prod
+.env.prod.agent
 /agent-key
 /agent-key.pub
 /admin-key

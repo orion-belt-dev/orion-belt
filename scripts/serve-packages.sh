@@ -36,6 +36,18 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 BIND="${ORION_PKG_BIND:-0.0.0.0}"
+
+# Ensure VERSION exists so Add-agent can discover the package version locally.
+if [[ ! -f "$DIST/VERSION" ]]; then
+  ver="${VERSION:-$(git -C "$ROOT" describe --tags --abbrev=0 2>/dev/null || true)}"
+  ver="${ver#v}"
+  if [[ -z "$ver" || "$ver" == "dev" ]]; then
+    ver="0.0.0"
+  fi
+  printf '%s\n' "$ver" >"$DIST/VERSION"
+  echo "Wrote $DIST/VERSION ($ver)"
+fi
+
 echo "Serving $DIST at http://${BIND}:$PORT/"
 echo "Add agent → Package base URL: http://127.0.0.1:$PORT  (or http://<host-ip>:$PORT)"
 echo "Ctrl-C to stop."
