@@ -1341,8 +1341,9 @@ paths:
            starts `orion-belt-agent`
 
         The private key is embedded in the script — treat it as a secret.
-        `package_base_url` must serve agent artifacts (e.g. GitHub Releases,
-        apt/rpm mirror, or lab `:8765` serving `dist/`).
+        `package_base_url` must serve agent artifacts. Default in the UI is
+        the public mirror `https://orion-belt-dev.github.io/packages`
+        (or lab `:8765` via `make serve-packages`).
       requestBody:
         required: true
         content:
@@ -2411,11 +2412,11 @@ components:
         package_base_url:
           type: string
           description: Base URL that serves orion-belt-agent packages/binary
-          example: https://packages.example.com
+          example: https://orion-belt-dev.github.io/packages
         version:
           type: string
           description: Package version string (without leading v). Defaults to server build version.
-          example: "0.6.0"
+          example: "1.0.0"
     AgentInstallScriptResponse:
       type: object
       properties:

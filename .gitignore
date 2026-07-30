@@ -50,6 +50,7 @@ recordings/
 # Release / packaging output
 dist/
 repos/
+packages-site/
 
 # QEMU / compose lab state
 lab/qemu/images/
@@ -65,6 +66,8 @@ lab/credentials/
 /agent-key.pub
 /admin-key
 /admin-key.pub
+/client.yaml
+/.orion-known-hosts
 
 # Frontend
 web/ui/node_modules/

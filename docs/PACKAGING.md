@@ -128,6 +128,8 @@ For Alpine index signing, set `ORION_APK_PRIVKEY` / `ORION_APK_PUBKEY` when call
 
 Wire the script into release CD after GoReleaser to refresh the hosted repo.
 
+The Release workflow also builds a flat **Add-agent** mirror under `packages-site/` (artifact `orion-belt-packages-site`). To auto-push it to [`orion-belt-dev/packages`](https://github.com/orion-belt-dev/packages) `gh-pages`, set repo secret `PACKAGES_DEPLOY_KEY` (deploy key with write access). Without it, download the artifact and run `make publish-packages-pages PUSH=1` locally.
+
 ### Arch Linux
 
 Binary packages via `packaging/arch/PKGBUILD` (reads GitHub release tarballs):
@@ -150,4 +152,23 @@ sudo systemctl enable --now orion-belt-server
 orion-belt-server setup
 ```
 
-To enroll hosts quickly, use the UI **Add agent** flow (or `POST /api/v1/admin/agents/install-script`). Point **package base URL** at a directory that serves the artifacts from `make packages` / `dist/` (or your published apt/rpm/apk/GitHub release URLs).
+To enroll hosts quickly, use the UI **Add agent** flow (or `POST /api/v1/admin/agents/install-script`). The default **package base URL** is the public GitHub Pages mirror:
+
+```text
+https://orion-belt-dev.github.io/packages
+```
+
+That site is the [`orion-belt-dev/packages`](https://github.com/orion-belt-dev/packages) repo (`gh-pages`). Refresh it after a release:
+
+```bash
+make publish-packages-pages FROM_RELEASE=1 PUSH=1
+# or from local dist/:
+make packages && make publish-packages-pages PUSH=1
+```
+
+For a **local** package server (dev builds, air-gapped, or custom `dist/`):
+
+```bash
+make packages
+make serve-packages   # http://127.0.0.1:8765 — set that as Package base URL
+```

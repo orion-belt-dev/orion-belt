@@ -250,7 +250,14 @@ agent:
 	switch osID {
 	case "debian":
 		b.WriteString(`echo "==> Installing orion-belt-agent (deb)"
-if curl -fsSL -o /tmp/orion-belt-agent.deb "$PKG_BASE/orion-belt-agent_${VERSION}_amd64.deb"; then
+DEB=""
+for cand in \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_amd64.deb" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.deb"
+do
+  if curl -fsSL -o /tmp/orion-belt-agent.deb "$cand"; then DEB=1; break; fi
+done
+if [ -n "$DEB" ]; then
   dpkg -i /tmp/orion-belt-agent.deb || apt-get install -f -y
   rm -f /tmp/orion-belt-agent.deb
 elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
@@ -262,7 +269,14 @@ fi
 `)
 	case "rhel":
 		b.WriteString(`echo "==> Installing orion-belt-agent (rpm)"
-if curl -fsSL -o /tmp/orion-belt-agent.rpm "$PKG_BASE/orion-belt-agent-${VERSION}-1.x86_64.rpm"; then
+RPM=""
+for cand in \
+  "$PKG_BASE/orion-belt-agent-${VERSION}-1.x86_64.rpm" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.rpm"
+do
+  if curl -fsSL -o /tmp/orion-belt-agent.rpm "$cand"; then RPM=1; break; fi
+done
+if [ -n "$RPM" ]; then
   if command -v dnf >/dev/null 2>&1; then dnf -y install /tmp/orion-belt-agent.rpm
   elif command -v yum >/dev/null 2>&1; then yum -y localinstall /tmp/orion-belt-agent.rpm
   else rpm -Uvh /tmp/orion-belt-agent.rpm; fi
@@ -276,7 +290,14 @@ fi
 `)
 	case "suse":
 		b.WriteString(`echo "==> Installing orion-belt-agent (rpm / zypper)"
-if curl -fsSL -o /tmp/orion-belt-agent.rpm "$PKG_BASE/orion-belt-agent-${VERSION}-1.x86_64.rpm"; then
+RPM=""
+for cand in \
+  "$PKG_BASE/orion-belt-agent-${VERSION}-1.x86_64.rpm" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.rpm"
+do
+  if curl -fsSL -o /tmp/orion-belt-agent.rpm "$cand"; then RPM=1; break; fi
+done
+if [ -n "$RPM" ]; then
   zypper -n install /tmp/orion-belt-agent.rpm || rpm -Uvh /tmp/orion-belt-agent.rpm
   rm -f /tmp/orion-belt-agent.rpm
 elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
@@ -288,7 +309,14 @@ fi
 `)
 	case "alpine":
 		b.WriteString(`echo "==> Installing orion-belt-agent (apk)"
-if curl -fsSL -o /tmp/orion-belt-agent.apk "$PKG_BASE/orion-belt-agent_${VERSION}_x86_64.apk"; then
+APK=""
+for cand in \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_x86_64.apk" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.apk"
+do
+  if curl -fsSL -o /tmp/orion-belt-agent.apk "$cand"; then APK=1; break; fi
+done
+if [ -n "$APK" ]; then
   apk add --allow-untrusted /tmp/orion-belt-agent.apk
   rm -f /tmp/orion-belt-agent.apk
 elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then

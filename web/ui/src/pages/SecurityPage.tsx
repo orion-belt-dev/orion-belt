@@ -389,7 +389,19 @@ export function SecurityPage() {
               </div>
               {backupCodes.length ? (
                 <>
-                  <label className="field">Backup codes — save these now</label>
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+                    <label className="field">Backup codes — save these now</label>
+                    <button
+                      type="button"
+                      className="btn secondary sm"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(backupCodes.join("\n"));
+                        toast("Backup codes copied");
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
                   <pre className="session">{backupCodes.join("\n")}</pre>
                 </>
               ) : null}
@@ -447,7 +459,19 @@ export function SecurityPage() {
                 <input className="mono" readOnly value={secret} />
                 {backupCodes.length ? (
                   <>
-                    <label className="field">Backup codes</label>
+                    <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+                      <label className="field">Backup codes</label>
+                      <button
+                        type="button"
+                        className="btn secondary sm"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(backupCodes.join("\n"));
+                          toast("Backup codes copied");
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
                     <pre className="session">{backupCodes.join("\n")}</pre>
                   </>
                 ) : null}
