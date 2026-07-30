@@ -521,6 +521,11 @@ button.os-card span { font-size: 0.78rem; }
 
 pre.code, pre.session {
   background: #070d0f;
+  /* The background is pinned dark in both themes, so pin the foreground too
+     (same pair the xterm hosts use). Inheriting var(--text) makes these blocks
+     near-black on near-black in light mode — which silently hid MFA backup
+     codes and agent install scripts. */
+  color: #e8f0f2;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 1rem;

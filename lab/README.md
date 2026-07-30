@@ -19,13 +19,17 @@ After the API is up, bootstrap creates an admin automatically (also part of `mak
 make lab-bootstrap-admin
 ```
 
-Then open **http://127.0.0.1:8080/ui**:
+Then sign in with the CLI — the console has no public-key field, so `osh` does
+the SSH-key challenge-response and opens the browser already signed in:
 
-| Field | Value |
-|-------|--------|
-| Username | `admin` |
-| SSH public key | contents of `lab/credentials/admin_ed25519.pub` |
-| TOTP | leave empty |
+```bash
+make build-client   # if bin/osh isn't built yet
+./bin/osh -u admin --api-endpoint http://127.0.0.1:8080 \
+    -i lab/credentials/admin_ed25519 login
+```
+
+Add `--code` to print a one-time code instead of opening a browser, then paste
+it into **Device code** on the login screen (single-use, 5 min TTL).
 
 Helper details: `lab/credentials/UI-LOGIN.txt`. Demo users: `lab/credentials/USERS.txt`.
 

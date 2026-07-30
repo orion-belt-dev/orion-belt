@@ -9,7 +9,10 @@
 #   2. docker compose -f docker-compose.server.yml --env-file .env.server up -d
 #   3. bootstrap the first admin (there's no browser sign-up form — this is
 #      SSH-key auth, not passwords) — see README.md's Docker section for the
-#      exact `... exec ... setup` command, then open http://localhost:8080/ui
+#      exact `... exec ... setup` command
+#   4. sign in with `osh login` (the console has no public-key field; osh proves
+#      possession of the key and opens the browser signed in) — see
+#      docs/TRY_IN_10_MINUTES.md step 2
 #
 # Agents connect to this server on port 2222; see docker-compose.agent.yml.
 
@@ -56,7 +59,40 @@ services:
       - orion_hostkey:/etc/orion-belt
     restart: unless-stopped
 
+  # Lab-only demo agent, started by docker-quickstart.sh so a first run has
+  # something to connect to. Opt-in: `--profile demo`.
+  #
+  # It sits on this compose network, so it reaches the gateway at `server:2222`
+  # — no host IP or host.docker.internal guessing. That convenience is also why
+  # it is not the real deployment path: a production agent runs on the machine
+  # you want to manage and dials out to the gateway over the network. Use
+  # docker-compose.agent.yml for that.
+  agent:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+      target: agent
+    depends_on:
+      - server
+    environment:
+      ORION_SERVER_HOST: "server"
+      ORION_SERVER_PORT: "2222"
+      ORION_AGENT_NAME: "${ORION_AGENT_NAME:-lab-1}"
+      ORION_AGENT_ENV: "lab"
+      # The gateway generates a fresh host key on first run, and this agent has
+      # no known_hosts to pin it against — fine inside a lab network, not a
+      # pattern to copy onto a real one.
+      ORION_STRICT_HOST_KEY_CHECKING: "no"
+    volumes:
+      # Order matters: the state volume mounts before the key bind-mount,
+      # otherwise it would shadow agent_key.
+      - orion_demo_agent_state:/etc/orion-belt
+      - ./agent-key:/etc/orion-belt/agent_key:ro
+    restart: unless-stopped
+
 volumes:
   orion_postgres_data:
   orion_recordings:
   orion_hostkey:
+  orion_demo_agent_state:
