@@ -16,6 +16,10 @@
 #   make packages && ./scripts/publish-packages-pages.sh
 #   ORION_PKG_TAG=v1.0.0 ./scripts/publish-packages-pages.sh --from-release
 #   ./scripts/publish-packages-pages.sh --push   # commit+push to orion-belt-dev/packages gh-pages
+#
+# Push auth (required for --push / PUSH=1):
+#   ORION_PACKAGES_TOKEN or PACKAGES_TOKEN  — HTTPS PAT with contents:write on packages
+#   PACKAGES_DEPLOY_KEY                    — SSH deploy key (write) on packages
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -174,6 +178,23 @@ printf '%s\n' "$VER" >"$OUT/VERSION"
 printf '%s\n' "$TAG" >"$OUT/TAG"
 touch "$OUT/.nojekyll"
 
+SERVER_IMG="ghcr.io/orion-belt-dev/orion-belt-server"
+AGENT_IMG="ghcr.io/orion-belt-dev/orion-belt-agent"
+cat >"$OUT/CONTAINERS" <<EOF
+# Orion Belt images on GitHub Container Registry (multi-arch amd64/arm64).
+# Documented here for the packages mirror; images are published on release.
+#
+#   docker pull ${SERVER_IMG}:${VER}
+#   docker pull ${AGENT_IMG}:${VER}
+#
+${SERVER_IMG}:${VER}
+${SERVER_IMG}:${TAG}
+${SERVER_IMG}:latest
+${AGENT_IMG}:${VER}
+${AGENT_IMG}:${TAG}
+${AGENT_IMG}:latest
+EOF
+
 cat >"$OUT/index.html" <<EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -184,16 +205,22 @@ cat >"$OUT/index.html" <<EOF
     body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #111; }
     code { background: #f4f4f5; padding: 0.1em 0.35em; border-radius: 4px; }
     a { color: #0b57d0; }
+    pre { background: #f4f4f5; padding: 0.75rem 1rem; overflow-x: auto; border-radius: 6px; }
   </style>
 </head>
 <body>
   <h1>Orion Belt packages</h1>
   <p>Static package mirror for <strong>Add agent</strong> install scripts.</p>
   <p>Package base URL: <code>${PAGES_URL}</code></p>
-  <p>Current release: <a href="VERSION">VERSION</a> / <a href="TAG">TAG</a> (${VER}).</p>
+  <p>Current release: <a href="VERSION">VERSION</a> / <a href="TAG">TAG</a> (${VER}).
+     The console reads <code>VERSION</code> to prefill Package version.</p>
   <p>Filenames match the install script
      (<code>orion-belt-agent_\${VERSION}_amd64.deb</code>, etc.)
      plus GoReleaser originals (<code>*_linux_amd64.*</code>).</p>
+  <h2>Container images (GHCR)</h2>
+  <p>See <a href="CONTAINERS">CONTAINERS</a>. Pull:</p>
+  <pre>docker pull ${SERVER_IMG}:${VER}
+docker pull ${AGENT_IMG}:${VER}</pre>
   <p>Source: <a href="https://github.com/orion-belt-dev/orion-belt/releases">GitHub Releases</a>.
      Repo: <a href="https://github.com/${REPO_SLUG}">${REPO_SLUG}</a>.
      Local mirror: <code>make serve-packages</code>.</p>
@@ -214,9 +241,31 @@ WORKDIR="$(mktemp -d)"
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
-echo "==> Pushing to ${REPO_SLUG} (gh-pages)"
-git clone --branch gh-pages --single-branch "git@github.com:${REPO_SLUG}.git" "$WORKDIR/repo" \
-  || git clone "git@github.com:${REPO_SLUG}.git" "$WORKDIR/repo"
+# Auth for cross-repo push (orion-belt → orion-belt-dev/packages):
+#   ORION_PACKAGES_TOKEN / PACKAGES_TOKEN  — HTTPS PAT with contents:write on packages
+#   PACKAGES_DEPLOY_KEY                   — SSH deploy key (write) on packages
+TOKEN="${ORION_PACKAGES_TOKEN:-${PACKAGES_TOKEN:-}}"
+DEPLOY_KEY="${PACKAGES_DEPLOY_KEY:-}"
+
+CLONE_URL=""
+if [[ -n "$TOKEN" ]]; then
+  CLONE_URL="https://x-access-token:${TOKEN}@github.com/${REPO_SLUG}.git"
+  echo "==> Pushing to ${REPO_SLUG} (gh-pages) via HTTPS token"
+elif [[ -n "$DEPLOY_KEY" ]]; then
+  eval "$(ssh-agent -s)" >/dev/null
+  echo "$DEPLOY_KEY" | tr -d '\r' | ssh-add -
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+  ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+  CLONE_URL="git@github.com:${REPO_SLUG}.git"
+  echo "==> Pushing to ${REPO_SLUG} (gh-pages) via SSH deploy key"
+else
+  die "PUSH=1 requires ORION_PACKAGES_TOKEN (or PACKAGES_TOKEN) or PACKAGES_DEPLOY_KEY
+  Set a repo/org secret with write access to ${REPO_SLUG}, then re-run the Release workflow."
+fi
+
+git clone --branch gh-pages --single-branch "$CLONE_URL" "$WORKDIR/repo" \
+  || git clone "$CLONE_URL" "$WORKDIR/repo"
 
 cd "$WORKDIR/repo"
 if ! git rev-parse --verify gh-pages >/dev/null 2>&1; then

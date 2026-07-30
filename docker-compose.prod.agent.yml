@@ -1,0 +1,30 @@
+# Orion Belt — production agent (published GHCR image)
+#
+# Always tracks: ghcr.io/orion-belt-dev/orion-belt-agent:latest
+#
+# Run on each host you want to manage (agent dials out — no inbound ports).
+#
+#   1. Register the agent in the console (Add agent) and save the key as ./agent-key
+#   2. cp .env.prod.agent.example .env.prod.agent  (set host + agent name)
+#   3. docker compose -f docker-compose.prod.agent.yml --env-file .env.prod.agent pull
+#   4. docker compose -f docker-compose.prod.agent.yml --env-file .env.prod.agent up -d
+#
+# Pin a release: ORION_IMAGE_TAG=1.1.0
+
+services:
+  agent:
+    image: "ghcr.io/orion-belt-dev/orion-belt-agent:${ORION_IMAGE_TAG:-latest}"
+    pull_policy: always
+    environment:
+      ORION_SERVER_HOST: "${ORION_SERVER_HOST:?set ORION_SERVER_HOST in .env.prod.agent}"
+      ORION_SERVER_PORT: "${ORION_SERVER_PORT:-2222}"
+      ORION_AGENT_NAME: "${ORION_AGENT_NAME:?set ORION_AGENT_NAME in .env.prod.agent}"
+      ORION_AGENT_ENV: "${ORION_AGENT_ENV:-production}"
+      ORION_STRICT_HOST_KEY_CHECKING: "${ORION_STRICT_HOST_KEY_CHECKING:-ask}"
+    volumes:
+      - orion_prod_agent_state:/etc/orion-belt
+      - ./agent-key:/etc/orion-belt/agent_key:ro
+    restart: unless-stopped
+
+volumes:
+  orion_prod_agent_state:
