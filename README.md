@@ -34,7 +34,8 @@ Self-hosted SSH/RDP access gateway with PAM workflows, without opening inbound p
 
 ## Try Orion Belt in 10 minutes
 
-Goal: gateway up → agent dials out → SSH works → session recorded.
+Goal: gateway up → agent dials out → SSH works → session recorded. All you need
+is Docker.
 
 ```bash
 git clone https://github.com/orion-belt-dev/orion-belt.git
@@ -42,20 +43,22 @@ cd orion-belt
 ./scripts/docker-quickstart.sh
 ```
 
-Open **http://localhost:8080/ui**, sign in with the printed `admin` username and public key, then:
+One command: it generates its own secrets, starts the gateway, creates your
+admin user, registers a demo machine (`lab-1`), and prints a link that signs you
+in to the console.
 
-1. **Add agent** in the console — save the private key as `./agent-key` (`chmod 600`)
-2. Start an agent (same host is fine for a lab):
+Then, in the console:
 
-```bash
-cp .env.agent.example .env.agent
-# set ORION_SERVER_HOST (e.g. host.docker.internal or your LAN IP) and ORION_AGENT_NAME
-docker compose -f docker-compose.agent.yml --env-file .env.agent up -d
-```
+1. **Machines** → **lab-1** → web terminal — run a few commands
+2. **Sessions** → **Playback** — watch the recording of what you just did
 
-3. Grant yourself access to the machine, SSH in (web terminal or `osh` / OpenSSH), then open **Sessions** to replay or live-watch.
+Same thing from a terminal, if you prefer:
+`./bin/osh -c client.yaml root@lab-1`
 
-Full walkthrough: **[Try Orion Belt in 10 minutes](docs/TRY_IN_10_MINUTES.md)**.
+Stop everything with `./scripts/docker-quickstart.sh --down`.
+
+Full walkthrough, including running an agent on a real machine:
+**[Try Orion Belt in 10 minutes](docs/TRY_IN_10_MINUTES.md)**.
 
 ## Orion Belt vs alternatives
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Bootstrap a lab admin for the web UI (/ui).
-# Auth is username + SSH public key (no password).
+# Auth is an SSH key challenge-response, driven by `osh login` — the console
+# itself has no public-key field, so the browser is signed in with a one-time
+# code that osh obtains after proving possession of the private key.
 #
 # Usage:
 #   ./lab/bootstrap-admin.sh
@@ -105,14 +107,22 @@ Orion Belt lab — web UI admin login
 
 URL:      $UI_URL
 Username: $USER_NAME
-SSH key:  paste the ONE-LINE public key below into "SSH public key"
-TOTP:     leave empty (unless you enabled MFA)
 
-Public key:
-$PUB
+Sign in from the CLI (nothing is pasted into the browser — it cannot sign
+a challenge with a key file). This opens the browser already signed in:
 
-Private key (keep local, for osh/ssh later):
+  ./bin/osh -u $USER_NAME --api-endpoint $API -i $KEY_PATH login
+
+Headless? Add --code to print a one-time code and URL instead, then use the
+"Device code" option on the login screen. Codes are single-use, 5 min TTL.
+
+If bin/osh is missing: make build-client
+
+Private key (also used by osh/ssh):
 $KEY_PATH
+
+Public key (registered on the server):
+$PUB
 
 Re-run bootstrap:
   make lab-bootstrap-admin
@@ -121,14 +131,16 @@ EOF
 cat <<EOF
 
 ╔══════════════════════════════════════════════════════════╗
-║  Lab admin ready — open the UI and sign in               ║
+║  Lab admin ready — sign in with osh                      ║
 ╚══════════════════════════════════════════════════════════╝
 
   UI:       $UI_URL
   Username: $USER_NAME
-  Pubkey:   ${KEY_PATH}.pub
 
-  cat ${KEY_PATH}.pub
+  ./bin/osh -u $USER_NAME --api-endpoint $API -i $KEY_PATH login
+
+  (opens the browser signed in; add --code for headless hosts,
+   and run 'make build-client' first if bin/osh is missing)
 
 Details written to: $LOGIN_FILE
 EOF

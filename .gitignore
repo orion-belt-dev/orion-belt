@@ -65,6 +65,8 @@ lab/credentials/
 /agent-key.pub
 /admin-key
 /admin-key.pub
+/client.yaml
+/.orion-known-hosts
 
 # Frontend
 web/ui/node_modules/

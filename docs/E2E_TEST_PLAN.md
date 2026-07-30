@@ -227,17 +227,19 @@ KEEP_IMAGES=1 make lab-qemu-start
 
 **Steps**
 
-1. Confirm `lab/credentials/admin_ed25519.pub` and `UI-LOGIN.txt` exist.
-2. Open `http://127.0.0.1:8080/ui`.
-3. Username: `admin`.
-4. Paste contents of `admin_ed25519.pub` into SSH public key.
-5. Leave TOTP empty; click Sign in.
+1. Confirm `lab/credentials/admin_ed25519` (private), `.pub`, and `UI-LOGIN.txt` exist.
+2. Open `http://127.0.0.1:8080/ui` — check the offered login methods.
+3. Run `./bin/osh -u admin --api-endpoint http://127.0.0.1:8080 -i lab/credentials/admin_ed25519 login --code`.
+4. Open the printed URL, or paste the code into **Device code** on the login screen.
+5. Re-submit the same code a second time.
 
 **Expected results**
 
 1. Files exist; pubkey is a single `ssh-ed25519 …` line.
-2. Login page loads (branded Orion Belt UI).
-3–5. Login succeeds; console shows machines / ops views appropriate for admin (not stuck on login error).
+2. Login page loads (branded Orion Belt UI) offering **Password**, **Security key**, **Device code** — there is no SSH-public-key field, by design.
+3. `osh` authenticates via key challenge-response and prints a 10-char code plus a `/ui/bootstrap?code=…` URL with a 5-minute expiry.
+4. Session is established; console shows machines / ops views appropriate for admin. First login lands on the blocking "create a password + enrol TOTP" gate.
+5. Rejected — codes are single-use.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked
 
