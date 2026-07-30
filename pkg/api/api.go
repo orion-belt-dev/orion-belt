@@ -260,6 +260,11 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		admin.GET("/notifications/policy", s.getNotificationPolicy)
 		admin.PUT("/notifications/policy", s.putNotificationPolicy)
 
+		// Notification copy (admin-editable per-event templates)
+		admin.GET("/notifications/templates", s.listNotificationTemplates)
+		admin.PUT("/notifications/templates/:event", s.putNotificationTemplate)
+		admin.DELETE("/notifications/templates/:event", s.deleteNotificationTemplate)
+
 		// Permission management
 		admin.GET("/permissions", s.listAllPermissions)
 		admin.POST("/permissions", s.grantPermission)
