@@ -119,6 +119,22 @@ See [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) for agent + first session.
 
 Step-by-step compose (secrets + admin bootstrap): same script, or the manual path in that doc. Make targets: `docker-up` / `docker-down` / `docker-agent-up`.
 
+Published images (GHCR):
+
+```bash
+docker pull ghcr.io/orion-belt-dev/orion-belt-server:latest
+docker pull ghcr.io/orion-belt-dev/orion-belt-agent:latest
+```
+
+Production compose (always pulls `:latest` unless you set `ORION_IMAGE_TAG`):
+
+```bash
+cp .env.prod.example .env.prod   # set secrets + public host/origin
+make docker-prod-up              # or: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+```
+
+Agent on a managed host: `docker-compose.prod.agent.yml` / `make docker-prod-agent-up`.
+
 ### Packages (deb / rpm / apk)
 
 ```bash

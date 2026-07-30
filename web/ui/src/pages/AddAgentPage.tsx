@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
@@ -15,8 +15,29 @@ import logoLinux from "../assets/distros/linux.png";
 
 /** Public GitHub Pages mirror (orion-belt-dev/packages). Local: make serve-packages → :8765 */
 const DEFAULT_PACKAGE_BASE_URL = "https://orion-belt-dev.github.io/packages";
-/** Matches the seeded Pages release when the gateway build is untagged/dev. */
-const DEFAULT_PACKAGE_VERSION = "1.0.0";
+/** Fallback only until VERSION is fetched from the package base URL. */
+const DEFAULT_PACKAGE_VERSION = "1.1.0";
+
+function normalizePackageVersion(raw: string): string {
+  let v = String(raw || "").trim();
+  if (v.startsWith("v")) v = v.slice(1);
+  return v;
+}
+
+/** Read `${base}/VERSION` from the package mirror (Pages or local serve). */
+async function fetchPackageVersion(baseUrl: string): Promise<string | null> {
+  const base = baseUrl.replace(/\/+$/, "");
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base}/VERSION`, { cache: "no-cache" });
+    if (!res.ok) return null;
+    const v = normalizePackageVersion(await res.text());
+    if (!v || v === "dev" || v === "0.0.0") return null;
+    return v;
+  } catch {
+    return null;
+  }
+}
 
 const OS_OPTIONS = [
   {
@@ -75,16 +96,34 @@ export function AddAgentPage() {
   const [gwPort, setGwPort] = useState(2222);
   const [pkg, setPkg] = useState(DEFAULT_PACKAGE_BASE_URL);
   const [ver, setVer] = useState(() => {
-    let v = version?.version || version?.display || DEFAULT_PACKAGE_VERSION;
-    if (String(v).startsWith("v")) v = String(v).slice(1);
-    if (v === "dev" || v === "0.0.0") v = DEFAULT_PACKAGE_VERSION;
-    return String(v);
+    let v = normalizePackageVersion(version?.version || version?.display || "");
+    if (!v || v === "dev" || v === "0.0.0") v = DEFAULT_PACKAGE_VERSION;
+    return v;
   });
+  const [verSource, setVerSource] = useState<"mirror" | "manual" | "fallback">("fallback");
   const [script, setScript] = useState("");
   const [filename, setFilename] = useState("orion-belt-install-agent.sh");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Prefer the package mirror's VERSION so Add-agent tracks the published
+  // release even when this gateway binary is an untagged/dev build.
+  useEffect(() => {
+    let cancelled = false;
+    const base = pkg.trim() || DEFAULT_PACKAGE_BASE_URL;
+    const timer = window.setTimeout(() => {
+      fetchPackageVersion(base).then((remote) => {
+        if (cancelled || !remote) return;
+        setVer(remote);
+        setVerSource("mirror");
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [pkg]);
 
   const selected = OS_OPTIONS.find((o) => o.id === os) || OS_OPTIONS[0];
 
@@ -186,10 +225,26 @@ export function AddAgentPage() {
               onChange={(e) => setPkg(e.target.value)}
               placeholder={DEFAULT_PACKAGE_BASE_URL}
             />
+            <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85em" }}>
+              Default: public Pages mirror. Local build:{" "}
+              <code>make packages &amp;&amp; make serve-packages</code> →{" "}
+              <code>http://127.0.0.1:8765</code>
+            </p>
           </div>
           <div>
             <label className="field">Package version</label>
-            <input value={ver} onChange={(e) => setVer(e.target.value)} />
+            <input
+              value={ver}
+              onChange={(e) => {
+                setVer(e.target.value);
+                setVerSource("manual");
+              }}
+            />
+            <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85em" }}>
+              {verSource === "mirror"
+                ? "Loaded from package mirror VERSION"
+                : "Edit freely — mirror VERSION used when available"}
+            </p>
           </div>
         </div>
         {err ? <div className="err">{err}</div> : null}
