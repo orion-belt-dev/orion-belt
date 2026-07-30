@@ -11,6 +11,7 @@ import (
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/zrougamed/orion-belt/pkg/notify"
 )
 
 func init() {
@@ -213,6 +214,15 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 			allowed_channels TEXT[] NOT NULL DEFAULT '{}',
 			mandatory_events JSONB NOT NULL DEFAULT '{}',
+			updated_at TIMESTAMP NOT NULL
+		)`,
+		// Admin-editable notification copy. One row per overridden event type;
+		// an event with no row renders the built-in default, so this table is
+		// empty on a fresh install and stays empty until an admin edits copy.
+		`CREATE TABLE IF NOT EXISTS notification_templates (
+			event_type VARCHAR(100) PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			body TEXT NOT NULL,
 			updated_at TIMESTAMP NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS notifications (
@@ -1293,6 +1303,62 @@ func (s *PostgresStore) UpsertNotificationPolicy(ctx context.Context, policy *co
 		  mandatory_events=EXCLUDED.mandatory_events,
 		  updated_at=NOW()`,
 		pq.Array(policy.AllowedChannels), mandatory)
+	return err
+}
+
+// ListNotificationTemplates returns every stored copy override, in the stable
+// order of the event catalog. Events an admin has never edited have no row and
+// are absent here — the caller resolves those against the built-in defaults.
+//
+// Rows for event types this build no longer knows about are left in place but
+// filtered out downstream, so a downgrade does not destroy copy that an
+// upgrade would make live again.
+func (s *PostgresStore) ListNotificationTemplates(ctx context.Context) ([]*notify.Template, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT event_type, title, body, updated_at FROM notification_templates`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*notify.Template
+	for rows.Next() {
+		t := &notify.Template{}
+		if err := rows.Scan(&t.EventType, &t.Title, &t.Body, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	notify.SortTemplates(out)
+	return out, nil
+}
+
+// UpsertNotificationTemplate stores the copy override for one event type.
+func (s *PostgresStore) UpsertNotificationTemplate(ctx context.Context, tmpl *notify.Template) error {
+	if tmpl == nil {
+		return fmt.Errorf("template is required")
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO notification_templates (event_type, title, body, updated_at)
+		VALUES ($1,$2,$3,NOW())
+		ON CONFLICT (event_type) DO UPDATE SET
+		  title=EXCLUDED.title,
+		  body=EXCLUDED.body,
+		  updated_at=NOW()`,
+		tmpl.EventType, tmpl.Title, tmpl.Body)
+	return err
+}
+
+// DeleteNotificationTemplate drops the override for eventType, which reverts
+// that event to the built-in copy. Deleting an event that was never overridden
+// is not an error: the caller asked for the default and the default is what
+// they end up with.
+func (s *PostgresStore) DeleteNotificationTemplate(ctx context.Context, eventType string) error {
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM notification_templates WHERE event_type=$1`, eventType)
 	return err
 }
 
