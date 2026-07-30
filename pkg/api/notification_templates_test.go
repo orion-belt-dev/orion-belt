@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/database"
-	"github.com/zrougamed/orion-belt/pkg/notify"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 )
 
 // templateStore is a stand-in for the parts of the store the notification path
