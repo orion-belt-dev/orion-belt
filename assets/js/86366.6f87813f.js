@@ -1,1 +1,0 @@
-"use strict";(globalThis.webpackChunkorion_belt_docs=globalThis.webpackChunkorion_belt_docs||[]).push([[86366],{86366(e,c,o){o.d(c,{createArchitectureServices:()=>r.S});var r=o(38980);o(87960)}}]);

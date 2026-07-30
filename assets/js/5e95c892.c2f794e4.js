@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkorion_belt_docs=self.webpackChunkorion_belt_docs||[]).push([["81668"],{86569(e,r,s){s.r(r),s.d(r,{default:()=>l});var c=s(74848);s(96540);var o=s(34164),a=s(34308),n=s(88287),t=s(22831),u=s(56525);function l(e){return(0,c.jsx)(a.e3,{className:(0,o.A)(n.G.wrapper.docsPages),children:(0,c.jsx)(u.A,{children:(0,t.v)(e.route.routes)})})}}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkorion_belt_docs=self.webpackChunkorion_belt_docs||[]).push([["93220"],{1912(o){o.exports=JSON.parse('{"blogBasePath":"/blog","blogTitle":"Blog","authorsListPath":"/blog/authors"}')}}]);
