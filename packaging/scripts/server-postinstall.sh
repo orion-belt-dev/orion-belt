@@ -42,6 +42,6 @@ Next steps (setup wizard):
 
   4. Open http://<host>:8080/ui  → Setup guide
 
-Docs: https://github.com/zrougamed/orion-belt/blob/master/docs/SETUP.md
+Docs: https://github.com/orion-belt-dev/orion-belt/blob/master/docs/SETUP.md
 
 EOF

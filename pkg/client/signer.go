@@ -7,8 +7,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/zrougamed/orion-belt/pkg/ca"
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/ca"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 // LoadSigner returns the ssh.Signer osh/ocp/oadmin should authenticate

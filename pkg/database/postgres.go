@@ -10,8 +10,8 @@ import (
 
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/notify"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 func init() {

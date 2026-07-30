@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 )
 
 // WebhookPlugin posts JSON payloads to a generic webhook URL.

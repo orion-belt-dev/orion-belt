@@ -21,9 +21,9 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/zrougamed/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Date={{.Date}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
 
   - id: agent
     main: ./cmd/agent
@@ -34,9 +34,9 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/zrougamed/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Date={{.Date}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
 
   - id: osh
     main: ./cmd/osh
@@ -47,9 +47,9 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/zrougamed/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Date={{.Date}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
 
   - id: ocp
     main: ./cmd/ocp
@@ -60,9 +60,9 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/zrougamed/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Date={{.Date}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
 
   - id: oadmin
     main: ./cmd/oadmin
@@ -73,9 +73,9 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/zrougamed/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/zrougamed/orion-belt/pkg/version.Date={{.Date}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
+      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
 
 archives:
   # Gateway binaries — Linux only (uniform binary count)
@@ -103,7 +103,7 @@ archives:
 nfpms:
   - id: orion-belt
     package_name: orion-belt
-    homepage: https://github.com/zrougamed/orion-belt
+    homepage: https://github.com/orion-belt-dev/orion-belt
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
     description: Orion Belt PAM gateway server (SSH bastion + API)
     license: Apache-2.0 WITH Commons-Clause
@@ -147,7 +147,7 @@ nfpms:
 
   - id: orion-belt-agent
     package_name: orion-belt-agent
-    homepage: https://github.com/zrougamed/orion-belt
+    homepage: https://github.com/orion-belt-dev/orion-belt
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
     description: Orion Belt reverse-SSH agent
     license: Apache-2.0 WITH Commons-Clause
@@ -170,7 +170,7 @@ nfpms:
 
   - id: orion-belt-tools
     package_name: orion-belt-tools
-    homepage: https://github.com/zrougamed/orion-belt
+    homepage: https://github.com/orion-belt-dev/orion-belt
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
     description: Orion Belt CLI tools (osh, ocp, oadmin)
     license: Apache-2.0 WITH Commons-Clause
@@ -226,7 +226,7 @@ changelog:
 
 release:
   github:
-    owner: zrougamed
+    owner: orion-belt-dev
     name: orion-belt
   draft: false
   prerelease: auto

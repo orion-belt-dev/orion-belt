@@ -3,7 +3,7 @@ package version
 
 import "fmt"
 
-// Set via -ldflags "-X github.com/zrougamed/orion-belt/pkg/version.Version=..."
+// Set via -ldflags "-X github.com/orion-belt-dev/orion-belt/pkg/version.Version=..."
 var (
 	Version = "dev"
 	Commit  = "none"

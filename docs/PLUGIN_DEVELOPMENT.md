@@ -77,7 +77,7 @@ import (
     "context"
     "log"
 
-    "github.com/zrougamed/orion-belt/pkg/plugin"
+    "github.com/orion-belt-dev/orion-belt/pkg/plugin"
 )
 
 type MyPlugin struct {
@@ -145,7 +145,7 @@ change one field.
 Add it to `registerBuiltinPlugins` in `pkg/server/plugins_builtin.go`:
 
 ```go
-import myplugin "github.com/zrougamed/orion-belt/plugins/my-plugin"
+import myplugin "github.com/orion-belt-dev/orion-belt/plugins/my-plugin"
 
 func registerBuiltinPlugins(m *plugin.Manager) error {
     for _, p := range []plugin.Plugin{

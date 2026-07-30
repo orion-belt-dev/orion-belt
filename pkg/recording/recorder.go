@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 // Cast v2 header written as the first line of each recording file.

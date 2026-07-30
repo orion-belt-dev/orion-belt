@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 // Authorizer decides whether a user may access a machine.

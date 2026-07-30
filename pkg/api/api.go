@@ -10,16 +10,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/zrougamed/orion-belt/docs/openapi"
-	"github.com/zrougamed/orion-belt/pkg/auth"
-	"github.com/zrougamed/orion-belt/pkg/ca"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/database"
-	"github.com/zrougamed/orion-belt/pkg/metrics"
-	"github.com/zrougamed/orion-belt/pkg/plugin"
-	"github.com/zrougamed/orion-belt/pkg/recording"
-	"github.com/zrougamed/orion-belt/pkg/version"
-	"github.com/zrougamed/orion-belt/web"
+	"github.com/orion-belt-dev/orion-belt/docs/openapi"
+	"github.com/orion-belt-dev/orion-belt/pkg/auth"
+	"github.com/orion-belt-dev/orion-belt/pkg/ca"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/recording"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
+	"github.com/orion-belt-dev/orion-belt/web"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -147,7 +147,7 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Use /api/v1/openapi.yaml for the full OpenAPI 3.0 specification",
 			"yaml":    "/api/v1/openapi.yaml",
-			"docs":    "https://github.com/zrougamed/orion-belt/blob/master/docs/openapi/openapi.yaml",
+			"docs":    "https://github.com/orion-belt-dev/orion-belt/blob/master/docs/openapi/openapi.yaml",
 		})
 	})
 
