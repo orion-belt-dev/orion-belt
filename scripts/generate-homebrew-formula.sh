@@ -3,13 +3,13 @@
 #
 # Usage:
 #   ./scripts/generate-homebrew-formula.sh v1.0.0
-#   ./scripts/generate-homebrew-formula.sh v1.0.0 --repo zrougamed/orion-belt
+#   ./scripts/generate-homebrew-formula.sh v1.0.0 --repo orion-belt-dev/orion-belt
 #
 # Writes Formula/orion-belt.rb in the current directory (or $OUT_DIR).
 set -euo pipefail
 
 VERSION="${1:?usage: $0 vX.Y.Z [--repo owner/name]}"
-REPO="zrougamed/orion-belt"
+REPO="orion-belt-dev/orion-belt"
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in

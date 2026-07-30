@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zrougamed/orion-belt/pkg/auth"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/metrics"
+	"github.com/orion-belt-dev/orion-belt/pkg/auth"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
 )
 
 const passwordLoginTicketTTL = 2 * time.Minute
@@ -118,7 +118,7 @@ func (s *APIServer) setPassword(c *gin.Context) {
 		raw, ok := pendingEnrollments.Load(userID)
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error":              "enroll authenticator first via POST /mfa/enroll, then confirm with totp_code",
+				"error":               "enroll authenticator first via POST /mfa/enroll, then confirm with totp_code",
 				"mfa_enroll_required": true,
 			})
 			return
@@ -144,9 +144,9 @@ func (s *APIServer) setPassword(c *gin.Context) {
 
 	_ = s.store.CreateAuditLog(ctx, common.NewAuditLog(user.ID, "auth.password.set", "user:"+user.ID, c.ClientIP(), nil))
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "password set",
-		"password_set":    true,
-		"mfa_enabled":     true,
+		"message":           "password set",
+		"password_set":      true,
+		"mfa_enabled":       true,
 		"must_set_password": false,
 	})
 }
@@ -222,7 +222,7 @@ func (s *APIServer) loginWithPassword(c *gin.Context) {
 	}
 	if !user.MFAEnabled {
 		c.JSON(http.StatusForbidden, gin.H{
-			"error":                 "password login requires totp; complete password setup in the console first",
+			"error":                   "password login requires totp; complete password setup in the console first",
 			"mfa_enrollment_required": true,
 		})
 		return

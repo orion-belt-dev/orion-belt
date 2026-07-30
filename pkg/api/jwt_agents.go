@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zrougamed/orion-belt/pkg/metrics"
+	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
 	"golang.org/x/crypto/ssh"
 )
 

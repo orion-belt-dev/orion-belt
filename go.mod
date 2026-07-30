@@ -1,4 +1,4 @@
-module github.com/zrougamed/orion-belt
+module github.com/orion-belt-dev/orion-belt
 
 go 1.26.5
 

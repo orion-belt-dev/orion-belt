@@ -67,7 +67,7 @@ Well-thought-out proposals have a much higher chance of being accepted.
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/zrougamed/orion-belt.git
+git clone https://github.com/orion-belt-dev/orion-belt.git
 cd orion-belt
 ```
 

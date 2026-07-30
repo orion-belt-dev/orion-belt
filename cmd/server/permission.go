@@ -8,10 +8,10 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/auth"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/auth"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/database"
 )
 
 var (

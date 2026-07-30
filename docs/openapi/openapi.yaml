@@ -22,10 +22,10 @@ info:
   version: "1.0.0"
   contact:
     name: Orion Belt Maintainers
-    url: https://github.com/zrougamed/orion-belt
+    url: https://github.com/orion-belt-dev/orion-belt
   license:
     name: Apache-2.0 WITH Commons-Clause
-    url: https://github.com/zrougamed/orion-belt/blob/master/LICENSE
+    url: https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE
 
 servers:
   - url: http://localhost:8080

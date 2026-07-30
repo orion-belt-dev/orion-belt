@@ -1,6 +1,6 @@
 [Unit]
 Description=Orion Belt PAM gateway server
-Documentation=https://github.com/zrougamed/orion-belt
+Documentation=https://github.com/orion-belt-dev/orion-belt
 After=network-online.target postgresql.service
 Wants=network-online.target
 

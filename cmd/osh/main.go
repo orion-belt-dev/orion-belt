@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/client"
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
-	"github.com/zrougamed/orion-belt/pkg/client"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/version"
 )
 
 var (

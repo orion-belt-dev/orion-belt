@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
 // CreateCAKey persists a new CA keypair. privateKeyEncrypted is the

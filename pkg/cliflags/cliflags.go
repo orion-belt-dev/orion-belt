@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/common"
 )
 
 // Common is the shared flag set for client CLIs.

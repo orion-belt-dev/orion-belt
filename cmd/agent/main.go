@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/agent"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/tracing"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/agent"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/tracing"
-	"github.com/zrougamed/orion-belt/pkg/version"
 )
 
 // tracingFlushTimeout bounds how long shutdown waits for buffered spans to
