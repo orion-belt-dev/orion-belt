@@ -222,6 +222,133 @@ func unknownChannels(policy *common.NotificationPolicy) []string {
 	return bad
 }
 
+// templateEntry is one row of the admin template editor: the copy in force,
+// the default it can be reset to, and the substitutions available to it.
+type templateEntry struct {
+	*notify.Template
+	// Customized reports that this event's copy is a stored override rather
+	// than the built-in default, so the UI can offer a reset only where there
+	// is something to reset.
+	Customized   bool     `json:"customized"`
+	DefaultTitle string   `json:"default_title"`
+	DefaultBody  string   `json:"default_body"`
+	Placeholders []string `json:"placeholders"`
+}
+
+// listNotificationTemplates returns the effective copy for every templatable
+// event — stored overrides merged over the built-in defaults. Admin-only.
+func (s *APIServer) listNotificationTemplates(c *gin.Context) {
+	stored, err := s.store.ListNotificationTemplates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	set := notify.NewTemplateSet(stored)
+
+	entries := make([]templateEntry, 0, len(notify.KnownEventTypes()))
+	for _, event := range notify.KnownEventTypes() {
+		def := notify.DefaultTemplate(event)
+		_, customized := set[event]
+		entries = append(entries, templateEntry{
+			Template:     set.Get(event),
+			Customized:   customized,
+			DefaultTitle: def.Title,
+			DefaultBody:  def.Body,
+			Placeholders: notify.PlaceholdersFor(event),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"templates": entries})
+}
+
+// putNotificationTemplate replaces the copy for one event type. Admin-only.
+// The new wording applies to the next notification delivered — templates are
+// read per delivery, so nothing has to be restarted.
+func (s *APIServer) putNotificationTemplate(c *gin.Context) {
+	event := c.Param("event")
+	var tmpl notify.Template
+	if err := c.ShouldBindJSON(&tmpl); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// The path names the event being edited; a body that disagrees is a client
+	// bug, and silently trusting either one would write copy to the wrong event.
+	if tmpl.EventType != "" && tmpl.EventType != event {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("event type in body (%q) does not match the path (%q)", tmpl.EventType, event),
+		})
+		return
+	}
+	tmpl.EventType = event
+	tmpl.Normalize()
+
+	if err := tmpl.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":        err.Error(),
+			"known_events": notify.KnownEventTypes(),
+			"placeholders": notify.PlaceholdersFor(event),
+		})
+		return
+	}
+
+	if err := s.store.UpsertNotificationTemplate(c.Request.Context(), &tmpl); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	def := notify.DefaultTemplate(event)
+	c.JSON(http.StatusOK, templateEntry{
+		Template:     &tmpl,
+		Customized:   true,
+		DefaultTitle: def.Title,
+		DefaultBody:  def.Body,
+		Placeholders: notify.PlaceholdersFor(event),
+	})
+}
+
+// deleteNotificationTemplate reverts one event to its built-in copy. Admin-only.
+func (s *APIServer) deleteNotificationTemplate(c *gin.Context) {
+	event := c.Param("event")
+	if !notify.IsKnownEventType(event) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":        fmt.Sprintf("unknown event type %q", event),
+			"known_events": notify.KnownEventTypes(),
+		})
+		return
+	}
+	if err := s.store.DeleteNotificationTemplate(c.Request.Context(), event); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	def := notify.DefaultTemplate(event)
+	c.JSON(http.StatusOK, templateEntry{
+		Template:     def,
+		Customized:   false,
+		DefaultTitle: def.Title,
+		DefaultBody:  def.Body,
+		Placeholders: notify.PlaceholdersFor(event),
+	})
+}
+
+// notificationTemplates resolves the copy in force right now. It reads through
+// to the store on every delivery rather than caching at startup, which is what
+// makes an admin's edit take effect on the next notification instead of the
+// next restart.
+//
+// A lookup failure falls back to the built-in copy: delivering the default
+// wording is strictly better than dropping a notification the recipient is
+// waiting on.
+func (s *APIServer) notificationTemplates(ctx context.Context) notify.TemplateSet {
+	stored, err := s.store.ListNotificationTemplates(ctx)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("notification template lookup failed, using defaults: %v", err)
+		}
+		return nil
+	}
+	return notify.NewTemplateSet(stored)
+}
+
 func (s *APIServer) deliverNotification(ctx context.Context, userID, notifType string, data map[string]string) {
 	if s.store == nil {
 		return
@@ -241,7 +368,7 @@ func (s *APIServer) deliverNotification(ctx context.Context, userID, notifType s
 	if !policy.Deliver(prefs, common.ChannelInApp, notifType) {
 		return
 	}
-	title, body := notify.Render(notifType, data)
+	title, body := s.notificationTemplates(ctx).Render(notifType, data)
 	meta := map[string]interface{}{}
 	for k, v := range data {
 		meta[k] = v
