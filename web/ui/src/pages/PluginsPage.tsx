@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import type { PluginConfigField, PluginInfo } from "../lib/types";
 import { Badge } from "../components/Badge";
 import { NotificationPolicyCard } from "../components/NotificationPolicyCard";
+import { NotificationTemplatesCard } from "../components/NotificationTemplatesCard";
 import { useToast } from "../components/Toast";
 
 function statusOf(p: PluginInfo): { label: string; kind: "ok" | "warn" | "danger" } {
@@ -373,6 +374,8 @@ export function PluginsPage() {
       ) : null}
 
       <NotificationPolicyCard />
+
+      <NotificationTemplatesCard />
 
       {plugins.map((p) => (
         <PluginCard key={p.name} plugin={p} />
