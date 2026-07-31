@@ -94,7 +94,13 @@ export function UsersPage() {
   }
 
   async function deleteUser(id: string, name: string) {
-    if (!confirm(`Delete user ${name}?`)) return;
+    if (
+      !confirm(
+        `Permanently delete user ${name}?\n\nThis removes their permissions, access requests, session history, and credentials.\n\nAudit entries they produced are kept (with the user field cleared). There is no archive for users — cancel if you are unsure.`,
+      )
+    ) {
+      return;
+    }
     try {
       await api(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" });
       toast("User deleted");

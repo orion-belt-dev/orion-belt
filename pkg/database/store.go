@@ -26,6 +26,9 @@ type Store interface {
 	DeleteMachine(ctx context.Context, id string) error
 	ListMachines(ctx context.Context, limit, offset int) ([]*common.Machine, error)
 	ListActiveMachines(ctx context.Context) ([]*common.Machine, error)
+	// ListSessionRecordingPathsForMachine returns on-disk recording paths for
+	// sessions tied to machineID (used to clean files after hard-delete).
+	ListSessionRecordingPathsForMachine(ctx context.Context, machineID string) ([]string, error)
 
 	// Session operations
 	CreateSession(ctx context.Context, session *common.Session) error
