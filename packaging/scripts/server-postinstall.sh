@@ -10,8 +10,15 @@ if ! getent passwd orionbelt >/dev/null 2>&1; then
 fi
 
 mkdir -p /var/lib/orion-belt/recordings /var/log/orion-belt /etc/orion-belt
-chown -R orionbelt:orionbelt /var/lib/orion-belt /var/log/orion-belt 2>/dev/null || true
+# The service runs as orionbelt with ProtectSystem=strict and ReadWritePaths
+# covering these three trees — ownership must match or startup/setup fail.
+chown -R orionbelt:orionbelt /var/lib/orion-belt /var/log/orion-belt /etc/orion-belt 2>/dev/null || true
 chmod 750 /var/lib/orion-belt /var/log/orion-belt /etc/orion-belt 2>/dev/null || true
+# server.yaml may have been unpacked as root:root 644 from the package; tighten.
+if [ -f /etc/orion-belt/server.yaml ]; then
+  chown orionbelt:orionbelt /etc/orion-belt/server.yaml 2>/dev/null || true
+  chmod 640 /etc/orion-belt/server.yaml 2>/dev/null || true
+fi
 
 if [ ! -f /etc/orion-belt/ssh_host_key ]; then
   if command -v ssh-keygen >/dev/null 2>&1; then

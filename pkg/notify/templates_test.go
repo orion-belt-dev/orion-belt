@@ -52,6 +52,7 @@ func TestKnownEventTypesIsStable(t *testing.T) {
 		EventAccessRequestApproved,
 		EventAccessRequestRejected,
 		EventAccessRequestExpired,
+		EventWebAuthnConfigDisabled,
 	}
 
 	got := KnownEventTypes()

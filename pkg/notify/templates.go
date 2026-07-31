@@ -14,6 +14,8 @@ const (
 	EventAccessRequestApproved = "access_request.approved"
 	EventAccessRequestRejected = "access_request.rejected"
 	EventAccessRequestExpired  = "access_request.expired"
+	// but the library rejected rp_id/origins — FIDO2 login is off until fixed.
+	EventWebAuthnConfigDisabled = "webauthn.config_disabled"
 )
 
 // Size limits for admin-supplied copy. Title is capped below the DB column so
@@ -58,15 +60,21 @@ var defaultTemplates = map[string]Template{
 		Title:     "Access request expired",
 		Body:      "Your pending access request for {{machine}} expired without approval.",
 	},
+	EventWebAuthnConfigDisabled: {
+		EventType: EventWebAuthnConfigDisabled,
+		Title:     "WebAuthn disabled — fix rp_id / origins",
+		Body:      "WebAuthn/FIDO2 was turned off at startup: {{error}}. SSH-key login still works. Fix auth.webauthn.rp_id and origins in server.yaml, then restart the gateway.",
+	},
 }
 
 // templatePlaceholders declares which substitutions each event supplies. It
 // drives both the admin UI's variable list and validation on save, so an
 // operator cannot store a placeholder that would render as literal braces.
 var templatePlaceholders = map[string][]string{
-	EventAccessRequestApproved: {"machine", "machine_id", "request_id", "remote_users", "ttl"},
-	EventAccessRequestRejected: {"machine", "machine_id", "request_id", "remote_users"},
-	EventAccessRequestExpired:  {"machine", "machine_id", "request_id"},
+	EventAccessRequestApproved:  {"machine", "machine_id", "request_id", "remote_users", "ttl"},
+	EventAccessRequestRejected:  {"machine", "machine_id", "request_id", "remote_users"},
+	EventAccessRequestExpired:   {"machine", "machine_id", "request_id"},
+	EventWebAuthnConfigDisabled: {"error", "rp_id"},
 }
 
 // placeholderPattern matches {{name}}, tolerating inner whitespace so copy
@@ -82,6 +90,7 @@ func KnownEventTypes() []string {
 		EventAccessRequestApproved,
 		EventAccessRequestRejected,
 		EventAccessRequestExpired,
+		EventWebAuthnConfigDisabled,
 	}
 }
 
