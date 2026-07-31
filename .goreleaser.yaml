@@ -116,6 +116,11 @@ nfpms:
       - src: packaging/systemd/orion-belt-server.service
         dst: /lib/systemd/system/orion-belt-server.service
         type: config
+      - src: packaging/openrc/orion-belt-server.initd
+        dst: /etc/init.d/orion-belt-server
+        type: config
+        file_info:
+          mode: 0755
       - src: config/server.example.yaml
         dst: /etc/orion-belt/server.yaml
         type: config|noreplace
@@ -138,12 +143,14 @@ nfpms:
       deb:
         dependencies:
           - systemd
+        # OpenRC unit is harmless on systemd hosts; leave packaged for Alpine.
       rpm:
         dependencies:
           - systemd
       apk:
         dependencies:
           - openrc
+        # Prefer OpenRC path on Alpine; systemd unit unused.
 
   - id: orion-belt-agent
     package_name: orion-belt-agent
@@ -158,6 +165,11 @@ nfpms:
       - src: packaging/systemd/orion-belt-agent.service
         dst: /lib/systemd/system/orion-belt-agent.service
         type: config
+      - src: packaging/openrc/orion-belt-agent.initd
+        dst: /etc/init.d/orion-belt-agent
+        type: config
+        file_info:
+          mode: 0755
       - src: config/agent.example.yaml
         dst: /etc/orion-belt/agent.yaml
         type: config|noreplace
@@ -167,6 +179,10 @@ nfpms:
           mode: 0750
     scripts:
       postinstall: packaging/scripts/agent-postinstall.sh
+    overrides:
+      apk:
+        dependencies:
+          - openrc
 
   - id: orion-belt-tools
     package_name: orion-belt-tools

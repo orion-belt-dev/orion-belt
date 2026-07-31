@@ -107,6 +107,24 @@ export function AddAgentPage() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Prefer the server's advertised public SSH address over window.location
+  // (which is wrong behind a reverse proxy or when the UI is on a different host).
+  useEffect(() => {
+    let cancelled = false;
+    api<{ ssh_host?: string; ssh_port?: number }>("/gateway-info")
+      .then((info) => {
+        if (cancelled) return;
+        if (info.ssh_host) setGw(info.ssh_host);
+        if (info.ssh_port && info.ssh_port > 0) setGwPort(info.ssh_port);
+      })
+      .catch(() => {
+        /* keep window.location defaults */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Prefer the package mirror's VERSION so Add-agent tracks the published
   // release even when this gateway binary is an untagged/dev build.
   useEffect(() => {

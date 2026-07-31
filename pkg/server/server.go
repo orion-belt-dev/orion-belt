@@ -108,6 +108,7 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 
 	var wa *webauthnlib.WebAuthn
 	if config.Auth.WebAuthn.Enabled {
+		config.Server.WebAuthnDefaultsFromPublicURL(&config.Auth.WebAuthn)
 		display := config.Auth.WebAuthn.RPDisplay
 		if display == "" {
 			display = "Orion Belt"
@@ -204,6 +205,7 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 		WebAuthn:           wa,
 		RateLimitPerMinute: config.Auth.RateLimitPerMinute,
 		CA:                 caAuthority,
+		Server:             config.Server,
 	})
 
 	server := &Server{

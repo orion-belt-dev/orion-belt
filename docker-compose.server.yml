@@ -53,6 +53,9 @@ services:
       ORION_WEBAUTHN_ENABLED: "${ORION_WEBAUTHN_ENABLED:-false}"
       ORION_PUBLIC_HOST: "${ORION_PUBLIC_HOST:-localhost}"
       ORION_PUBLIC_ORIGIN: "${ORION_PUBLIC_ORIGIN:-http://localhost:8080}"
+      ORION_PUBLIC_URL: "${ORION_PUBLIC_URL:-${ORION_PUBLIC_ORIGIN:-http://localhost:8080}}"
+      ORION_PUBLIC_SSH_HOST: "${ORION_PUBLIC_SSH_HOST:-}"
+      ORION_PUBLIC_SSH_PORT: "${ORION_PUBLIC_SSH_PORT:-}"
       ORION_RECORDING_ENCRYPTION_KEY: "${ORION_RECORDING_ENCRYPTION_KEY:-}"
     volumes:
       - orion_recordings:/var/lib/orion-belt/recordings

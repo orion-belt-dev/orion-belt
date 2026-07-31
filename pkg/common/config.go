@@ -2,7 +2,9 @@ package common
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -47,12 +49,112 @@ type TracingConfig struct {
 
 // ServerConfig contains server-specific configuration
 type ServerConfig struct {
-	Host           string `yaml:"host"`
-	Port           int    `yaml:"port"`
-	APIPort        int    `yaml:"api_port,omitempty"`
-	SSHHostKey     string `yaml:"ssh_host_key,omitempty"`
-	APIEndpoint    string `yaml:"api_endpoint,omitempty"`
-	MetricsEnabled bool   `yaml:"metrics_enabled,omitempty"`
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	APIPort int    `yaml:"api_port,omitempty"`
+	// SSHHostKey is the path to the gateway's SSH host private key.
+	SSHHostKey string `yaml:"ssh_host_key,omitempty"`
+	// APIEndpoint is a legacy client-oriented field (often ".../api"). Prefer
+	// PublicURL for the advertised UI/API origin.
+	APIEndpoint string `yaml:"api_endpoint,omitempty"`
+	// PublicURL is the origin browsers and clients use to reach this gateway
+	// (scheme + host[:port], no path). Example: https://orion.example.com
+	// or http://192.0.2.10:8080. Not a bind address — server.host is.
+	PublicURL string `yaml:"public_url,omitempty"`
+	// PublicSSHHost is the hostname/IP agents and SSH clients dial. Empty
+	// means derive from PublicURL's host, then fall back to server.host.
+	PublicSSHHost string `yaml:"public_ssh_host,omitempty"`
+	// PublicSSHPort is the SSH port agents dial. Empty/0 means server.port.
+	PublicSSHPort  int  `yaml:"public_ssh_port,omitempty"`
+	MetricsEnabled bool `yaml:"metrics_enabled,omitempty"`
+}
+
+// EffectiveAPIPort returns the HTTP API listen port (default 8080).
+func (s ServerConfig) EffectiveAPIPort() int {
+	if s.APIPort > 0 {
+		return s.APIPort
+	}
+	return 8080
+}
+
+// EffectiveSSHPort returns the SSH listen port (default 2222).
+func (s ServerConfig) EffectiveSSHPort() int {
+	if s.Port > 0 {
+		return s.Port
+	}
+	return 2222
+}
+
+// AdvertisedURL returns the public UI/API origin with no trailing slash.
+// Empty when neither PublicURL nor a usable APIEndpoint is set.
+func (s ServerConfig) AdvertisedURL() string {
+	if u := strings.TrimRight(strings.TrimSpace(s.PublicURL), "/"); u != "" {
+		return u
+	}
+	ep := strings.TrimSpace(s.APIEndpoint)
+	if ep == "" {
+		return ""
+	}
+	ep = strings.TrimSuffix(ep, "/")
+	ep = strings.TrimSuffix(ep, "/api")
+	return strings.TrimRight(ep, "/")
+}
+
+// AdvertisedSSHHost is what agents / OpenSSH clients should dial.
+func (s ServerConfig) AdvertisedSSHHost() string {
+	if h := strings.TrimSpace(s.PublicSSHHost); h != "" {
+		return h
+	}
+	if u := s.AdvertisedURL(); u != "" {
+		if parsed, err := url.Parse(u); err == nil {
+			if host := parsed.Hostname(); host != "" {
+				return host
+			}
+		}
+	}
+	h := strings.TrimSpace(s.Host)
+	if h != "" && h != "0.0.0.0" && h != "::" && h != "[::]" {
+		return h
+	}
+	return "localhost"
+}
+
+// AdvertisedSSHPort is the SSH port agents / OpenSSH clients should dial.
+func (s ServerConfig) AdvertisedSSHPort() int {
+	if s.PublicSSHPort > 0 {
+		return s.PublicSSHPort
+	}
+	return s.EffectiveSSHPort()
+}
+
+// UIURL is the console URL operators should open.
+func (s ServerConfig) UIURL() string {
+	if base := s.AdvertisedURL(); base != "" {
+		return base + "/ui"
+	}
+	return fmt.Sprintf("http://localhost:%d/ui", s.EffectiveAPIPort())
+}
+
+// WebAuthnDefaultsFromPublicURL fills empty WebAuthn RPID/origins from PublicURL.
+// Existing explicit values are left alone.
+func (s ServerConfig) WebAuthnDefaultsFromPublicURL(wa *WebAuthnConfig) {
+	if wa == nil {
+		return
+	}
+	base := s.AdvertisedURL()
+	if base == "" {
+		return
+	}
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Hostname() == "" {
+		return
+	}
+	if strings.TrimSpace(wa.RPID) == "" {
+		wa.RPID = parsed.Hostname()
+	}
+	if len(wa.Origins) == 0 {
+		wa.Origins = []string{base}
+	}
 }
 
 // DatabaseConfig contains database configuration
