@@ -1,0 +1,23 @@
+#!/sbin/openrc-run
+# Orion Belt PAM gateway (OpenRC)
+
+name="orion-belt-server"
+description="Orion Belt PAM gateway server"
+command="/usr/bin/orion-belt-server"
+command_args="-c /etc/orion-belt/server.yaml"
+command_user="orionbelt:orionbelt"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+directory="/var/lib/orion-belt"
+
+depend() {
+	need net
+	use dns logger
+	after firewall postgresql
+}
+
+start_pre() {
+	checkpath -d -o orionbelt:orionbelt -m 0750 /var/lib/orion-belt
+	checkpath -d -o orionbelt:orionbelt -m 0750 /var/log/orion-belt
+	checkpath -d -o orionbelt:orionbelt -m 0750 /etc/orion-belt
+}

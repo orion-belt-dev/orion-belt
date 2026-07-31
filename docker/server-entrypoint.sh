@@ -25,12 +25,29 @@ DB_USER="${POSTGRES_USER:-orionbelt}"
 DB_NAME="${POSTGRES_DB:-orionbelt}"
 CFG=/etc/orion-belt/config.generated.yaml
 
+# Advertised addresses: what browsers and agents use to reach this gateway.
+# Defaults keep local-lab behaviour; production compose requires them set.
+PUBLIC_URL="${ORION_PUBLIC_URL:-${ORION_PUBLIC_ORIGIN:-http://localhost:8080}}"
+PUBLIC_HOST="${ORION_PUBLIC_HOST:-localhost}"
+# If only PUBLIC_URL is set, derive the host for WebAuthn / SSH advertise.
+case "$PUBLIC_HOST" in
+  localhost|"")
+    _host=$(printf '%s' "$PUBLIC_URL" | sed -E 's|^[a-zA-Z][a-zA-Z0-9+.-]*://||; s|[:/].*$||')
+    [ -n "$_host" ] && PUBLIC_HOST="$_host"
+    ;;
+esac
+PUBLIC_SSH_HOST="${ORION_PUBLIC_SSH_HOST:-$PUBLIC_HOST}"
+PUBLIC_SSH_PORT="${ORION_PUBLIC_SSH_PORT:-2222}"
+
 cat > "$CFG" <<EOF
 server:
   host: "0.0.0.0"
   port: 2222
   api_port: 8080
   ssh_host_key: "${HOST_KEY}"
+  public_url: "${PUBLIC_URL}"
+  public_ssh_host: "${PUBLIC_SSH_HOST}"
+  public_ssh_port: ${PUBLIC_SSH_PORT}
   metrics_enabled: true
 
 database:
@@ -47,9 +64,9 @@ auth:
   webauthn:
     enabled: ${ORION_WEBAUTHN_ENABLED:-true}
     rp_display_name: "${ORION_WEBAUTHN_RP_NAME:-Orion Belt}"
-    rp_id: "${ORION_PUBLIC_HOST:-localhost}"
+    rp_id: "${PUBLIC_HOST}"
     origins:
-      - "${ORION_PUBLIC_ORIGIN:-http://localhost:8080}"
+      - "${PUBLIC_URL}"
 
 recording:
   enabled: true

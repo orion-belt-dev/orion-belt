@@ -9,7 +9,7 @@ and replayed the recording of it.
 - **Docker**, running — [Docker Desktop](https://docs.docker.com/get-docker/) on
   Mac/Windows, Docker Engine + Compose plugin on Linux
 - A web browser
-- ~10 minutes, most of it waiting for the first build
+- ~10 minutes (faster if you choose published images; first source build is longer)
 
 No Go, no Node, no config files to edit. If something is missing, the script
 says so before it changes anything.
@@ -20,6 +20,14 @@ says so before it changes anything.
 git clone https://github.com/orion-belt-dev/orion-belt.git
 cd orion-belt
 ./scripts/docker-quickstart.sh
+```
+
+The script asks whether to **build from this checkout** or **pull published
+GHCR images**. To skip the prompt:
+
+```bash
+./scripts/docker-quickstart.sh --images        # recommended for a first look
+./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
 ```
 
 That's the whole setup. It generates its own secrets, starts the gateway,

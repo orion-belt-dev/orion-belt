@@ -42,6 +42,7 @@ type APIServer struct {
 	challenges      *challengeStore
 	bootstrap       *bootstrapStore
 	passwordTickets *passwordTicketStore
+	serverCfg       common.ServerConfig
 }
 
 // AgentCommander sends control commands to connected agents.
@@ -65,6 +66,8 @@ type Options struct {
 	TerminalBridge     TerminalBridge
 	RateLimitPerMinute int
 	CA                 *ca.Authority
+	// Server is the gateway's server.* config block (advertise URLs for UI/agents).
+	Server common.ServerConfig
 }
 
 // NewAPIServer creates a new API server
@@ -104,6 +107,7 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 		challenges:      newChallengeStore(),
 		bootstrap:       newBootstrapStore(),
 		passwordTickets: newPasswordTicketStore(),
+		serverCfg:       opt.Server,
 	}
 
 	api.router.Use(gin.Recovery())
@@ -138,6 +142,9 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 	s.router.GET("/api/v1/version", func(c *gin.Context) {
 		c.JSON(200, version.Info())
 	})
+
+	// Advertised addresses for UI / agent install defaults (not bind addresses).
+	s.router.GET("/api/v1/gateway-info", s.gatewayInfo)
 
 	s.router.GET("/api/v1/openapi.yaml", func(c *gin.Context) {
 		c.Header("Cache-Control", "public, max-age=300")

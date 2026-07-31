@@ -3,13 +3,16 @@
 #
 # Takes a fresh checkout to a signed-in web console with one connectable
 # machine, so a first run ends in a working demo instead of a setup checklist.
-# It generates the secrets, starts the gateway, bootstraps the first admin,
-# builds the `osh` client, registers a lab agent, and prints a sign-in link.
+#
+# By default asks whether to build images from this checkout or pull the
+# published GHCR images. Non-interactive / CI: pass --from-source or --images.
 #
 # Usage:
-#   ./scripts/docker-quickstart.sh              # everything (recommended)
-#   ./scripts/docker-quickstart.sh --no-agent   # gateway + sign-in only
-#   ./scripts/docker-quickstart.sh --down       # stop it all again
+#   ./scripts/docker-quickstart.sh                 # prompt (or --images if no TTY)
+#   ./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
+#   ./scripts/docker-quickstart.sh --images        # pull ghcr.io/...:latest
+#   ./scripts/docker-quickstart.sh --no-agent      # gateway + sign-in only
+#   ./scripts/docker-quickstart.sh --down          # stop it all again
 #
 # Safe to re-run: every step skips itself if it is already done.
 #
@@ -23,28 +26,35 @@ SSH_PORT="${ORION_SSH_PORT:-2222}"
 AGENT_NAME="${ORION_AGENT_NAME:-lab-1}"
 CFG=/etc/orion-belt/config.generated.yaml
 GO_IMAGE="${ORION_GO_IMAGE:-golang:1.26.5-alpine}"
+PUBLIC_URL="${ORION_PUBLIC_URL:-http://localhost:${API_PORT}}"
 
 WITH_AGENT=1
+IMAGE_SOURCE="" # source | images
 for arg in "$@"; do
   case "$arg" in
     --no-agent|--no-demo-agent) WITH_AGENT=0 ;;
+    --from-source|--build) IMAGE_SOURCE=source ;;
+    --images|--from-images|--pull) IMAGE_SOURCE=images ;;
     --down|--stop)
       echo "-> stopping Orion Belt"
+      # Tear down both compose flavours; ignore "not found".
       docker compose -f docker-compose.server.yml --env-file .env.server \
-        --profile demo down
+        --profile demo down 2>/dev/null || true
+      if [ -f .env.prod ]; then
+        docker compose -f docker-compose.prod.yml -f docker-compose.quickstart-demo.yml \
+          --env-file .env.prod --profile demo down 2>/dev/null || true
+      fi
       echo "Stopped. Data volumes were kept; add --volumes to remove them."
       exit 0
       ;;
-    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)
+      sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
 
-COMPOSE=(docker compose -f docker-compose.server.yml --env-file .env.server)
-TOTAL=6
-[ "$WITH_AGENT" -eq 1 ] && TOTAL=7
-STEP=0
-step() { STEP=$((STEP + 1)); printf '\n[%d/%d] %s\n' "$STEP" "$TOTAL" "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 echo "== Orion Belt quick start =="
@@ -59,17 +69,63 @@ for tool in openssl ssh-keygen curl; do
   have "$tool" || { echo "Missing required tool: $tool" >&2; exit 1; }
 done
 
+# ----------------------------------------------------------- image source
+if [ -z "$IMAGE_SOURCE" ]; then
+  if [ -t 0 ]; then
+    echo
+    echo "How should the gateway image be obtained?"
+    echo "  1) Build from this checkout (Dockerfile — needs a few minutes)"
+    echo "  2) Pull published images from GHCR (ghcr.io/orion-belt-dev/...:latest)"
+    printf "Choice [1/2] (default 2): "
+    read -r choice
+    case "${choice:-2}" in
+      1) IMAGE_SOURCE=source ;;
+      2) IMAGE_SOURCE=images ;;
+      *) echo "Invalid choice" >&2; exit 2 ;;
+    esac
+  else
+    IMAGE_SOURCE=images
+    echo "   (not a terminal — using published GHCR images; pass --from-source to build)"
+  fi
+fi
+
+if [ "$IMAGE_SOURCE" = "source" ]; then
+  ENV_FILE=.env.server
+  COMPOSE=(docker compose -f docker-compose.server.yml --env-file "$ENV_FILE")
+  UP_ARGS=(up -d --build)
+  echo "   mode: build from source"
+else
+  ENV_FILE=.env.prod
+  COMPOSE=(docker compose -f docker-compose.prod.yml -f docker-compose.quickstart-demo.yml --env-file "$ENV_FILE")
+  UP_ARGS=(up -d --pull always)
+  echo "   mode: published images (GHCR)"
+fi
+
+TOTAL=6
+[ "$WITH_AGENT" -eq 1 ] && TOTAL=7
+STEP=0
+step() { STEP=$((STEP + 1)); printf '\n[%d/%d] %s\n' "$STEP" "$TOTAL" "$1"; }
+
 # ------------------------------------------------------------------ secrets
 step "Secrets"
-if [ ! -f .env.server ]; then
+if [ ! -f "$ENV_FILE" ]; then
   {
     echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
     echo "ORION_JWT_SECRET=$(openssl rand -hex 32)"
-  } > .env.server
-  chmod 600 .env.server
-  echo "   generated .env.server"
+    echo "ORION_PUBLIC_HOST=localhost"
+    echo "ORION_PUBLIC_ORIGIN=${PUBLIC_URL}"
+    echo "ORION_PUBLIC_URL=${PUBLIC_URL}"
+    echo "ORION_API_PORT=${API_PORT}"
+    echo "ORION_SSH_PORT=${SSH_PORT}"
+  } > "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "   generated $ENV_FILE"
 else
-  echo "   .env.server already exists — reusing it"
+  echo "   $ENV_FILE already exists — reusing it"
+  # Ensure advertise vars exist for older env files.
+  grep -q '^ORION_PUBLIC_URL=' "$ENV_FILE" 2>/dev/null || echo "ORION_PUBLIC_URL=${PUBLIC_URL}" >> "$ENV_FILE"
+  grep -q '^ORION_PUBLIC_ORIGIN=' "$ENV_FILE" 2>/dev/null || echo "ORION_PUBLIC_ORIGIN=${PUBLIC_URL}" >> "$ENV_FILE"
+  grep -q '^ORION_PUBLIC_HOST=' "$ENV_FILE" 2>/dev/null || echo "ORION_PUBLIC_HOST=localhost" >> "$ENV_FILE"
 fi
 
 # ---------------------------------------------------------------- key pairs
@@ -89,7 +145,11 @@ if [ "$WITH_AGENT" -eq 1 ] && [ ! -f agent-key ]; then
 fi
 
 # ------------------------------------------------------------------ gateway
-step "Gateway (first run builds the image — a few minutes)"
+if [ "$IMAGE_SOURCE" = "source" ]; then
+  step "Gateway (first run builds the image — a few minutes)"
+else
+  step "Gateway (pulling published images)"
+fi
 
 # sanity check — the project name is used to find containers to stop and remove
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')}"
@@ -114,8 +174,6 @@ if [ -n "$existing" ]; then
     "${COMPOSE[@]}" --profile demo down --remove-orphans >/dev/null 2>&1 || true
     leftover=$(project_containers || true)
     if [ -n "$leftover" ]; then
-      # What `down` leaves behind: a container renamed mid-recreate still holds
-      # the name compose wants, so remove it by ID.
       # shellcheck disable=SC2086
       docker rm -f $leftover >/dev/null 2>&1 || true
     fi
@@ -136,15 +194,15 @@ if [ -z "$("${COMPOSE[@]}" ps -q server 2>/dev/null)" ]; then
   if [ -n "$clash" ]; then
     echo "   ! something else is already listening on:$clash" >&2
     echo "     Re-run on free ports, for example:" >&2
-    echo "       ORION_API_PORT=18080 ORION_SSH_PORT=12222 $0" >&2
+    echo "       ORION_API_PORT=18080 ORION_SSH_PORT=12222 $0 --${IMAGE_SOURCE}" >&2
     exit 1
   fi
 fi
 
-"${COMPOSE[@]}" up -d --build
+"${COMPOSE[@]}" "${UP_ARGS[@]}"
 
 printf '   waiting for the gateway to answer'
-for _ in $(seq 1 60); do
+for _ in $(seq 1 90); do
   if curl -sf "http://localhost:${API_PORT}/health" >/dev/null 2>&1; then
     printf ' ok\n'; break
   fi
@@ -166,6 +224,9 @@ step "Admin user"
   -e ORION_SETUP_ADMIN_NAME=admin \
   -e ORION_SETUP_ADMIN_EMAIL=admin@localhost \
   -e ORION_SETUP_ADMIN_KEY="$(cat admin-key.pub)" \
+  -e ORION_SETUP_PUBLIC_URL="$PUBLIC_URL" \
+  -e ORION_SETUP_PUBLIC_SSH_HOST=localhost \
+  -e ORION_SETUP_PUBLIC_SSH_PORT="$SSH_PORT" \
   server /app/orion-belt-server -c "$CFG" setup < /dev/null >/dev/null
 echo "   admin ready (authenticates with admin-key)"
 
@@ -218,7 +279,7 @@ if [ ! -f client.yaml ]; then
 server:
   host: "localhost"
   port: ${SSH_PORT}
-  api_endpoint: "http://localhost:${API_PORT}"
+  api_endpoint: "${PUBLIC_URL}"
 auth:
   user: "admin"
   key_file: "${PWD}/admin-key"
@@ -243,7 +304,7 @@ if [ "$WITH_AGENT" -eq 1 ]; then
       --type both --remote-users root >/dev/null
     echo "   registered '$AGENT_NAME' and granted admin access to it"
   fi
-  "${COMPOSE[@]}" --profile demo up -d --build agent
+  "${COMPOSE[@]}" --profile demo "${UP_ARGS[@]}" agent
   echo "   agent container started (dials out to the gateway)"
 fi
 
@@ -305,13 +366,14 @@ else
   cat <<EOF
 
   2. Add a machine: **Add agent** in the console, then see
-     docker-compose.agent.yml to run the agent on it.
+     docker-compose.agent.yml / docker-compose.prod.agent.yml to run the agent.
 EOF
 fi
 
 cat <<EOF
 
-  Console:  http://localhost:${API_PORT}/ui
+  Console:  ${PUBLIC_URL}/ui
+  Mode:     ${IMAGE_SOURCE}
   Stop:     $0 --down
   Guide:    docs/TRY_IN_10_MINUTES.md
 

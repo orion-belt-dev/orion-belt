@@ -1,0 +1,25 @@
+# Lab-only demo agent overlay for published-image quickstart.
+# Used with: docker compose -f docker-compose.prod.yml -f docker-compose.quickstart-demo.yml
+#
+# Shares the compose network with the gateway so the agent dials `server:2222`.
+
+services:
+  agent:
+    image: "ghcr.io/orion-belt-dev/orion-belt-agent:${ORION_IMAGE_TAG:-latest}"
+    pull_policy: always
+    profiles: [demo]
+    depends_on:
+      - server
+    environment:
+      ORION_SERVER_HOST: "server"
+      ORION_SERVER_PORT: "2222"
+      ORION_AGENT_NAME: "${ORION_AGENT_NAME:-lab-1}"
+      ORION_AGENT_ENV: "lab"
+      ORION_STRICT_HOST_KEY_CHECKING: "no"
+    volumes:
+      - ./agent-key:/etc/orion-belt/agent_key:ro
+      - orion_quickstart_agent_state:/etc/orion-belt
+    restart: unless-stopped
+
+volumes:
+  orion_quickstart_agent_state:

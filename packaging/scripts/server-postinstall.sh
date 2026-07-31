@@ -32,15 +32,21 @@ Orion Belt server installed.
 Next steps (setup wizard):
 
   1. Edit /etc/orion-belt/server.yaml
+     - server.public_url          (UI/API origin agents and browsers use)
+     - server.public_ssh_host/port (optional; defaults from public_url)
      - database.connection_string
      - auth.jwt_secret
 
   2. systemctl enable --now orion-belt-server
+     # Alpine / OpenRC: rc-update add orion-belt-server default && rc-service orion-belt-server start
 
   3. orion-belt-server setup
-     Creates the first admin and prints how to add agents / users.
+     Creates the first admin, sets the public address, prints agent/user steps.
 
-  4. Open http://<host>:8080/ui  → Setup guide
+  4. Open <public_url>/ui  → Setup guide
+
+  Or one-shot from releases:
+    curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/scripts/install-server.sh | sudo bash
 
 Docs: https://github.com/orion-belt-dev/orion-belt/blob/master/docs/SETUP.md
 

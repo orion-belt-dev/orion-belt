@@ -87,6 +87,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/VersionInfo"
 
+  /api/v1/gateway-info:
+    get:
+      tags: [System]
+      summary: Advertised public URL and SSH endpoint
+      description: |
+        Returns the gateway's advertised addresses (`server.public_url` /
+        `public_ssh_*`), used by the console Add-agent form and operators.
+        These are not bind addresses.
+      security: []
+      responses:
+        "200":
+          description: Advertised connection info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  public_url:
+                    type: string
+                    example: https://orion.example.com
+                  ui_url:
+                    type: string
+                    example: https://orion.example.com/ui
+                  ssh_host:
+                    type: string
+                    example: orion.example.com
+                  ssh_port:
+                    type: integer
+                    example: 2222
+                  api_port:
+                    type: integer
+                    example: 8080
+
   /api/v1/openapi.yaml:
     get:
       tags: [System]
