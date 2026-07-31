@@ -64,7 +64,13 @@ func runSetup(cmd *cobra.Command, args []string) {
 		logger.Fatal("Database: %v\n  Ensure Postgres is up and connection_string is correct.", err)
 	}
 	defer store.Close()
-	fmt.Println("✓ Database reachable")
+	if err := store.Connect(cmd.Context()); err != nil {
+		logger.Fatal("Database connect: %v", err)
+	}
+	if err := store.Migrate(cmd.Context()); err != nil {
+		logger.Fatal("Database migrate: %v", err)
+	}
+	fmt.Println("✓ Database reachable (schema up to date)")
 
 	fmt.Println()
 	fmt.Println("── Public address ──")

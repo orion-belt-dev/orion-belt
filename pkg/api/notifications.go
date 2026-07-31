@@ -20,6 +20,10 @@ func (s *APIServer) listNotifications(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(string)
+	isAdmin, _ := c.Get("is_admin")
+	if admin, _ := isAdmin.(bool); admin {
+		s.ensureWebAuthnConfigNotification(ctx, uid)
+	}
 
 	limit := 50
 	if v := c.Query("limit"); v != "" {
@@ -45,6 +49,10 @@ func (s *APIServer) unreadNotificationCount(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(string)
+	isAdmin, _ := c.Get("is_admin")
+	if admin, _ := isAdmin.(bool); admin {
+		s.ensureWebAuthnConfigNotification(ctx, uid)
+	}
 
 	count, err := s.store.CountUnreadNotifications(ctx, uid)
 	if err != nil {
@@ -415,6 +423,65 @@ func (s *APIServer) notifyAccessRequestRejected(ctx context.Context, req *common
 		"request_id":   req.ID,
 		"remote_users": strings.Join(req.RemoteUsers, ", "),
 	})
+}
+
+// ensureWebAuthnConfigNotification posts a one-shot in-app notice when
+// WebAuthn was configured enabled but failed to initialize. Dedupes on unread
+// notifications of the same type so restarts / polling do not spam the bell.
+// Delivered directly (not via preference gates) — operators must see config faults.
+func (s *APIServer) ensureWebAuthnConfigNotification(ctx context.Context, userID string) {
+	if s == nil || s.store == nil || s.webAuthnConfigErr == "" || userID == "" {
+		return
+	}
+	existing, err := s.store.ListUserNotifications(ctx, userID, 50, 0)
+	if err != nil {
+		return
+	}
+	for _, n := range existing {
+		if n == nil || n.Type != notify.EventWebAuthnConfigDisabled || n.ReadAt != nil {
+			continue
+		}
+		// Already have an unread notice — keep it rather than stacking.
+		return
+	}
+	data := map[string]string{"error": s.webAuthnConfigErr, "rp_id": s.webAuthnConfigRPID}
+	title, body := s.notificationTemplates(ctx).Render(notify.EventWebAuthnConfigDisabled, data)
+	meta := map[string]interface{}{"error": s.webAuthnConfigErr, "rp_id": s.webAuthnConfigRPID}
+	n := common.NewNotification(userID, notify.EventWebAuthnConfigDisabled, title, body, meta)
+	if err := s.store.CreateNotification(ctx, n); err != nil && s.logger != nil {
+		s.logger.Warn("failed to create WebAuthn config notification: %v", err)
+	}
+}
+
+// NotifyAdminsWebAuthnDisabled fans out the WebAuthn config failure to every
+// admin (used at gateway start when admins already exist).
+func (s *APIServer) NotifyAdminsWebAuthnDisabled(ctx context.Context, configErr string, rpID string) {
+	if s == nil || s.store == nil {
+		return
+	}
+	configErr = strings.TrimSpace(configErr)
+	if configErr == "" {
+		return
+	}
+	if s.webAuthnConfigErr == "" {
+		s.webAuthnConfigErr = configErr
+	}
+	if rpID != "" {
+		s.webAuthnConfigRPID = rpID
+	}
+	users, err := s.store.ListUsers(ctx, 500, 0)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("WebAuthn notify: list users: %v", err)
+		}
+		return
+	}
+	for _, u := range users {
+		if u == nil || !(u.IsAdmin || u.Role == "admin") {
+			continue
+		}
+		s.ensureWebAuthnConfigNotification(ctx, u.ID)
+	}
 }
 
 // expireStaleAccessRequests marks old pending JIT requests as expired.

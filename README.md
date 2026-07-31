@@ -139,17 +139,27 @@ make docker-prod-up
 curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/scripts/install-server.sh | sudo bash
 ```
 
-Distro-aware: installs deb/rpm/apk when available (else the release binary), writes `/etc/orion-belt/server.yaml` with your **public URL**, enables systemd or OpenRC, and runs the setup wizard (admin SSH key — file, paste, or generate).
+Distro-aware: installs deb/rpm/apk when available (else the release binary), writes `/etc/orion-belt/server.yaml` with your **public URL**, enables systemd or OpenRC, and runs the setup wizard (admin SSH key — file, paste, or generate). Can also install local PostgreSQL (`--install-postgres` / interactive choice).
 
 Unattended:
 
 ```bash
 curl -fsSL .../install-server.sh | sudo bash -s -- --unattended \
   --public-url https://orion.example.com \
-  --db-url 'postgres://orionbelt:SECRET@127.0.0.1:5432/orionbelt?sslmode=disable' \
+  --install-postgres \
   --jwt-secret "$(openssl rand -hex 32)" \
   --admin-email admin@example.com \
   --admin-key-file /root/admin.pub
+```
+
+(`--install-postgres` installs/starts local Postgres and creates the `orionbelt` DB; or pass `--db-url` instead.)
+
+Uninstall (asks separately whether to keep the DB, logs, and recordings):
+
+```bash
+sudo bash scripts/install-server.sh --uninstall
+# unattended:
+sudo bash scripts/install-server.sh --uninstall --unattended --drop-db --drop-logs --drop-data
 ```
 
 ### Packages (deb / rpm / apk)

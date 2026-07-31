@@ -37,7 +37,12 @@ type APIServer struct {
 	recordingCrypt  *recording.Crypto
 	recorder        *recording.Recorder
 	webAuthn        *webauthn.WebAuthn
-	terminalBridge  TerminalBridge
+	// webAuthnConfigErr is set when auth.webauthn.enabled was true but
+	// library init failed (bad rp_id / origins). Surfaced as an in-app
+	// notification so admins see it when they open the console.
+	webAuthnConfigErr string
+	webAuthnConfigRPID string
+	terminalBridge     TerminalBridge
 	ca              *ca.Authority
 	challenges      *challengeStore
 	bootstrap       *bootstrapStore
@@ -63,7 +68,11 @@ type Options struct {
 	RecordingCrypt     *recording.Crypto
 	Recorder           *recording.Recorder
 	WebAuthn           *webauthn.WebAuthn
-	TerminalBridge     TerminalBridge
+	// WebAuthnConfigError is a human-readable reason WebAuthn was disabled at
+	// startup despite auth.webauthn.enabled (empty when healthy / not enabled).
+	WebAuthnConfigError string
+	WebAuthnConfigRPID  string
+	TerminalBridge      TerminalBridge
 	RateLimitPerMinute int
 	CA                 *ca.Authority
 	// Server is the gateway's server.* config block (advertise URLs for UI/agents).
@@ -101,8 +110,10 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 		mfaRequired:     opt.MFARequired,
 		recordingCrypt:  opt.RecordingCrypt,
 		recorder:        opt.Recorder,
-		webAuthn:        opt.WebAuthn,
-		terminalBridge:  opt.TerminalBridge,
+		webAuthn:           opt.WebAuthn,
+		webAuthnConfigErr:  strings.TrimSpace(opt.WebAuthnConfigError),
+		webAuthnConfigRPID: strings.TrimSpace(opt.WebAuthnConfigRPID),
+		terminalBridge:     opt.TerminalBridge,
 		ca:              opt.CA,
 		challenges:      newChallengeStore(),
 		bootstrap:       newBootstrapStore(),

@@ -107,6 +107,7 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 	}
 
 	var wa *webauthnlib.WebAuthn
+	var webAuthnConfigErr string
 	if config.Auth.WebAuthn.Enabled {
 		config.Server.WebAuthnDefaultsFromPublicURL(&config.Auth.WebAuthn)
 		display := config.Auth.WebAuthn.RPDisplay
@@ -127,9 +128,15 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 			RPOrigins:     origins,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("webauthn: %w", err)
+			// Don't brick the gateway for a bad lab config (e.g. rp_id set to a
+			// bare IP — WebAuthn requires a domain). SSH-key / password login
+			// still work; operators can fix webauthn.* and restart.
+			webAuthnConfigErr = err.Error()
+			logger.Warn("WebAuthn disabled: %v (fix auth.webauthn.rp_id / origins)", err)
+			wa = nil
+		} else {
+			logger.Info("WebAuthn/FIDO2 enabled (rp_id=%s)", rpid)
 		}
-		logger.Info("WebAuthn/FIDO2 enabled (rp_id=%s)", rpid)
 	}
 
 	// Initialize plugin manager and register all bundled plugins — compiled
@@ -195,19 +202,24 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 
 	// Initialize API server
 	apiServer := api.NewAPIServer(store, authService, logger, api.Options{
-		JWTSecret:          config.Auth.JWTSecret,
-		JWTExpiryHours:     config.Auth.JWTExpiryHours,
-		PluginManager:      pluginManager,
-		MetricsEnabled:     true,
-		MFARequired:        config.Auth.MFARequired,
-		RecordingCrypt:     recCrypto,
-		Recorder:           recorder,
-		WebAuthn:           wa,
-		RateLimitPerMinute: config.Auth.RateLimitPerMinute,
-		CA:                 caAuthority,
-		Server:             config.Server,
+		JWTSecret:           config.Auth.JWTSecret,
+		JWTExpiryHours:      config.Auth.JWTExpiryHours,
+		PluginManager:       pluginManager,
+		MetricsEnabled:      true,
+		MFARequired:         config.Auth.MFARequired,
+		RecordingCrypt:      recCrypto,
+		Recorder:            recorder,
+		WebAuthn:            wa,
+		WebAuthnConfigError: webAuthnConfigErr,
+		WebAuthnConfigRPID:  config.Auth.WebAuthn.RPID,
+		RateLimitPerMinute:  config.Auth.RateLimitPerMinute,
+		CA:                  caAuthority,
+		Server:              config.Server,
 	})
 
+	if webAuthnConfigErr != "" {
+		apiServer.NotifyAdminsWebAuthnDisabled(ctx, webAuthnConfigErr, config.Auth.WebAuthn.RPID)
+	}
 	server := &Server{
 		config:        config,
 		store:         store,
