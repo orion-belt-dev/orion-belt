@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
-	"github.com/orion-belt-dev/orion-belt/pkg/database"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 )
@@ -59,17 +58,11 @@ func runSetup(cmd *cobra.Command, args []string) {
 		fmt.Printf("  %s\n", configPath)
 	}
 
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
+	store, err := openStore(cmd.Context())
 	if err != nil {
 		logger.Fatal("Database: %v\n  Ensure Postgres is up and connection_string is correct.", err)
 	}
 	defer store.Close()
-	if err := store.Connect(cmd.Context()); err != nil {
-		logger.Fatal("Database connect: %v", err)
-	}
-	if err := store.Migrate(cmd.Context()); err != nil {
-		logger.Fatal("Database migrate: %v", err)
-	}
 	fmt.Println("✓ Database reachable (schema up to date)")
 
 	fmt.Println()

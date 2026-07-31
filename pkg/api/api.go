@@ -1104,9 +1104,35 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 		return
 	}
 
+	// Best-effort: gather recording paths before cascading session rows away.
+	recordingPaths, _ := s.store.ListSessionRecordingPathsForMachine(ctx, id)
+
+	if s.agentCommander != nil {
+		_ = s.agentCommander.DisconnectAgent(id)
+	}
+
+	agentUserID := machine.AgentID
+
 	if err := s.store.DeleteMachine(ctx, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if agentUserID != "" {
+		if err := s.store.DeleteUser(ctx, agentUserID); err != nil && err != database.ErrNotFound {
+			if s.logger != nil {
+				s.logger.Warn("deleted machine %s but failed to remove agent user %s: %v", id, agentUserID, err)
+			}
+		}
+	}
+	for _, path := range recordingPaths {
+		if path == "" {
+			continue
+		}
+		_ = os.Remove(path)
+		_ = os.Remove(path + ".enc")
+		if strings.HasSuffix(path, ".cast") {
+			_ = os.Remove(path + ".gz")
+		}
 	}
 	s.recordAudit(c, "machine.delete", "machine:"+id, map[string]interface{}{"name": machine.Name})
 	c.JSON(http.StatusOK, gin.H{"message": "machine deleted"})

@@ -10,7 +10,6 @@ import (
 
 	"github.com/orion-belt-dev/orion-belt/pkg/auth"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
-	"github.com/orion-belt-dev/orion-belt/pkg/database"
 	"github.com/spf13/cobra"
 )
 
@@ -79,11 +78,6 @@ func init() {
 
 func runPermGrant(cmd *cobra.Command, args []string) {
 	logger := getLogger()
-	config, err := loadConfig()
-	if err != nil {
-		logger.Fatal("Failed to load config: %v", err)
-	}
-
 	// Validate access type
 	if permAccessType != "ssh" && permAccessType != "scp" && permAccessType != "both" {
 		logger.Fatal("Invalid access type '%s'. Must be 'ssh', 'scp', or 'both'", permAccessType)
@@ -105,15 +99,10 @@ func runPermGrant(cmd *cobra.Command, args []string) {
 		remoteUsers = []string{"root"} // default
 	}
 
-	// Initialize database
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to create database store: %v", err)
-	}
-
 	ctx := context.Background()
-	if err := store.Connect(ctx); err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+	store, err := openStore(ctx)
+	if err != nil {
+		logger.Fatal("%v", err)
 	}
 	defer store.Close()
 
@@ -201,20 +190,10 @@ func runPermGrant(cmd *cobra.Command, args []string) {
 
 func runPermList(cmd *cobra.Command, args []string) {
 	logger := getLogger()
-	config, err := loadConfig()
-	if err != nil {
-		logger.Fatal("Failed to load config: %v", err)
-	}
-
-	// Initialize database
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to create database store: %v", err)
-	}
-
 	ctx := context.Background()
-	if err := store.Connect(ctx); err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+	store, err := openStore(ctx)
+	if err != nil {
+		logger.Fatal("%v", err)
 	}
 	defer store.Close()
 
@@ -273,20 +252,10 @@ func runPermList(cmd *cobra.Command, args []string) {
 
 func runSessionList(cmd *cobra.Command, args []string) {
 	logger := getLogger()
-	config, err := loadConfig()
-	if err != nil {
-		logger.Fatal("Failed to load config: %v", err)
-	}
-
-	// Initialize database
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to create database store: %v", err)
-	}
-
 	ctx := context.Background()
-	if err := store.Connect(ctx); err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+	store, err := openStore(ctx)
+	if err != nil {
+		logger.Fatal("%v", err)
 	}
 	defer store.Close()
 

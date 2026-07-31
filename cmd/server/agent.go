@@ -9,7 +9,6 @@ import (
 
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
-	"github.com/orion-belt-dev/orion-belt/pkg/database"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 )
@@ -74,14 +73,10 @@ func runAgentRegister(cmd *cobra.Command, args []string) {
 		logger.Fatal("Failed to load config: %v", err)
 	}
 
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to create database store: %v", err)
-	}
-
 	ctx := context.Background()
-	if err := store.Connect(ctx); err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+	store, err := openStore(ctx)
+	if err != nil {
+		logger.Fatal("%v", err)
 	}
 	defer store.Close()
 
@@ -179,19 +174,10 @@ func runAgentRegister(cmd *cobra.Command, args []string) {
 
 func runAgentList(cmd *cobra.Command, args []string) {
 	logger := getLogger()
-	config, err := loadConfig()
-	if err != nil {
-		logger.Fatal("Failed to load config: %v", err)
-	}
-
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to create database store: %v", err)
-	}
-
 	ctx := context.Background()
-	if err := store.Connect(ctx); err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+	store, err := openStore(ctx)
+	if err != nil {
+		logger.Fatal("%v", err)
 	}
 	defer store.Close()
 
@@ -238,19 +224,10 @@ func runAgentList(cmd *cobra.Command, args []string) {
 func runAgentDelete(cmd *cobra.Command, args []string) {
 	agentName := args[0]
 	logger := getLogger()
-	config, err := loadConfig()
-	if err != nil {
-		logger.Fatal("Failed to load config: %v", err)
-	}
-
-	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
-	if err != nil {
-		logger.Fatal("Failed to create database store: %v", err)
-	}
-
 	ctx := context.Background()
-	if err := store.Connect(ctx); err != nil {
-		logger.Fatal("Failed to connect to database: %v", err)
+	store, err := openStore(ctx)
+	if err != nil {
+		logger.Fatal("%v", err)
 	}
 	defer store.Close()
 
