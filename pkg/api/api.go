@@ -10,16 +10,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/zrougamed/orion-belt/docs/openapi"
-	"github.com/zrougamed/orion-belt/pkg/auth"
-	"github.com/zrougamed/orion-belt/pkg/ca"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/database"
-	"github.com/zrougamed/orion-belt/pkg/metrics"
-	"github.com/zrougamed/orion-belt/pkg/plugin"
-	"github.com/zrougamed/orion-belt/pkg/recording"
-	"github.com/zrougamed/orion-belt/pkg/version"
-	"github.com/zrougamed/orion-belt/web"
+	"github.com/orion-belt-dev/orion-belt/docs/openapi"
+	"github.com/orion-belt-dev/orion-belt/pkg/auth"
+	"github.com/orion-belt-dev/orion-belt/pkg/ca"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/recording"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
+	"github.com/orion-belt-dev/orion-belt/web"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -37,11 +37,17 @@ type APIServer struct {
 	recordingCrypt  *recording.Crypto
 	recorder        *recording.Recorder
 	webAuthn        *webauthn.WebAuthn
-	terminalBridge  TerminalBridge
+	// webAuthnConfigErr is set when auth.webauthn.enabled was true but
+	// library init failed (bad rp_id / origins). Surfaced as an in-app
+	// notification so admins see it when they open the console.
+	webAuthnConfigErr string
+	webAuthnConfigRPID string
+	terminalBridge     TerminalBridge
 	ca              *ca.Authority
 	challenges      *challengeStore
 	bootstrap       *bootstrapStore
 	passwordTickets *passwordTicketStore
+	serverCfg       common.ServerConfig
 }
 
 // AgentCommander sends control commands to connected agents.
@@ -62,9 +68,15 @@ type Options struct {
 	RecordingCrypt     *recording.Crypto
 	Recorder           *recording.Recorder
 	WebAuthn           *webauthn.WebAuthn
-	TerminalBridge     TerminalBridge
+	// WebAuthnConfigError is a human-readable reason WebAuthn was disabled at
+	// startup despite auth.webauthn.enabled (empty when healthy / not enabled).
+	WebAuthnConfigError string
+	WebAuthnConfigRPID  string
+	TerminalBridge      TerminalBridge
 	RateLimitPerMinute int
 	CA                 *ca.Authority
+	// Server is the gateway's server.* config block (advertise URLs for UI/agents).
+	Server common.ServerConfig
 }
 
 // NewAPIServer creates a new API server
@@ -98,12 +110,15 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 		mfaRequired:     opt.MFARequired,
 		recordingCrypt:  opt.RecordingCrypt,
 		recorder:        opt.Recorder,
-		webAuthn:        opt.WebAuthn,
-		terminalBridge:  opt.TerminalBridge,
+		webAuthn:           opt.WebAuthn,
+		webAuthnConfigErr:  strings.TrimSpace(opt.WebAuthnConfigError),
+		webAuthnConfigRPID: strings.TrimSpace(opt.WebAuthnConfigRPID),
+		terminalBridge:     opt.TerminalBridge,
 		ca:              opt.CA,
 		challenges:      newChallengeStore(),
 		bootstrap:       newBootstrapStore(),
 		passwordTickets: newPasswordTicketStore(),
+		serverCfg:       opt.Server,
 	}
 
 	api.router.Use(gin.Recovery())
@@ -139,6 +154,9 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		c.JSON(200, version.Info())
 	})
 
+	// Advertised addresses for UI / agent install defaults (not bind addresses).
+	s.router.GET("/api/v1/gateway-info", s.gatewayInfo)
+
 	s.router.GET("/api/v1/openapi.yaml", func(c *gin.Context) {
 		c.Header("Cache-Control", "public, max-age=300")
 		c.Data(http.StatusOK, "application/yaml; charset=utf-8", openapi.Spec)
@@ -147,7 +165,7 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Use /api/v1/openapi.yaml for the full OpenAPI 3.0 specification",
 			"yaml":    "/api/v1/openapi.yaml",
-			"docs":    "https://github.com/zrougamed/orion-belt/blob/master/docs/openapi/openapi.yaml",
+			"docs":    "https://github.com/orion-belt-dev/orion-belt/blob/master/docs/openapi/openapi.yaml",
 		})
 	})
 
@@ -259,6 +277,11 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		// Notification policy (bounds for per-user preferences)
 		admin.GET("/notifications/policy", s.getNotificationPolicy)
 		admin.PUT("/notifications/policy", s.putNotificationPolicy)
+
+		// Notification copy (admin-editable per-event templates)
+		admin.GET("/notifications/templates", s.listNotificationTemplates)
+		admin.PUT("/notifications/templates/:event", s.putNotificationTemplate)
+		admin.DELETE("/notifications/templates/:event", s.deleteNotificationTemplate)
 
 		// Permission management
 		admin.GET("/permissions", s.listAllPermissions)
@@ -1081,9 +1104,35 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 		return
 	}
 
+	// Best-effort: gather recording paths before cascading session rows away.
+	recordingPaths, _ := s.store.ListSessionRecordingPathsForMachine(ctx, id)
+
+	if s.agentCommander != nil {
+		_ = s.agentCommander.DisconnectAgent(id)
+	}
+
+	agentUserID := machine.AgentID
+
 	if err := s.store.DeleteMachine(ctx, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if agentUserID != "" {
+		if err := s.store.DeleteUser(ctx, agentUserID); err != nil && err != database.ErrNotFound {
+			if s.logger != nil {
+				s.logger.Warn("deleted machine %s but failed to remove agent user %s: %v", id, agentUserID, err)
+			}
+		}
+	}
+	for _, path := range recordingPaths {
+		if path == "" {
+			continue
+		}
+		_ = os.Remove(path)
+		_ = os.Remove(path + ".enc")
+		if strings.HasSuffix(path, ".cast") {
+			_ = os.Remove(path + ".gz")
+		}
 	}
 	s.recordAudit(c, "machine.delete", "machine:"+id, map[string]interface{}{"name": machine.Name})
 	c.JSON(http.StatusOK, gin.H{"message": "machine deleted"})

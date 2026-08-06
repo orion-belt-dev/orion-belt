@@ -112,12 +112,55 @@ Details: [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ### Docker (fastest)
 
 ```bash
+git clone https://github.com/orion-belt-dev/orion-belt.git
+cd orion-belt
 ./scripts/docker-quickstart.sh
+```
+
+The script asks whether to **build from this checkout** or **pull published GHCR images**. Non-interactive:
+
+```bash
+./scripts/docker-quickstart.sh --images        # ghcr.io/orion-belt-dev/...:latest
+./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
 ```
 
 See [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) for agent + first session.
 
-Step-by-step compose (secrets + admin bootstrap): same script, or the manual path in that doc. Make targets: `docker-up` / `docker-down` / `docker-agent-up`.
+Make targets: `docker-up` / `docker-down` / `docker-agent-up`. Production compose:
+
+```bash
+cp .env.prod.example .env.prod   # set secrets + ORION_PUBLIC_URL
+make docker-prod-up
+```
+
+### curl | bash (Linux server)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/scripts/install-server.sh | sudo bash
+```
+
+Distro-aware: installs deb/rpm/apk when available (else the release binary), writes `/etc/orion-belt/server.yaml` with your **public URL**, enables systemd or OpenRC, and runs the setup wizard (admin SSH key — file, paste, or generate). Can also install local PostgreSQL (`--install-postgres` / interactive choice).
+
+Unattended:
+
+```bash
+curl -fsSL .../install-server.sh | sudo bash -s -- --unattended \
+  --public-url https://orion.example.com \
+  --install-postgres \
+  --jwt-secret "$(openssl rand -hex 32)" \
+  --admin-email admin@example.com \
+  --admin-key-file /root/admin.pub
+```
+
+(`--install-postgres` installs/starts local Postgres and creates the `orionbelt` DB; or pass `--db-url` instead.)
+
+Uninstall (asks separately whether to keep the DB, logs, and recordings):
+
+```bash
+sudo bash scripts/install-server.sh --uninstall
+# unattended:
+sudo bash scripts/install-server.sh --uninstall --unattended --drop-db --drop-logs --drop-data
+```
 
 ### Packages (deb / rpm / apk)
 
@@ -126,7 +169,7 @@ make packages
 # then install from dist/ — see docs/PACKAGING.md
 ```
 
-First-run after packages: [SETUP.md](docs/SETUP.md).
+First-run after packages: [SETUP.md](docs/SETUP.md). Set `server.public_url` (and optional `public_ssh_host` / `public_ssh_port`) so the UI and agents advertise a real address instead of localhost.
 
 ### From source
 

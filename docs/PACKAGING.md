@@ -128,7 +128,19 @@ For Alpine index signing, set `ORION_APK_PRIVKEY` / `ORION_APK_PUBKEY` when call
 
 Wire the script into release CD after GoReleaser to refresh the hosted repo.
 
-The Release workflow also builds a flat **Add-agent** mirror under `packages-site/` (artifact `orion-belt-packages-site`). To auto-push it to [`orion-belt-dev/packages`](https://github.com/orion-belt-dev/packages) `gh-pages`, set repo secret `PACKAGES_DEPLOY_KEY` (deploy key with write access). Without it, download the artifact and run `make publish-packages-pages PUSH=1` locally.
+The Release workflow runs `make publish-packages-pages … PUSH=1` after GoReleaser.
+`GITHUB_TOKEN` cannot push to another repository, so set **one** of these secrets on `orion-belt`:
+
+| Secret | Purpose |
+|--------|---------|
+| `PACKAGES_TOKEN` | Fine-grained PAT (or classic) with **Contents: Read and write** on [`orion-belt-dev/packages`](https://github.com/orion-belt-dev/packages) |
+| `PACKAGES_DEPLOY_KEY` | SSH deploy key (write) on that same repo |
+
+Without either secret the Release job **fails** on the publish step (instead of silently skipping). Locally you can still run:
+
+```bash
+make publish-packages-pages FROM_RELEASE=1 PUSH=1
+```
 
 ### Arch Linux
 
@@ -172,3 +184,41 @@ For a **local** package server (dev builds, air-gapped, or custom `dist/`):
 make packages
 make serve-packages   # http://127.0.0.1:8765 — set that as Package base URL
 ```
+
+## Container images (GHCR)
+
+Release tags push multi-arch (`linux/amd64`, `linux/arm64`) images to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.1.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.1.0
+# or :latest
+```
+
+Local build + push (after `docker login ghcr.io`):
+
+```bash
+DOCKER_TAG=1.1.0 make docker-push
+```
+
+Image refs for the current mirror release are also listed at
+[`https://orion-belt-dev.github.io/packages/CONTAINERS`](https://orion-belt-dev.github.io/packages/CONTAINERS).
+
+## Production Docker Compose
+
+Pull published images (always refresh `:latest`):
+
+```bash
+cp .env.prod.example .env.prod
+make docker-prod-up
+```
+
+Agent hosts:
+
+```bash
+cp .env.prod.agent.example .env.prod.agent
+make docker-prod-agent-up
+```
+
+Override tag with `ORION_IMAGE_TAG=1.1.0` to pin. Source builds stay on `docker-compose.server.yml`.
+

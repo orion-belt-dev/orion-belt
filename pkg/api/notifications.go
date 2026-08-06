@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/database"
-	"github.com/zrougamed/orion-belt/pkg/notify"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 )
 
 // listNotifications returns the authenticated user's notifications, most
@@ -20,6 +20,10 @@ func (s *APIServer) listNotifications(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(string)
+	isAdmin, _ := c.Get("is_admin")
+	if admin, _ := isAdmin.(bool); admin {
+		s.ensureWebAuthnConfigNotification(ctx, uid)
+	}
 
 	limit := 50
 	if v := c.Query("limit"); v != "" {
@@ -45,6 +49,10 @@ func (s *APIServer) unreadNotificationCount(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(string)
+	isAdmin, _ := c.Get("is_admin")
+	if admin, _ := isAdmin.(bool); admin {
+		s.ensureWebAuthnConfigNotification(ctx, uid)
+	}
 
 	count, err := s.store.CountUnreadNotifications(ctx, uid)
 	if err != nil {
@@ -222,6 +230,138 @@ func unknownChannels(policy *common.NotificationPolicy) []string {
 	return bad
 }
 
+// templateEntry is one row of the admin template editor: the copy in force,
+// the default it can be reset to, and the substitutions available to it.
+type templateEntry struct {
+	*notify.Template
+	// Customized reports that this event's copy is a stored override rather
+	// than the built-in default, so the UI can offer a reset only where there
+	// is something to reset.
+	Customized   bool     `json:"customized"`
+	DefaultTitle string   `json:"default_title"`
+	DefaultBody  string   `json:"default_body"`
+	Placeholders []string `json:"placeholders"`
+}
+
+// listNotificationTemplates returns the effective copy for every templatable
+// event — stored overrides merged over the built-in defaults. Admin-only.
+func (s *APIServer) listNotificationTemplates(c *gin.Context) {
+	stored, err := s.store.ListNotificationTemplates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	set := notify.NewTemplateSet(stored)
+
+	entries := make([]templateEntry, 0, len(notify.KnownEventTypes()))
+	for _, event := range notify.KnownEventTypes() {
+		def := notify.DefaultTemplate(event)
+		_, customized := set[event]
+		entries = append(entries, templateEntry{
+			Template:     set.Get(event),
+			Customized:   customized,
+			DefaultTitle: def.Title,
+			DefaultBody:  def.Body,
+			Placeholders: notify.PlaceholdersFor(event),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"templates": entries})
+}
+
+// putNotificationTemplate replaces the copy for one event type. Admin-only.
+// The new wording applies to the next notification delivered — templates are
+// read per delivery, so nothing has to be restarted.
+func (s *APIServer) putNotificationTemplate(c *gin.Context) {
+	event := c.Param("event")
+	var tmpl notify.Template
+	if err := c.ShouldBindJSON(&tmpl); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// The path names the event being edited; a body that disagrees is a client
+	// bug, and silently trusting either one would write copy to the wrong event.
+	if tmpl.EventType != "" && tmpl.EventType != event {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("event type in body (%q) does not match the path (%q)", tmpl.EventType, event),
+		})
+		return
+	}
+	tmpl.EventType = event
+	tmpl.Normalize()
+
+	if err := tmpl.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":        err.Error(),
+			"known_events": notify.KnownEventTypes(),
+			"placeholders": notify.PlaceholdersFor(event),
+		})
+		return
+	}
+
+	if err := s.store.UpsertNotificationTemplate(c.Request.Context(), &tmpl); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	s.recordAudit(c, "notification_template.update", "notification_template:"+event, map[string]interface{}{
+		"title": tmpl.Title,
+		"body":  tmpl.Body,
+	})
+
+	def := notify.DefaultTemplate(event)
+	c.JSON(http.StatusOK, templateEntry{
+		Template:     &tmpl,
+		Customized:   true,
+		DefaultTitle: def.Title,
+		DefaultBody:  def.Body,
+		Placeholders: notify.PlaceholdersFor(event),
+	})
+}
+
+// deleteNotificationTemplate reverts one event to its built-in copy. Admin-only.
+func (s *APIServer) deleteNotificationTemplate(c *gin.Context) {
+	event := c.Param("event")
+	if !notify.IsKnownEventType(event) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":        fmt.Sprintf("unknown event type %q", event),
+			"known_events": notify.KnownEventTypes(),
+		})
+		return
+	}
+	if err := s.store.DeleteNotificationTemplate(c.Request.Context(), event); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	s.recordAudit(c, "notification_template.delete", "notification_template:"+event, nil)
+
+	def := notify.DefaultTemplate(event)
+	c.JSON(http.StatusOK, templateEntry{
+		Template:     def,
+		Customized:   false,
+		DefaultTitle: def.Title,
+		DefaultBody:  def.Body,
+		Placeholders: notify.PlaceholdersFor(event),
+	})
+}
+
+// notificationTemplates resolves the copy in force right now. It reads through
+// to the store on every delivery rather than caching at startup, which is what
+// makes an admin's edit take effect on the next notification instead of the
+// next restart.
+//
+// A lookup failure falls back to the built-in copy: delivering the default
+// wording is strictly better than dropping a notification the recipient is
+// waiting on.
+func (s *APIServer) notificationTemplates(ctx context.Context) notify.TemplateSet {
+	stored, err := s.store.ListNotificationTemplates(ctx)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("notification template lookup failed, using defaults: %v", err)
+		}
+		return nil
+	}
+	return notify.NewTemplateSet(stored)
+}
+
 func (s *APIServer) deliverNotification(ctx context.Context, userID, notifType string, data map[string]string) {
 	if s.store == nil {
 		return
@@ -241,7 +381,7 @@ func (s *APIServer) deliverNotification(ctx context.Context, userID, notifType s
 	if !policy.Deliver(prefs, common.ChannelInApp, notifType) {
 		return
 	}
-	title, body := notify.Render(notifType, data)
+	title, body := s.notificationTemplates(ctx).Render(notifType, data)
 	meta := map[string]interface{}{}
 	for k, v := range data {
 		meta[k] = v
@@ -283,6 +423,65 @@ func (s *APIServer) notifyAccessRequestRejected(ctx context.Context, req *common
 		"request_id":   req.ID,
 		"remote_users": strings.Join(req.RemoteUsers, ", "),
 	})
+}
+
+// ensureWebAuthnConfigNotification posts a one-shot in-app notice when
+// WebAuthn was configured enabled but failed to initialize. Dedupes on unread
+// notifications of the same type so restarts / polling do not spam the bell.
+// Delivered directly (not via preference gates) — operators must see config faults.
+func (s *APIServer) ensureWebAuthnConfigNotification(ctx context.Context, userID string) {
+	if s == nil || s.store == nil || s.webAuthnConfigErr == "" || userID == "" {
+		return
+	}
+	existing, err := s.store.ListUserNotifications(ctx, userID, 50, 0)
+	if err != nil {
+		return
+	}
+	for _, n := range existing {
+		if n == nil || n.Type != notify.EventWebAuthnConfigDisabled || n.ReadAt != nil {
+			continue
+		}
+		// Already have an unread notice — keep it rather than stacking.
+		return
+	}
+	data := map[string]string{"error": s.webAuthnConfigErr, "rp_id": s.webAuthnConfigRPID}
+	title, body := s.notificationTemplates(ctx).Render(notify.EventWebAuthnConfigDisabled, data)
+	meta := map[string]interface{}{"error": s.webAuthnConfigErr, "rp_id": s.webAuthnConfigRPID}
+	n := common.NewNotification(userID, notify.EventWebAuthnConfigDisabled, title, body, meta)
+	if err := s.store.CreateNotification(ctx, n); err != nil && s.logger != nil {
+		s.logger.Warn("failed to create WebAuthn config notification: %v", err)
+	}
+}
+
+// NotifyAdminsWebAuthnDisabled fans out the WebAuthn config failure to every
+// admin (used at gateway start when admins already exist).
+func (s *APIServer) NotifyAdminsWebAuthnDisabled(ctx context.Context, configErr string, rpID string) {
+	if s == nil || s.store == nil {
+		return
+	}
+	configErr = strings.TrimSpace(configErr)
+	if configErr == "" {
+		return
+	}
+	if s.webAuthnConfigErr == "" {
+		s.webAuthnConfigErr = configErr
+	}
+	if rpID != "" {
+		s.webAuthnConfigRPID = rpID
+	}
+	users, err := s.store.ListUsers(ctx, 500, 0)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("WebAuthn notify: list users: %v", err)
+		}
+		return
+	}
+	for _, u := range users {
+		if u == nil || !(u.IsAdmin || u.Role == "admin") {
+			continue
+		}
+		s.ensureWebAuthnConfigNotification(ctx, u.ID)
+	}
 }
 
 // expireStaleAccessRequests marks old pending JIT requests as expired.

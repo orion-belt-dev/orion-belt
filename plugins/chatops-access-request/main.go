@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 )
 
 // ChatOpsPlugin is the plugin entry point implementing plugin.Plugin,

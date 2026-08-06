@@ -12,10 +12,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/zrougamed/orion-belt/pkg/ca"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/database"
-	"github.com/zrougamed/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/ca"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 )
 
 // fakeStore is a minimal in-memory database.Store for exercising

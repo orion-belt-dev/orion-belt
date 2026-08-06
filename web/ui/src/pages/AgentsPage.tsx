@@ -154,7 +154,13 @@ export function AgentsPage() {
       toast("Delete is only allowed after revoke (or archive)", "err");
       return;
     }
-    if (!confirm(`Permanently delete ${m.name}?`)) return;
+    if (
+      !confirm(
+        `Permanently delete ${m.name}?\n\nThis removes related permissions, access requests, session history, and recordings for this agent.\n\nIf you need to keep those records, cancel and Archive the agent instead.`,
+      )
+    ) {
+      return;
+    }
     try {
       await api(`/admin/machines/${encodeURIComponent(m.id)}`, { method: "DELETE" });
       toast("Agent deleted");

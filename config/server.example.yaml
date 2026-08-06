@@ -1,9 +1,14 @@
 server:
+  # Bind address (0.0.0.0 = all interfaces). Not what clients dial.
   host: "0.0.0.0"
   port: 2222
   api_port: 8080
   ssh_host_key: "/etc/orion-belt/ssh_host_key"
-  api_endpoint: "http://localhost:8080/api"
+  # Origin browsers / API clients use (scheme + host[:port], no path).
+  # Agents use public_ssh_host/port (derived from this URL's host when unset).
+  public_url: "https://orion.example.com"
+  # public_ssh_host: "orion.example.com"
+  # public_ssh_port: 2222
   metrics_enabled: true
 
 database:
@@ -21,10 +26,10 @@ auth:
   webauthn:
     enabled: true
     rp_display_name: "Orion Belt"
-    rp_id: "localhost"
+    # Must match the hostname in server.public_url (no port).
+    rp_id: "orion.example.com"
     origins:
-      - "http://localhost:8080"
-      - "https://localhost:8080"
+      - "https://orion.example.com"
   openfga:
     enabled: false
     api_url: "http://localhost:8081"

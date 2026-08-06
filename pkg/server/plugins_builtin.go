@@ -1,13 +1,13 @@
 package server
 
 import (
-	"github.com/zrougamed/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 
-	auditlogger "github.com/zrougamed/orion-belt/plugins/audit-logger"
-	chatops "github.com/zrougamed/orion-belt/plugins/chatops-access-request"
-	emailnotifications "github.com/zrougamed/orion-belt/plugins/email-notifications"
-	slacknotify "github.com/zrougamed/orion-belt/plugins/notification"
-	webhooknotifications "github.com/zrougamed/orion-belt/plugins/webhook-notifications"
+	auditlogger "github.com/orion-belt-dev/orion-belt/plugins/audit-logger"
+	chatops "github.com/orion-belt-dev/orion-belt/plugins/chatops-access-request"
+	emailnotifications "github.com/orion-belt-dev/orion-belt/plugins/email-notifications"
+	slacknotify "github.com/orion-belt-dev/orion-belt/plugins/notification"
+	webhooknotifications "github.com/orion-belt-dev/orion-belt/plugins/webhook-notifications"
 )
 
 // registerBuiltinPlugins wires every bundled plugin directly into the

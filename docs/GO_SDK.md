@@ -2,7 +2,7 @@
 
 Orion Belt ships a reusable Go SDK at import path:
 
-github.com/zrougamed/orion-belt/pkg/sdk
+github.com/orion-belt-dev/orion-belt/pkg/sdk
 
 The SDK is intended for automation and integrations that need to call the
 Orion Belt HTTP API from Go.
@@ -18,7 +18,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/zrougamed/orion-belt/pkg/sdk"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 	"golang.org/x/crypto/ssh"
 )
 

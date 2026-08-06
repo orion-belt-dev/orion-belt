@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 )
 
 // Store defines the interface for database operations
@@ -25,6 +26,9 @@ type Store interface {
 	DeleteMachine(ctx context.Context, id string) error
 	ListMachines(ctx context.Context, limit, offset int) ([]*common.Machine, error)
 	ListActiveMachines(ctx context.Context) ([]*common.Machine, error)
+	// ListSessionRecordingPathsForMachine returns on-disk recording paths for
+	// sessions tied to machineID (used to clean files after hard-delete).
+	ListSessionRecordingPathsForMachine(ctx context.Context, machineID string) ([]string, error)
 
 	// Session operations
 	CreateSession(ctx context.Context, session *common.Session) error
@@ -71,6 +75,12 @@ type Store interface {
 	// Admin-set boundary that user preferences are resolved within (singleton).
 	GetNotificationPolicy(ctx context.Context) (*common.NotificationPolicy, error)
 	UpsertNotificationPolicy(ctx context.Context, policy *common.NotificationPolicy) error
+
+	// Admin-edited notification copy. Only overridden event types are stored;
+	// anything absent falls back to the built-in template.
+	ListNotificationTemplates(ctx context.Context) ([]*notify.Template, error)
+	UpsertNotificationTemplate(ctx context.Context, tmpl *notify.Template) error
+	DeleteNotificationTemplate(ctx context.Context, eventType string) error
 
 	// Access request hygiene
 	ExpireStalePendingAccessRequests(ctx context.Context, olderThan time.Duration) (int, error)

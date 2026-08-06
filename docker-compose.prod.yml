@@ -1,0 +1,68 @@
+# Orion Belt — production stack (published GHCR images)
+#
+# Always tracks the latest released images from GitHub Container Registry:
+#   ghcr.io/orion-belt-dev/orion-belt-server:latest
+#   (agent: see docker-compose.prod.agent.yml)
+#
+#   1. cp .env.prod.example .env.prod
+#      Fill POSTGRES_PASSWORD and ORION_JWT_SECRET (openssl rand -hex 32).
+#      Set ORION_PUBLIC_HOST / ORION_PUBLIC_ORIGIN to your real domain.
+#   2. docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#   4. Bootstrap admin (SSH-key auth — no browser sign-up):
+#        docker compose -f docker-compose.prod.yml --env-file .env.prod \
+#          exec server /app/orion-belt-server setup
+#
+# Dev / local builds from source: use docker-compose.server.yml instead.
+#
+# Image tags: override ORION_IMAGE_TAG (default latest). pin e.g. ORION_IMAGE_TAG=1.1.0
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-orionbelt}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}"
+      POSTGRES_DB: "${POSTGRES_DB:-orionbelt}"
+    volumes:
+      - orion_prod_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orionbelt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  server:
+    image: "ghcr.io/orion-belt-dev/orion-belt-server:${ORION_IMAGE_TAG:-latest}"
+    pull_policy: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ORION_SSH_PORT:-2222}:2222"
+      - "${ORION_API_PORT:-8080}:8080"
+    environment:
+      POSTGRES_HOST: "postgres"
+      POSTGRES_USER: "${POSTGRES_USER:-orionbelt}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}"
+      POSTGRES_DB: "${POSTGRES_DB:-orionbelt}"
+      ORION_JWT_SECRET: "${ORION_JWT_SECRET:?set ORION_JWT_SECRET in .env.prod, generate with 'openssl rand -hex 32'}"
+      ORION_MFA_REQUIRED: "${ORION_MFA_REQUIRED:-false}"
+      ORION_WEBAUTHN_ENABLED: "${ORION_WEBAUTHN_ENABLED:-true}"
+      ORION_PUBLIC_HOST: "${ORION_PUBLIC_HOST:?set ORION_PUBLIC_HOST in .env.prod}"
+      ORION_PUBLIC_ORIGIN: "${ORION_PUBLIC_ORIGIN:?set ORION_PUBLIC_ORIGIN in .env.prod}"
+      ORION_PUBLIC_URL: "${ORION_PUBLIC_URL:-${ORION_PUBLIC_ORIGIN}}"
+      ORION_PUBLIC_SSH_HOST: "${ORION_PUBLIC_SSH_HOST:-}"
+      ORION_PUBLIC_SSH_PORT: "${ORION_PUBLIC_SSH_PORT:-}"
+      ORION_RECORDING_ENCRYPTION_KEY: "${ORION_RECORDING_ENCRYPTION_KEY:-}"
+      ORION_RECORDING_RETENTION_DAYS: "${ORION_RECORDING_RETENTION_DAYS:-90}"
+    volumes:
+      - orion_prod_recordings:/var/lib/orion-belt/recordings
+      - orion_prod_hostkey:/etc/orion-belt
+    restart: unless-stopped
+
+volumes:
+  orion_prod_postgres_data:
+  orion_prod_recordings:
+  orion_prod_hostkey:

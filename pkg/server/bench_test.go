@@ -14,11 +14,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/zrougamed/orion-belt/pkg/auth"
-	"github.com/zrougamed/orion-belt/pkg/ca"
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/plugin"
-	"github.com/zrougamed/orion-belt/pkg/recording"
+	"github.com/orion-belt-dev/orion-belt/pkg/auth"
+	"github.com/orion-belt-dev/orion-belt/pkg/ca"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
+	"github.com/orion-belt-dev/orion-belt/pkg/recording"
 )
 
 // Gateway performance benchmarks.

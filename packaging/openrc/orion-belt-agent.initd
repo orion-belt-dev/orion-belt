@@ -1,0 +1,19 @@
+#!/sbin/openrc-run
+# Orion Belt agent (OpenRC)
+
+name="orion-belt-agent"
+description="Orion Belt reverse-SSH agent"
+command="/usr/bin/orion-belt-agent"
+command_args="-c /etc/orion-belt/agent.yaml"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+
+depend() {
+	need net
+	use dns logger
+	after firewall
+}
+
+start_pre() {
+	checkpath -d -m 0750 /etc/orion-belt
+}

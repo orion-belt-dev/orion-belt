@@ -10,7 +10,8 @@ import (
 
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
-	"github.com/zrougamed/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 )
 
 func init() {
@@ -78,8 +79,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		)`,
 		`CREATE TABLE IF NOT EXISTS sessions (
 			id VARCHAR(36) PRIMARY KEY,
-			user_id VARCHAR(36) NOT NULL REFERENCES users(id),
-			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id),
+			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
 			remote_user VARCHAR(255) NOT NULL,
 			source VARCHAR(32) NOT NULL DEFAULT 'ssh',
 			start_time TIMESTAMP NOT NULL,
@@ -90,8 +91,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		)`,
 		`CREATE TABLE IF NOT EXISTS access_requests (
 			id VARCHAR(36) PRIMARY KEY,
-			user_id VARCHAR(36) NOT NULL REFERENCES users(id),
-			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id),
+			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
 			remote_users TEXT[] NOT NULL,
 			access_type VARCHAR(50) NOT NULL DEFAULT 'both',
 			reason TEXT NOT NULL,
@@ -99,22 +100,22 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			status VARCHAR(50) NOT NULL,
 			requested_at TIMESTAMP NOT NULL,
 			reviewed_at TIMESTAMP,
-			reviewed_by VARCHAR(36) REFERENCES users(id),
+			reviewed_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
 			expires_at TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS permissions (
 			id VARCHAR(36) PRIMARY KEY,
-			user_id VARCHAR(36) NOT NULL REFERENCES users(id),
-			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id),
+			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
 			access_type VARCHAR(50) NOT NULL,
 			remote_users TEXT[] NOT NULL,
-			granted_by VARCHAR(36) NOT NULL REFERENCES users(id),
+			granted_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
 			granted_at TIMESTAMP NOT NULL,
 			expires_at TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id VARCHAR(36) PRIMARY KEY,
-			user_id VARCHAR(36) REFERENCES users(id),
+			user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
 			action VARCHAR(255) NOT NULL,
 			resource VARCHAR(255) NOT NULL,
 			metadata JSONB,
@@ -215,6 +216,15 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			mandatory_events JSONB NOT NULL DEFAULT '{}',
 			updated_at TIMESTAMP NOT NULL
 		)`,
+		// Admin-editable notification copy. One row per overridden event type;
+		// an event with no row renders the built-in default, so this table is
+		// empty on a fresh install and stays empty until an admin edits copy.
+		`CREATE TABLE IF NOT EXISTS notification_templates (
+			event_type VARCHAR(100) PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			body TEXT NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS notifications (
 			id VARCHAR(36) PRIMARY KEY,
 			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -250,7 +260,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			issued_at TIMESTAMP NOT NULL,
 			expires_at TIMESTAMP NOT NULL,
 			revoked_at TIMESTAMP,
-			revoked_by VARCHAR(36) REFERENCES users(id),
+			revoked_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
 			revoke_reason TEXT
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_subject ON ssh_certificates(subject_id)`,
@@ -264,7 +274,202 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		}
 	}
 
+	// Repair FK / nullability drift on upgraded databases (idempotent; no-op when OK).
+	if err := s.repairSchema(ctx); err != nil {
+		return fmt.Errorf("%w: %v", ErrMigrationFailed, err)
+	}
+
 	return nil
+}
+
+// fkSpec describes the foreign key we want after repair.
+type fkSpec struct {
+	table     string
+	column    string
+	refTable  string
+	refColumn string
+	onDelete  string // CASCADE | SET NULL | NO ACTION | RESTRICT
+	name      string // preferred constraint name
+}
+
+// repairSchema brings an existing database in line with the delete/nullability
+// rules this build expects. Fresh CREATE TABLE IF NOT EXISTS leaves old FKs
+// alone; without this step agent/user deletes fail with 23503 after real use.
+func (s *PostgresStore) repairSchema(ctx context.Context) error {
+	if err := s.ensureColumnNullable(ctx, "permissions", "granted_by"); err != nil {
+		return err
+	}
+
+	specs := []fkSpec{
+		{"sessions", "machine_id", "machines", "id", "CASCADE", "sessions_machine_id_fkey"},
+		{"sessions", "user_id", "users", "id", "CASCADE", "sessions_user_id_fkey"},
+		{"access_requests", "machine_id", "machines", "id", "CASCADE", "access_requests_machine_id_fkey"},
+		{"access_requests", "user_id", "users", "id", "CASCADE", "access_requests_user_id_fkey"},
+		{"access_requests", "reviewed_by", "users", "id", "SET NULL", "access_requests_reviewed_by_fkey"},
+		{"permissions", "machine_id", "machines", "id", "CASCADE", "permissions_machine_id_fkey"},
+		{"permissions", "user_id", "users", "id", "CASCADE", "permissions_user_id_fkey"},
+		{"permissions", "granted_by", "users", "id", "SET NULL", "permissions_granted_by_fkey"},
+		{"audit_logs", "user_id", "users", "id", "SET NULL", "audit_logs_user_id_fkey"},
+		{"ssh_certificates", "revoked_by", "users", "id", "SET NULL", "ssh_certificates_revoked_by_fkey"},
+		{"api_keys", "user_id", "users", "id", "CASCADE", "api_keys_user_id_fkey"},
+		{"http_sessions", "user_id", "users", "id", "CASCADE", "http_sessions_user_id_fkey"},
+		{"user_ssh_keys", "user_id", "users", "id", "CASCADE", "user_ssh_keys_user_id_fkey"},
+		{"webauthn_credentials", "user_id", "users", "id", "CASCADE", "webauthn_credentials_user_id_fkey"},
+		{"notification_prefs", "user_id", "users", "id", "CASCADE", "notification_prefs_user_id_fkey"},
+		{"notifications", "user_id", "users", "id", "CASCADE", "notifications_user_id_fkey"},
+	}
+	for _, spec := range specs {
+		if err := s.ensureForeignKey(ctx, spec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeDeleteRule(rule string) string {
+	switch strings.ToUpper(strings.TrimSpace(rule)) {
+	case "CASCADE":
+		return "CASCADE"
+	case "SET NULL":
+		return "SET NULL"
+	case "SET DEFAULT":
+		return "SET DEFAULT"
+	case "RESTRICT":
+		return "RESTRICT"
+	default:
+		return "NO ACTION"
+	}
+}
+
+func (s *PostgresStore) ensureColumnNullable(ctx context.Context, table, column string) error {
+	var nullable string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT is_nullable
+		FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+		table, column).Scan(&nullable)
+	if err == sql.ErrNoRows {
+		return nil // table/column not present yet
+	}
+	if err != nil {
+		return fmt.Errorf("inspect %s.%s nullability: %w", table, column, err)
+	}
+	if strings.EqualFold(nullable, "YES") {
+		return nil
+	}
+	_, err = s.db.ExecContext(ctx, fmt.Sprintf(
+		`ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL`,
+		pqQuoteIdent(table), pqQuoteIdent(column)))
+	if err != nil {
+		return fmt.Errorf("make %s.%s nullable: %w", table, column, err)
+	}
+	return nil
+}
+
+type existingFK struct {
+	name       string
+	deleteRule string
+	refTable   string
+	refColumn  string
+}
+
+func (s *PostgresStore) listForeignKeys(ctx context.Context, table, column string) ([]existingFK, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT tc.constraint_name, rc.delete_rule, ccu.table_name, ccu.column_name
+		FROM information_schema.table_constraints AS tc
+		JOIN information_schema.key_column_usage AS kcu
+		  ON tc.constraint_name = kcu.constraint_name
+		 AND tc.table_schema = kcu.table_schema
+		JOIN information_schema.referential_constraints AS rc
+		  ON tc.constraint_name = rc.constraint_name
+		 AND tc.table_schema = rc.constraint_schema
+		JOIN information_schema.constraint_column_usage AS ccu
+		  ON ccu.constraint_name = tc.constraint_name
+		 AND ccu.table_schema = tc.table_schema
+		WHERE tc.constraint_type = 'FOREIGN KEY'
+		  AND tc.table_schema = 'public'
+		  AND tc.table_name = $1
+		  AND kcu.column_name = $2`, table, column)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []existingFK
+	for rows.Next() {
+		var fk existingFK
+		if err := rows.Scan(&fk.name, &fk.deleteRule, &fk.refTable, &fk.refColumn); err != nil {
+			return nil, err
+		}
+		fk.deleteRule = normalizeDeleteRule(fk.deleteRule)
+		out = append(out, fk)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) ensureForeignKey(ctx context.Context, spec fkSpec) error {
+	want := normalizeDeleteRule(spec.onDelete)
+	existing, err := s.listForeignKeys(ctx, spec.table, spec.column)
+	if err != nil {
+		return fmt.Errorf("inspect FK %s.%s: %w", spec.table, spec.column, err)
+	}
+
+	ok := false
+	if len(existing) == 1 {
+		fk := existing[0]
+		if fk.deleteRule == want && fk.refTable == spec.refTable && fk.refColumn == spec.refColumn {
+			ok = true
+		}
+	}
+	if ok {
+		return nil
+	}
+
+	for _, fk := range existing {
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf(
+			`ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s`,
+			pqQuoteIdent(spec.table), pqQuoteIdent(fk.name))); err != nil {
+			return fmt.Errorf("drop FK %s: %w", fk.name, err)
+		}
+	}
+
+	// Also drop the preferred name in case it exists on another column shape.
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(
+		`ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s`,
+		pqQuoteIdent(spec.table), pqQuoteIdent(spec.name))); err != nil {
+		return fmt.Errorf("drop FK %s: %w", spec.name, err)
+	}
+
+	onDeleteSQL := "NO ACTION"
+	switch want {
+	case "CASCADE":
+		onDeleteSQL = "CASCADE"
+	case "SET NULL":
+		onDeleteSQL = "SET NULL"
+	case "SET DEFAULT":
+		onDeleteSQL = "SET DEFAULT"
+	case "RESTRICT":
+		onDeleteSQL = "RESTRICT"
+	}
+
+	_, err = s.db.ExecContext(ctx, fmt.Sprintf(
+		`ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE %s`,
+		pqQuoteIdent(spec.table),
+		pqQuoteIdent(spec.name),
+		pqQuoteIdent(spec.column),
+		pqQuoteIdent(spec.refTable),
+		pqQuoteIdent(spec.refColumn),
+		onDeleteSQL,
+	))
+	if err != nil {
+		return fmt.Errorf("add FK %s: %w", spec.name, err)
+	}
+	return nil
+}
+
+// pqQuoteIdent quotes a SQL identifier (table/column/constraint) safely.
+func pqQuoteIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
 // CreateUser creates a new user
@@ -364,18 +569,55 @@ func (s *PostgresStore) UpdateUser(ctx context.Context, user *common.User) error
 	return nil
 }
 
-// DeleteUser deletes a user
+// DeleteUser deletes a user and dependent subject rows (sessions, their
+// access requests, their permissions). Attribution FKs (granted_by,
+// reviewed_by, audit_logs.user_id, revoked_by) are nulled so history for
+// other principals is preserved. Credential tables already CASCADE.
 func (s *PostgresStore) DeleteUser(ctx context.Context, id string) error {
-	query := `DELETE FROM users WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
-
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
+	defer func() { _ = tx.Rollback() }()
 
+	// Clear attribution pointers first (works even before SET NULL migrations).
+	if _, err := tx.ExecContext(ctx, `UPDATE permissions SET granted_by = NULL WHERE granted_by = $1`, id); err != nil {
+		// Pre-migration schemas still have granted_by NOT NULL — point at the
+		// permission subject so the row can survive until migrate rebinds the FK.
+		if _, err2 := tx.ExecContext(ctx, `UPDATE permissions SET granted_by = user_id WHERE granted_by = $1`, id); err2 != nil {
+			return fmt.Errorf("failed to clear permission grantor: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE access_requests SET reviewed_by = NULL WHERE reviewed_by = $1`, id); err != nil {
+		return fmt.Errorf("failed to clear access-request reviewer: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE audit_logs SET user_id = NULL WHERE user_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to clear audit log user: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE ssh_certificates SET revoked_by = NULL WHERE revoked_by = $1`, id); err != nil {
+		return fmt.Errorf("failed to clear certificate revoker: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE user_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to delete user permissions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM access_requests WHERE user_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to delete user access requests: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to delete user sessions: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return ErrNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
 	}
 	return nil
 }
@@ -494,20 +736,61 @@ func (s *PostgresStore) UpdateMachine(ctx context.Context, machine *common.Machi
 	return nil
 }
 
-// DeleteMachine deletes a machine
+// DeleteMachine deletes a machine and its dependent rows (permissions,
+// access requests, and sessions). Session recording files on disk are left for
+// the retention job / operator cleanup — the FK cascade is what unblocks UI delete.
 func (s *PostgresStore) DeleteMachine(ctx context.Context, id string) error {
-	query := `DELETE FROM machines WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
-
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete machine: %w", err)
 	}
+	defer func() { _ = tx.Rollback() }()
 
+	// Explicit deletes keep behaviour correct even before the CASCADE migration
+	// has run on an upgraded database.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE machine_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to delete machine permissions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM access_requests WHERE machine_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to delete machine access requests: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE machine_id = $1`, id); err != nil {
+		return fmt.Errorf("failed to delete machine sessions: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM machines WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete machine: %w", err)
+	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return ErrNotFound
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to delete machine: %w", err)
+	}
 	return nil
+}
+
+// ListSessionRecordingPathsForMachine returns recording_path values for a machine.
+func (s *PostgresStore) ListSessionRecordingPathsForMachine(ctx context.Context, machineID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT recording_path FROM sessions WHERE machine_id = $1 AND recording_path <> ''`, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list session recordings: %w", err)
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, fmt.Errorf("failed to scan recording path: %w", err)
+		}
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, rows.Err()
 }
 
 // ListMachines lists machines with pagination
@@ -1304,6 +1587,64 @@ func (s *PostgresStore) UpsertNotificationPolicy(ctx context.Context, policy *co
 		  mandatory_events=EXCLUDED.mandatory_events,
 		  updated_at=NOW()`,
 		pq.Array(emptyIfNil(policy.AllowedChannels)), mandatory)
+	return err
+}
+
+// ListNotificationTemplates returns every stored copy override, in the stable
+// order of the event catalog. Events an admin has never edited have no row and
+// are absent here — the caller resolves those against the built-in defaults.
+//
+// Rows for event types this build no longer knows about are left in place but
+// filtered out downstream, so a downgrade does not destroy copy that an
+// upgrade would make live again.
+func (s *PostgresStore) ListNotificationTemplates(ctx context.Context) ([]*notify.Template, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT event_type, title, body, updated_at FROM notification_templates`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*notify.Template
+	for rows.Next() {
+		t := &notify.Template{}
+		if err := rows.Scan(&t.EventType, &t.Title, &t.Body, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	notify.SortTemplates(out)
+	return out, nil
+}
+
+// UpsertNotificationTemplate stores the copy override for one event type.
+// On success, tmpl.UpdatedAt is set to the timestamp written by the database
+// so the PUT response matches a subsequent GET.
+func (s *PostgresStore) UpsertNotificationTemplate(ctx context.Context, tmpl *notify.Template) error {
+	if tmpl == nil {
+		return fmt.Errorf("template is required")
+	}
+	return s.db.QueryRowContext(ctx, `
+		INSERT INTO notification_templates (event_type, title, body, updated_at)
+		VALUES ($1,$2,$3,NOW())
+		ON CONFLICT (event_type) DO UPDATE SET
+		  title=EXCLUDED.title,
+		  body=EXCLUDED.body,
+		  updated_at=NOW()
+		RETURNING updated_at`,
+		tmpl.EventType, tmpl.Title, tmpl.Body).Scan(&tmpl.UpdatedAt)
+}
+
+// DeleteNotificationTemplate drops the override for eventType, which reverts
+// that event to the built-in copy. Deleting an event that was never overridden
+// is not an error: the caller asked for the default and the default is what
+// they end up with.
+func (s *PostgresStore) DeleteNotificationTemplate(ctx context.Context, eventType string) error {
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM notification_templates WHERE event_type=$1`, eventType)
 	return err
 }
 

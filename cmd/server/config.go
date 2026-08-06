@@ -51,9 +51,12 @@ func runConfigShow(cmd *cobra.Command, args []string) {
 
 	fmt.Println("Configuration loaded successfully:")
 	fmt.Printf("\nServer:\n")
-	fmt.Printf("  Host:        %s\n", config.Server.Host)
-	fmt.Printf("  Port:        %d\n", config.Server.Port)
-	fmt.Printf("  API Port:    %d\n", config.Server.APIPort)
+	fmt.Printf("  Host:         %s\n", config.Server.Host)
+	fmt.Printf("  Port:         %d\n", config.Server.Port)
+	fmt.Printf("  API Port:     %d\n", config.Server.APIPort)
+	fmt.Printf("  Public URL:   %s\n", config.Server.AdvertisedURL())
+	fmt.Printf("  Public SSH:   %s:%d\n", config.Server.AdvertisedSSHHost(), config.Server.AdvertisedSSHPort())
+	fmt.Printf("  UI:           %s\n", config.Server.UIURL())
 	fmt.Printf("  SSH Host Key: %s\n", config.Server.SSHHostKey)
 
 	fmt.Printf("\nDatabase:\n")

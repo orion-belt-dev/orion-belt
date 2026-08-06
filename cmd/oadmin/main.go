@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
 	"github.com/zrougamed/orion-belt/pkg/sdk"
-	"github.com/zrougamed/orion-belt/pkg/version"
 )
 
 var flags cliflags.Common

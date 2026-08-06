@@ -2,7 +2,10 @@
         test-coverage coverage-check coverage-baseline \
         bench perf-check perf-baseline \
         docker-build docker-build-server docker-build-agent docker-build-client \
-        docker-push docker-up docker-down docker-logs docker-agent-up docker-agent-down \
+        docker-push docker-push-server docker-push-agent \
+        docker-up docker-down docker-logs docker-agent-up docker-agent-down \
+        docker-prod-pull docker-prod-up docker-prod-down \
+        docker-prod-agent-up docker-prod-agent-down \
         cve packages repos packaging-key sign-artifacts serve-packages publish-packages-pages \
         lab-compose-up lab-compose-down lab-bootstrap-admin \
         lab-qemu-images lab-qemu-images-refresh lab-qemu-up lab-qemu-down lab-qemu-restart lab-qemu-test \
@@ -21,17 +24,19 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -s -w \
-	-X github.com/zrougamed/orion-belt/pkg/version.Version=$(VERSION) \
-	-X github.com/zrougamed/orion-belt/pkg/version.Commit=$(COMMIT) \
-	-X github.com/zrougamed/orion-belt/pkg/version.Date=$(DATE)
+	-X github.com/orion-belt-dev/orion-belt/pkg/version.Version=$(VERSION) \
+	-X github.com/orion-belt-dev/orion-belt/pkg/version.Commit=$(COMMIT) \
+	-X github.com/orion-belt-dev/orion-belt/pkg/version.Date=$(DATE)
 
 # Docker variables
-DOCKER_REGISTRY ?=
+# Default registry for pushes: GitHub Container Registry under the org.
+DOCKER_REGISTRY ?= ghcr.io/orion-belt-dev
 DOCKER_IMAGE ?= orion-belt
 DOCKER_TAG ?= latest
 DOCKER_DIR=docker
 DOCKERFILE=$(DOCKER_DIR)/Dockerfile
 DOCKERFILE_AGENT=$(DOCKER_DIR)/Dockerfile.agent
+DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
 
 # Helper to prefix image name with registry if set
 ifdef DOCKER_REGISTRY
@@ -156,6 +161,8 @@ docker-build-server:
 		--file $(DOCKERFILE) \
 		--target server \
 		--tag $(IMAGE_PREFIX)-server:$(DOCKER_TAG) \
+		--label org.opencontainers.image.source=https://github.com/orion-belt-dev/orion-belt \
+		--label org.opencontainers.image.description="Orion Belt PAM gateway server" \
 		.
 
 # Build agent image
@@ -165,7 +172,24 @@ docker-build-agent:
 		--file $(DOCKERFILE_AGENT) \
 		--target agent \
 		--tag $(IMAGE_PREFIX)-agent:$(DOCKER_TAG) \
+		--label org.opencontainers.image.source=https://github.com/orion-belt-dev/orion-belt \
+		--label org.opencontainers.image.description="Orion Belt reverse-SSH agent" \
 		.
+
+# Build both images locally
+docker-build: docker-build-server docker-build-agent
+
+# Push to GHCR (login first: echo $$GITHUB_TOKEN | docker login ghcr.io -u USER --password-stdin)
+# Override: DOCKER_TAG=1.1.0 make docker-push
+docker-push-server: docker-build-server
+	docker push $(IMAGE_PREFIX)-server:$(DOCKER_TAG)
+
+docker-push-agent: docker-build-agent
+	docker push $(IMAGE_PREFIX)-agent:$(DOCKER_TAG)
+
+docker-push: docker-push-server docker-push-agent
+	@echo "Pushed $(IMAGE_PREFIX)-server:$(DOCKER_TAG) and $(IMAGE_PREFIX)-agent:$(DOCKER_TAG)"
+	@echo "Also listed on https://orion-belt-dev.github.io/packages (CONTAINERS)"
 
 # Start the server + Postgres via Docker Compose (see .env.server.example)
 docker-up:
@@ -188,6 +212,26 @@ docker-agent-up:
 # Stop the agent
 docker-agent-down:
 	docker compose -f docker-compose.agent.yml --env-file .env.agent down
+
+# Production stack from GHCR (:latest by default — always pull on up)
+#   cp .env.prod.example .env.prod && make docker-prod-up
+docker-prod-pull:
+	docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+
+docker-prod-up:
+	docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+	@echo "Prod server up (GHCR $${ORION_IMAGE_TAG:-latest}). SSH: :$${ORION_SSH_PORT:-2222}  UI: http://localhost:$${ORION_API_PORT:-8080}/ui"
+
+docker-prod-down:
+	docker compose -f docker-compose.prod.yml --env-file .env.prod down
+
+docker-prod-agent-up:
+	docker compose -f docker-compose.prod.agent.yml --env-file .env.prod.agent pull
+	docker compose -f docker-compose.prod.agent.yml --env-file .env.prod.agent up -d
+
+docker-prod-agent-down:
+	docker compose -f docker-compose.prod.agent.yml --env-file .env.prod.agent down
 
 # ────────────────────────────────────────────────────────────
 # Security / packaging / labs
