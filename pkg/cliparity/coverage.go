@@ -42,6 +42,7 @@ var Coverage = map[string]Cover{
 	"GET /health":              {Exempt: "liveness probe for load balancers and container runtimes"},
 	"GET /metrics":             {Exempt: "Prometheus scrape endpoint"},
 	"GET /api/v1/version":      {Command: "oadmin version"},
+	"GET /api/v1/gateway-info": {Command: "oadmin gateway-info"},
 	"GET /api/v1/openapi.json": {Exempt: "OpenAPI document served for API tooling and the console"},
 	"GET /api/v1/openapi.yaml": {Exempt: "OpenAPI document served for API tooling and the console"},
 
@@ -132,14 +133,17 @@ var Coverage = map[string]Cover{
 	"GET /api/v1/setup/status":         {Command: "oadmin setup status"},
 
 	// --- Notifications -----------------------------------------------------
-	"GET /api/v1/notifications":              {Command: "osh notifications list"},
-	"GET /api/v1/notifications/unread-count": {Command: "osh notifications list", Note: "the unread count is printed in the list summary"},
-	"POST /api/v1/notifications/:id/read":    {Command: "osh notifications read"},
-	"POST /api/v1/notifications/read-all":    {Command: "osh notifications read --all"},
-	"GET /api/v1/notifications/prefs":        {Command: "osh notifications prefs"},
-	"PUT /api/v1/notifications/prefs":        {Command: "osh notifications prefs --set"},
-	"GET /api/v1/admin/notifications/policy": {Command: "oadmin notifications policy"},
-	"PUT /api/v1/admin/notifications/policy": {Command: "oadmin notifications set-policy"},
+	"GET /api/v1/notifications":                           {Command: "osh notifications list"},
+	"GET /api/v1/notifications/unread-count":              {Command: "osh notifications list", Note: "the unread count is printed in the list summary"},
+	"POST /api/v1/notifications/:id/read":                 {Command: "osh notifications read"},
+	"POST /api/v1/notifications/read-all":                 {Command: "osh notifications read --all"},
+	"GET /api/v1/notifications/prefs":                     {Command: "osh notifications prefs"},
+	"PUT /api/v1/notifications/prefs":                     {Command: "osh notifications prefs --set"},
+	"GET /api/v1/admin/notifications/policy":              {Command: "oadmin notifications policy"},
+	"PUT /api/v1/admin/notifications/policy":              {Command: "oadmin notifications set-policy"},
+	"GET /api/v1/admin/notifications/templates":           {Command: "oadmin notifications templates"},
+	"PUT /api/v1/admin/notifications/templates/:event":    {Command: "oadmin notifications set-template"},
+	"DELETE /api/v1/admin/notifications/templates/:event": {Command: "oadmin notifications reset-template"},
 
 	// --- Plugins -----------------------------------------------------------
 	"GET /api/v1/admin/plugins":                   {Command: "oadmin plugins list"},

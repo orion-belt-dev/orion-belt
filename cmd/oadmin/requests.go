@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
 )
 
 func newRequestsCmd() *cobra.Command {

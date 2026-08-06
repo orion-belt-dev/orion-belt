@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
-	"github.com/zrougamed/orion-belt/pkg/sdk"
 )
 
 // defaultPackageBaseURL is where generated installers fetch agent packages

@@ -9,9 +9,9 @@ import (
 	"github.com/orion-belt-dev/orion-belt/pkg/client"
 	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/sdk"
 )
 
 var (

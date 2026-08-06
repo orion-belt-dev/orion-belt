@@ -103,10 +103,12 @@ prints backup codes once, for the same reason.
 | `oadmin agents list` / `command` / `disconnect` / `install-script` | Operate connected agents |
 | `oadmin plugins list` / `enable` / `disable` / `config` | Manage plugins |
 | `oadmin notifications policy` / `set-policy` | Set the org-wide notification bounds |
+| `oadmin notifications templates [--body]` / `set-template` / `reset-template` | Edit the copy recipients see per event |
 | `oadmin ca export` / `list-certs` / `revoke <serial>` | Manage the SSH CA |
 | `oadmin reports export <name>` | Export a compliance report |
 | `oadmin usage [--window H]` | Access volume and approval latency |
 | `oadmin setup status` | First-run checklist |
+| `oadmin gateway-info` | Addresses the gateway advertises to clients and agents |
 | `oadmin version` | CLI and gateway versions (also a reachability check) |
 
 Commands that take a user or machine accept the name as well as the ID:

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
 )
 
 func newAuditCmd() *cobra.Command {

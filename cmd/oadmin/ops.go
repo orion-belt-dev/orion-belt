@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
-	"github.com/zrougamed/orion-belt/pkg/sdk"
-	"github.com/zrougamed/orion-belt/pkg/version"
 )
 
 func newReportsCmd() *cobra.Command {
@@ -160,6 +160,53 @@ func runSetupStatus(cmd *cobra.Command, args []string) {
 
 	if status.Next != "" {
 		cliflags.Print("\nNext: %s", status.Next)
+	}
+}
+
+func newGatewayInfoCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "gateway-info",
+		Short: "Show the addresses this gateway advertises",
+		Long: `Prints the URLs and ports the gateway hands out to clients and agents.
+
+These are the reachable addresses, not the bind addresses — they are what to
+put in a client config, and what "agents install-script --gateway-host" should
+point at. It needs no authentication, so it also works before you have
+credentials.`,
+		Args: cobra.NoArgs,
+		Run:  runGatewayInfo,
+	}
+}
+
+func runGatewayInfo(cmd *cobra.Command, args []string) {
+	cfg, err := flags.LoadConfig()
+	if err != nil {
+		cliflags.Fatalf("%v", err)
+	}
+	endpoint := cliflags.APIEndpointFor(cfg)
+
+	client, err := sdk.NewClient(endpoint, sdk.WithTimeout(flags.Timeout))
+	if err != nil {
+		cliflags.Fatalf("%v", err)
+	}
+
+	info, err := client.GetGatewayInfo(context.Background())
+	if err != nil {
+		cliflags.Fatalf("reading gateway info from %s: %v", endpoint, err)
+	}
+
+	if flags.JSON {
+		cliflags.MustPrintJSON(info)
+		return
+	}
+
+	cliflags.Print("Public URL: %s", cliflags.OrDash(info.PublicURL))
+	cliflags.Print("Console:    %s", cliflags.OrDash(info.UIURL))
+	cliflags.Print("SSH:        %s:%d", cliflags.OrDash(info.SSHHost), info.SSHPort)
+	cliflags.Print("API port:   %d", info.APIPort)
+	if info.PublicSSHHost != "" || info.PublicSSHPort != 0 {
+		cliflags.Print("Configured public SSH override: %s:%d",
+			cliflags.OrDash(info.PublicSSHHost), info.PublicSSHPort)
 	}
 }
 

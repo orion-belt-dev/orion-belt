@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/sdk"
 )
 
 var flags cliflags.Common
@@ -40,6 +40,7 @@ func init() {
 	rootCmd.AddCommand(newReportsCmd())
 	rootCmd.AddCommand(newUsageCmd())
 	rootCmd.AddCommand(newSetupCmd())
+	rootCmd.AddCommand(newGatewayInfoCmd())
 	rootCmd.AddCommand(newVersionCmd())
 }
 

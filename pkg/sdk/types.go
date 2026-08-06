@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/notify"
 )
 
 // User is a platform user account.
@@ -30,6 +31,35 @@ type NotificationPrefs = common.NotificationPrefs
 // NotificationPolicy is the admin-set boundary that per-user preferences are
 // resolved within.
 type NotificationPolicy = common.NotificationPolicy
+
+// NotificationTemplate is the admin-editable copy for one notification event.
+type NotificationTemplate = notify.Template
+
+// NotificationTemplateEntry is one event's copy as the admin endpoint reports
+// it: the effective template, plus what the built-in default says and which
+// placeholders the event supports, so a caller can edit without guessing.
+type NotificationTemplateEntry struct {
+	NotificationTemplate
+
+	// Customized reports that this event's copy is a stored override rather
+	// than the built-in default — the only case where a reset does anything.
+	Customized   bool     `json:"customized"`
+	DefaultTitle string   `json:"default_title"`
+	DefaultBody  string   `json:"default_body"`
+	Placeholders []string `json:"placeholders"`
+}
+
+// GatewayInfo is the set of addresses the gateway advertises to clients and
+// agents. These are the reachable addresses to hand out, not bind addresses.
+type GatewayInfo struct {
+	PublicURL     string `json:"public_url"`
+	UIURL         string `json:"ui_url"`
+	SSHHost       string `json:"ssh_host"`
+	SSHPort       int    `json:"ssh_port"`
+	APIPort       int    `json:"api_port"`
+	PublicSSHHost string `json:"public_ssh_host,omitempty"`
+	PublicSSHPort int    `json:"public_ssh_port,omitempty"`
+}
 
 // NotificationPolicyResult is the stored policy together with the channels and
 // event types this server build implements, which is what a caller needs to

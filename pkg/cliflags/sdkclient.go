@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/zrougamed/orion-belt/pkg/common"
-	"github.com/zrougamed/orion-belt/pkg/sdk"
+	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 )
 
 // APIEndpointFor resolves the HTTP API base URL from a loaded config, falling

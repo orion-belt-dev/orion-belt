@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/zrougamed/orion-belt/pkg/cliparity"
+	"github.com/orion-belt-dev/orion-belt/pkg/cliparity"
 )
 
 func TestCoveredCommandsExist(t *testing.T) {

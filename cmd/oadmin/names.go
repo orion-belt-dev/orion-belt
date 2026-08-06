@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
-	"github.com/zrougamed/orion-belt/pkg/sdk"
+	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 )
 
 // nameIndex maps the user and machine IDs that appear as foreign keys in
