@@ -308,6 +308,29 @@ func (c *Client) PutNotificationPrefsWithBounds(ctx context.Context, prefs Notif
 	return &out, nil
 }
 
+// GetNotificationPolicy returns the admin-set boundary that per-user
+// preferences are resolved within, together with the channels and event types
+// this server build knows about. Admin-only.
+func (c *Client) GetNotificationPolicy(ctx context.Context) (*NotificationPolicyResult, error) {
+	var out NotificationPolicyResult
+	if err := c.Do(ctx, http.MethodGet, "/admin/notifications/policy", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PutNotificationPolicy replaces the notification policy. Admin-only.
+//
+// The submitted policy replaces the stored one outright, so send the complete
+// document rather than the fields being changed.
+func (c *Client) PutNotificationPolicy(ctx context.Context, policy NotificationPolicy) (*NotificationPolicy, error) {
+	var out NotificationPolicy
+	if err := c.Do(ctx, http.MethodPut, "/admin/notifications/policy", policy, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetSetupStatus returns first-run setup checklist status.
 func (c *Client) GetSetupStatus(ctx context.Context) (*SetupStatus, error) {
 	var out SetupStatus

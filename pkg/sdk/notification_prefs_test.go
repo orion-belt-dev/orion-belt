@@ -1,7 +1,10 @@
 package sdk
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -69,6 +72,86 @@ func TestNotificationPrefsIgnoresBoundsFields(t *testing.T) {
 	}
 	if got.UserID != "u1" || !got.InAppEnabled {
 		t.Errorf("legacy decode broke: %+v", got)
+	}
+}
+
+// GetNotificationPolicy reads the admin endpoint and returns the policy
+// alongside the channels and events this server build knows, which is what a
+// caller needs to submit a policy the server will accept.
+func TestGetNotificationPolicyParsesServerShape(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/admin/notifications/policy" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"policy": {"allowed_channels":["in_app"],"mandatory_events":{"access_request.approved":["in_app"]}},
+			"known_channels": ["in_app","email"],
+			"known_events": ["access_request.approved","access_request.rejected"]
+		}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, WithAPIKey("k123"))
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	result, err := client.GetNotificationPolicy(context.Background())
+	if err != nil {
+		t.Fatalf("GetNotificationPolicy error: %v", err)
+	}
+	if !reflect.DeepEqual(result.Policy.AllowedChannels, []string{"in_app"}) {
+		t.Errorf("allowed_channels = %v", result.Policy.AllowedChannels)
+	}
+	if !reflect.DeepEqual(result.KnownChannels, []string{"in_app", "email"}) {
+		t.Errorf("known_channels = %v", result.KnownChannels)
+	}
+	if len(result.KnownEvents) != 2 {
+		t.Errorf("known_events = %v", result.KnownEvents)
+	}
+}
+
+// PutNotificationPolicy replaces the policy wholesale and returns what was
+// stored after the server normalized it.
+func TestPutNotificationPolicySendsTheWholePolicy(t *testing.T) {
+	var received NotificationPolicy
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/admin/notifications/policy" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Errorf("decode: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"allowed_channels":["in_app"],"mandatory_events":{}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, WithAPIKey("k123"))
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	stored, err := client.PutNotificationPolicy(context.Background(), NotificationPolicy{
+		AllowedChannels: []string{"in_app"},
+		MandatoryEvents: map[string][]string{"access_request.approved": {"in_app"}},
+	})
+	if err != nil {
+		t.Fatalf("PutNotificationPolicy error: %v", err)
+	}
+	if !reflect.DeepEqual(received.AllowedChannels, []string{"in_app"}) {
+		t.Errorf("server received allowed_channels = %v", received.AllowedChannels)
+	}
+	if !reflect.DeepEqual(received.MandatoryEvents["access_request.approved"], []string{"in_app"}) {
+		t.Errorf("server received mandatory_events = %v", received.MandatoryEvents)
+	}
+	if !reflect.DeepEqual(stored.AllowedChannels, []string{"in_app"}) {
+		t.Errorf("stored policy = %+v", stored)
 	}
 }
 

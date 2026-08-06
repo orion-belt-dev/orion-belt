@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/zrougamed/orion-belt/pkg/cliflags"
 	"github.com/zrougamed/orion-belt/pkg/client"
+	"github.com/zrougamed/orion-belt/pkg/cliflags"
 	"github.com/zrougamed/orion-belt/pkg/version"
 )
 
@@ -17,9 +17,12 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "ocp source destination",
-	Short:   "Orion-Belt SCP Client",
-	Long:    `ocp copies files through the Orion-Belt gateway (SCP over the reverse tunnel).`,
+	Use:   "ocp source destination",
+	Short: "Orion-Belt SCP Client",
+	Long: `ocp copies files through the Orion-Belt gateway (SCP over the reverse tunnel).
+
+Its subcommands browse the same remote filesystems the console file browser
+shows: "ocp ls", "ocp mkdir", and "ocp rm".`,
 	Version: version.String(),
 	Args:    cobra.ExactArgs(2),
 	Run:     runSCP,
@@ -30,6 +33,10 @@ func init() {
 	flags.BindSSHTrust(rootCmd)
 	rootCmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively copy directories (not yet supported)")
 	_ = rootCmd.Flags().MarkHidden("recursive") // registered for compatibility; Copy() does not implement it yet
+
+	rootCmd.AddCommand(newLsCmd())
+	rootCmd.AddCommand(newMkdirCmd())
+	rootCmd.AddCommand(newRmCmd())
 }
 
 func main() {

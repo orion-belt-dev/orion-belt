@@ -31,6 +31,20 @@ type NotificationPrefs = common.NotificationPrefs
 // resolved within.
 type NotificationPolicy = common.NotificationPolicy
 
+// NotificationPolicyResult is the stored policy together with the channels and
+// event types this server build implements, which is what a caller needs to
+// submit a policy the server will accept.
+type NotificationPolicyResult struct {
+	Policy NotificationPolicy `json:"policy"`
+
+	// KnownChannels lists every delivery channel this build implements.
+	KnownChannels []string `json:"known_channels"`
+
+	// KnownEvents lists every notification event type that can be made
+	// mandatory.
+	KnownEvents []string `json:"known_events"`
+}
+
 // NotificationPrefsResult is a user's preferences together with the admin
 // bounds the server applied to them.
 type NotificationPrefsResult struct {
@@ -142,8 +156,11 @@ type AuthUser struct {
 
 // CreateAPIKeyRequest creates a user-owned API key.
 type CreateAPIKeyRequest struct {
-	Name      string `json:"name"`
-	ExpiresIn *int   `json:"expires_in,omitempty"`
+	Name string `json:"name"`
+
+	// ExpiresIn is the key's lifetime in DAYS, not seconds. Nil means the key
+	// never expires.
+	ExpiresIn *int `json:"expires_in,omitempty"`
 }
 
 // CreateAPIKeyResponse includes the one-time raw API key material.
