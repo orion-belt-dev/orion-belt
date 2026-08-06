@@ -72,6 +72,7 @@ Role uses `EffectiveRole`: explicit `admin`/`operator`/`auditor`, else `is_admin
     └── Routes
         ├── / (dashboard for admin/operator/auditor)
         ├── /setup
+        ├── /catalog (access catalog; landing page for role `user`)
         ├── /requests
         ├── /machines
         ├── /terminal
@@ -118,6 +119,7 @@ Parity with the original console FRs remains the Phase 1 bar:
 - Login (pubkey, TOTP, WebAuthn)
 - Role-filtered shell + version chip
 - Dashboard / setup / requests / machines / terminal / files
+- Access catalog: capabilities filtered to the logged-in user's relationships (grants, requests, sessions, shared machine tags), with one-click request from the row
 - Dashboard usage analytics: access volume, approval latency (avg/p50/p95), and top targets over a selected window
 - Sessions list + timed cast playback + download
 - Users / agents / **Add agent** install script
@@ -141,6 +143,7 @@ Parity with the original console FRs remains the Phase 1 bar:
 4. Terminal connect → disconnect → Sessions playback works for `.cast`
 5. Add agent generates install script (`POST /admin/agents/install-script`)
 6. Role `user` cannot open `/add-agent` or `/agents`
+7. `/catalog` lists only capabilities tied to the signed-in user; **Request** on a row files the access request and the row turns *pending*
 
 ---
 
