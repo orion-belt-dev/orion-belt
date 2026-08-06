@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -11,9 +12,11 @@ const REMOTE_USERS = ["root", "ubuntu", "ec2-user", "admin", "deploy", "alpine",
 
 export function TerminalPage() {
   const { toast } = useToast();
+  const [params] = useSearchParams();
   const machinesQ = useQuery({ queryKey: ["machines"], queryFn: () => api<Machine[]>("/machines") });
-  const [machine, setMachine] = useState("");
-  const [user, setUser] = useState("root");
+  // Deep links (access catalog, command palette) name the target up front.
+  const [machine, setMachine] = useState(params.get("machine") || "");
+  const [user, setUser] = useState(params.get("user") || "root");
   const [connected, setConnected] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState("offline");
@@ -23,8 +26,11 @@ export function TerminalPage() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (!machinesQ.data?.length || machine) return;
-    setMachine(machinesQ.data[0].name);
+    const list = machinesQ.data;
+    if (!list?.length) return;
+    // Also covers a deep link naming a machine that no longer exists.
+    if (machine && list.some((m) => m.name === machine)) return;
+    setMachine(list[0].name);
   }, [machinesQ.data, machine]);
 
   useEffect(() => {

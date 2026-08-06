@@ -3,6 +3,7 @@ import type { IconComponent } from "../components/icons";
 import {
   DashboardIcon,
   SetupIcon,
+  CatalogIcon,
   RequestsIcon,
   MachinesIcon,
   TerminalIcon,
@@ -36,6 +37,7 @@ export type NavItem = { id: string; label: string; icon: IconComponent; path: st
 const BASE: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: DashboardIcon, path: "/" },
   { id: "setup", label: "Setup guide", icon: SetupIcon, path: "/setup" },
+  { id: "catalog", label: "Access catalog", icon: CatalogIcon, path: "/catalog" },
   { id: "requests", label: "Access requests", icon: RequestsIcon, path: "/requests" },
   { id: "machines", label: "Machines", icon: MachinesIcon, path: "/machines" },
   { id: "terminal", label: "Terminal", icon: TerminalIcon, path: "/terminal" },
@@ -58,7 +60,9 @@ export const NAV: Record<Role, NavItem[]> = {
   admin: BASE,
   operator: BASE,
   auditor: pick("dashboard", "sessions", "users", "audit", "security"),
-  user: pick("machines", "terminal", "files", "sessions", "requests", "audit", "security"),
+  // The catalog leads for a plain user: it is where they find out what they
+  // can ask for, instead of guessing machine names on the request form.
+  user: pick("catalog", "machines", "terminal", "files", "sessions", "requests", "audit", "security"),
 };
 
 export function defaultPathForRole(role: Role): string {

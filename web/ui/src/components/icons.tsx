@@ -53,6 +53,19 @@ export function RequestsIcon(props: IconProps) {
   );
 }
 
+export function CatalogIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="4.5" width="7" height="7" rx="1.4" />
+      <rect x="13.5" y="4.5" width="7" height="7" rx="1.4" />
+      <rect x="3.5" y="14" width="7" height="6" rx="1.4" />
+      <circle cx="17" cy="17" r="3.2" />
+      <line x1="17" y1="15.4" x2="17" y2="18.6" />
+      <line x1="15.4" y1="17" x2="18.6" y2="17" />
+    </Icon>
+  );
+}
+
 export function MachinesIcon(props: IconProps) {
   return (
     <Icon {...props}>

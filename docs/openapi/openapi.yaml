@@ -973,6 +973,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/Message"
 
+  /api/v1/capabilities:
+    get:
+      tags: [Access Requests]
+      summary: What the caller could ask for
+      description: |
+        Returns the access capabilities relevant to the authenticated user —
+        a machine plus the login and access type they could ask for — derived
+        from the relationships they already have: active grants, access
+        requests, past sessions, and machines that share a tag with one of
+        those.
+
+        Each entry says why it is being offered (`source`, `reason`) and
+        whether the user already holds it (`status`), so a console can list
+        what to request instead of making the user guess machine names.
+
+        Entries are ordered `granted`, then `pending`, then `requestable`.
+        The response is capped at 500 entries; `truncated` reports the cut.
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [related, all]
+            default: related
+          description: |
+            `related` (default) lists only capabilities backed by an existing
+            relationship. `all` adds every remaining machine in the inventory.
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Build the catalog for another user. Requires role admin, operator,
+            or auditor; a plain user may only read their own.
+      responses:
+        "200":
+          description: Capability catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilityCatalog"
+        "400":
+          description: Unknown scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/access-requests:
     get:
       tags: [Access Requests]
@@ -2140,6 +2194,80 @@ components:
             type: object
             additionalProperties: true
       required: [report_type, format, generated_at, record_count, records]
+
+    CapabilityCatalog:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: The user the catalog was built for.
+        scope:
+          type: string
+          enum: [related, all]
+        generated_at:
+          type: string
+          format: date-time
+        truncated:
+          type: boolean
+          description: True when the catalog was cut at the 500-entry cap.
+        capabilities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Capability"
+      required: [user_id, scope, generated_at, truncated, capabilities]
+
+    Capability:
+      type: object
+      description: One thing the user could ask for, and why it is offered.
+      properties:
+        id:
+          type: string
+          description: Stable key — machine id, remote user, and access type.
+        machine_id: { type: string }
+        machine_name: { type: string }
+        hostname: { type: string }
+        port: { type: integer }
+        machine_active: { type: boolean }
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        remote_user:
+          type: string
+          description: Login on the target machine; empty means any login.
+        access_type:
+          type: string
+          enum: [ssh, scp, both]
+        status:
+          type: string
+          enum: [granted, pending, requestable]
+          description: |
+            `granted` — an active permission the user already holds.
+            `pending` — a request awaiting approval.
+            `requestable` — the user can ask for it.
+        source:
+          type: string
+          enum: [grant, request, session, tag, directory]
+          description: The relationship this entry was derived from.
+        reason:
+          type: string
+          description: One-line explanation, e.g. "Shares env=prod with app-01".
+        permission_id:
+          type: string
+          description: Set when status is `granted`.
+        request_id:
+          type: string
+          description: Set when the entry came from an access request.
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Most recent session on this machine as this login.
+      required: [id, machine_id, machine_name, machine_active, remote_user, access_type, status, source, reason]
 
     UsageDashboard:
       type: object

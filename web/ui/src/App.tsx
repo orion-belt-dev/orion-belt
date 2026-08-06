@@ -10,6 +10,7 @@ import { AddAgentPage } from "./pages/AddAgentPage";
 import { TerminalPage } from "./pages/TerminalPage";
 import { MachinesPage } from "./pages/MachinesPage";
 import { AgentsPage } from "./pages/AgentsPage";
+import { CatalogPage } from "./pages/CatalogPage";
 import { RequestsPage } from "./pages/RequestsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AuditPage } from "./pages/AuditPage";
@@ -74,6 +75,14 @@ export default function App() {
           element={
             <RoleGate id="setup">
               <SetupPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="catalog"
+          element={
+            <RoleGate id="catalog">
+              <CatalogPage />
             </RoleGate>
           }
         />
