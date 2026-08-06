@@ -7,7 +7,8 @@ pkg/auth	24.4
 pkg/authz	95.6
 pkg/ca	76.2
 pkg/client	3.3
-pkg/cliflags	10.0
+pkg/cliflags	34.9
+pkg/cliparity	54.6
 pkg/common	60.2
 pkg/cryptutil	86.0
 pkg/database	0.0
@@ -15,7 +16,7 @@ pkg/metrics	100.0
 pkg/notify	75.0
 pkg/plugin	28.5
 pkg/recording	67.9
-pkg/sdk	26.5
+pkg/sdk	28.2
 pkg/server	8.3
 pkg/tracing	79.6
 pkg/version	100.0

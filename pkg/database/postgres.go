@@ -1522,8 +1522,19 @@ func (s *PostgresStore) UpsertNotificationPrefs(ctx context.Context, prefs *comm
 		  email_enabled=EXCLUDED.email_enabled,
 		  event_types=EXCLUDED.event_types,
 		  updated_at=NOW()`,
-		prefs.UserID, prefs.InAppEnabled, prefs.EmailEnabled, pq.Array(prefs.EventTypes))
+		prefs.UserID, prefs.InAppEnabled, prefs.EmailEnabled, pq.Array(emptyIfNil(prefs.EventTypes)))
 	return err
+}
+
+// emptyIfNil keeps a nil slice out of a NOT NULL array column. "No event types"
+// and "no allowed channels" are meaningful, permissive states here — a caller
+// that sends null (or omits the field) means the empty list, not a missing
+// value, and pq.Array would otherwise write NULL and fail the constraint.
+func emptyIfNil(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
 
 // GetNotificationPolicy returns the admin-set boundary for user preferences.
@@ -1575,7 +1586,7 @@ func (s *PostgresStore) UpsertNotificationPolicy(ctx context.Context, policy *co
 		  allowed_channels=EXCLUDED.allowed_channels,
 		  mandatory_events=EXCLUDED.mandatory_events,
 		  updated_at=NOW()`,
-		pq.Array(policy.AllowedChannels), mandatory)
+		pq.Array(emptyIfNil(policy.AllowedChannels)), mandatory)
 	return err
 }
 
