@@ -10,7 +10,7 @@
 #
 # Env:
 #   SKIP_BUILD=1     reuse existing dist/ binaries
-#   GOTOOLCHAIN      default go1.26.5
+#   GOTOOLCHAIN      default go1.26.6
 set -euo pipefail
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -166,7 +166,7 @@ else
   echo "==> Building linux/amd64 server + agent → dist/"
   (
     cd "$ROOT"
-    export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.26.5}"
+    export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.26.6}"
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/orion-belt-server ./cmd/server
     GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/orion-belt-agent ./cmd/agent
   )

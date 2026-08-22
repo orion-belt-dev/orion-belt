@@ -76,7 +76,7 @@ echo "==> Building linux/amd64 binaries + packages into dist/"
 mkdir -p "$ROOT/dist"
 (
   cd "$ROOT"
-  export GOTOOLCHAIN=go1.26.5
+  export GOTOOLCHAIN=go1.26.6
   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/orion-belt-server ./cmd/server
   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/orion-belt-agent ./cmd/agent
 )

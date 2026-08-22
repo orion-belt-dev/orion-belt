@@ -19,7 +19,7 @@ func TestZeroCVEs(t *testing.T) {
 	if err != nil {
 		install := exec.Command("go", "install", "golang.org/x/vuln/cmd/govulncheck@latest")
 		install.Dir = root
-		install.Env = append(os.Environ(), "GOTOOLCHAIN=go1.26.5")
+		install.Env = append(os.Environ(), "GOTOOLCHAIN=go1.26.6")
 		if out, err := install.CombinedOutput(); err != nil {
 			t.Fatalf("install govulncheck: %v\n%s", err, out)
 		}
@@ -33,7 +33,7 @@ func TestZeroCVEs(t *testing.T) {
 
 	cmd := exec.Command(govulncheck, "./...")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=go1.26.5")
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=go1.26.6")
 	out, err := cmd.CombinedOutput()
 	t.Logf("%s", out)
 	if err != nil {

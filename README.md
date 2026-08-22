@@ -176,7 +176,7 @@ First-run after packages: [SETUP.md](docs/SETUP.md). Set `server.public_url` (an
 ```bash
 git clone https://github.com/orion-belt-dev/orion-belt.git
 cd orion-belt
-make build   # Go 1.26.5+ (see go.mod)
+make build   # Go 1.26.6+ (see go.mod)
 ```
 
 ## Docs
