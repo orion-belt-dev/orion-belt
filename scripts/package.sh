@@ -9,7 +9,7 @@ VERSION="${VERSION#v}"
 VERSION="$(printf '%s' "$VERSION" | tr -c 'A-Za-z0-9._-' '-')"
 export VERSION
 mkdir -p dist
-export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.26.5}"
+export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.26.6}"
 
 echo "==> Building linux/amd64 binaries"
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION}" -o dist/orion-belt-server ./cmd/server

@@ -54,7 +54,7 @@ Validate that a fresh Orion Belt gateway can be brought up under QEMU, that mult
 |-------------|--------|
 | OS | Linux x86_64 (Ubuntu/Fedora recommended) |
 | Packages | `qemu-system-x86`, `qemu-utils`, `cloud-image-utils` or `genisoimage`, `openssh-client`, `curl`, `python3` |
-| Go | **1.26.5+** (for building binaries into `dist/`) |
+| Go | **1.26.6+** (for building binaries into `dist/`) |
 | Nested virt | `/dev/kvm` preferred; TCG works but is slower |
 | Disk / RAM | ~8–12 GB free disk for images; ≥8 GB host RAM recommended |
 | Network | Outbound HTTPS to download cloud images (first run) |
@@ -426,7 +426,7 @@ KEEP_IMAGES=1 make lab-qemu-start
 |--|--|
 | **Priority** | P1 |
 | **Type** | Security / CI |
-| **Preconditions** | Go 1.26.5+ |
+| **Preconditions** | Go 1.26.6+ |
 
 **Steps**
 

@@ -164,4 +164,4 @@ make cve
 ORION_CVE_E2E=1 go test ./e2e/cve/ -v
 ```
 
-Requires Go **1.26.5+** (see `go.mod`). Mapped as **TC-QEMU-012** in [docs/E2E_TEST_PLAN.md](../docs/E2E_TEST_PLAN.md).
+Requires Go **1.26.6+** (see `go.mod`). Mapped as **TC-QEMU-012** in [docs/E2E_TEST_PLAN.md](../docs/E2E_TEST_PLAN.md).

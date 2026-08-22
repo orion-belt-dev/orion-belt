@@ -25,7 +25,7 @@ API_PORT="${ORION_API_PORT:-8080}"
 SSH_PORT="${ORION_SSH_PORT:-2222}"
 AGENT_NAME="${ORION_AGENT_NAME:-lab-1}"
 CFG=/etc/orion-belt/config.generated.yaml
-GO_IMAGE="${ORION_GO_IMAGE:-golang:1.26.5-alpine}"
+GO_IMAGE="${ORION_GO_IMAGE:-golang:1.26.6-alpine}"
 PUBLIC_URL="${ORION_PUBLIC_URL:-http://localhost:${API_PORT}}"
 
 WITH_AGENT=1
