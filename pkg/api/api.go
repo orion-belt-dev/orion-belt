@@ -220,6 +220,9 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		protected.GET("/permissions/user/:id", s.getUserPermissions)
 		protected.GET("/permissions/machine/:id", s.getMachinePermissions)
 
+		// What the caller could ask for, given their current relationships
+		protected.GET("/capabilities", s.listCapabilities)
+
 		// Access request management
 		protected.GET("/access-requests", s.listAccessRequests)
 		protected.POST("/access-requests", s.createAccessRequest)

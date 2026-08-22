@@ -51,6 +51,37 @@ export type AccessRequest = {
   expires_at?: string | null;
 };
 
+// What the logged-in user could ask for, and why it is being offered.
+export type CapabilityStatus = "granted" | "pending" | "requestable";
+export type CapabilitySource = "grant" | "request" | "session" | "tag" | "directory";
+
+export type Capability = {
+  id: string;
+  machine_id: string;
+  machine_name: string;
+  hostname?: string;
+  port?: number;
+  machine_active: boolean;
+  tags?: Record<string, string>;
+  remote_user: string; // "" means any login the approver allows
+  access_type: string;
+  status: CapabilityStatus;
+  source: CapabilitySource;
+  reason: string;
+  permission_id?: string;
+  request_id?: string;
+  expires_at?: string | null;
+  last_used_at?: string | null;
+};
+
+export type CapabilityCatalog = {
+  user_id: string;
+  scope: "related" | "all";
+  generated_at: string;
+  truncated?: boolean;
+  capabilities: Capability[];
+};
+
 export type UsageDashboard = {
   window_hours: number;
   from: string;

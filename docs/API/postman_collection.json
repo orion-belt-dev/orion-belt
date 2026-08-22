@@ -837,6 +837,55 @@
 			"name": "8. Access Requests",
 			"item": [
 				{
+					"name": "List Capability Catalog",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test(\"Catalog is scoped to the caller\", function () {",
+									"    pm.expect(jsonData.scope).to.eql(\"related\");",
+									"    pm.expect(jsonData.capabilities).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/capabilities?scope=related",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"capabilities"
+							],
+							"query": [
+								{
+									"key": "scope",
+									"value": "related"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "Create Access Request",
 					"event": [
 						{
