@@ -19,8 +19,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # ./cmd/... carries the CLI parity tests: they check that every command
+      # pkg/cliparity maps an API route to still exists and still has its
+      # flags and help text. Those live in package main, so they only run if
+      # cmd is in scope here.
       - name: Unit tests
-        run: go test ./pkg/... ./e2e/...
+        run: go test ./pkg/... ./cmd/... ./e2e/...
         env:
           ORION_CVE_E2E: "1"
       # One iteration of every benchmark: too few to time anything, enough to

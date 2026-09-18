@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/orion-belt-dev/orion-belt/pkg/client"
 	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
 	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -24,9 +26,14 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "osh [user@]machine",
-	Short:   "Orion-Belt SSH Client",
-	Long:    `osh is the Orion-Belt SSH client for connecting to machines through the Orion-Belt server.`,
+	Use:   "osh [user@]machine",
+	Short: "Orion-Belt SSH Client",
+	Long: `osh is the Orion-Belt SSH client for connecting to machines through the Orion-Belt server.
+
+Beyond connecting, it manages your own account from the terminal: sign-in
+credentials (SSH keys, API keys, password, MFA, WebAuthn), your access
+requests, and your notification preferences. Administrative operations live in
+oadmin.`,
 	Version: version.String(),
 	Args:    cobra.MaximumNArgs(1),
 	Run:     runSSH,
@@ -55,7 +62,27 @@ func init() {
 	loginCmd.Flags().BoolVar(&loginPassword, "password", false, "authenticate with password + TOTP instead of SSH key")
 
 	rootCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(newWhoamiCmd())
+	rootCmd.AddCommand(newRequestsCmd())
+	rootCmd.AddCommand(newKeysCmd())
+	rootCmd.AddCommand(newAPIKeysCmd())
+	rootCmd.AddCommand(newMFACmd())
+	rootCmd.AddCommand(newPasswordCmd())
+	rootCmd.AddCommand(newWebAuthnCmd())
+	rootCmd.AddCommand(newNotificationsCmd())
 }
+
+// api returns an authenticated SDK client, exiting with a readable message
+// when the config, key, or login fails.
+func api() *sdk.Client {
+	client, err := flags.APIClient()
+	if err != nil {
+		cliflags.Fatalf("%v", err)
+	}
+	return client
+}
+
+func ctx() context.Context { return context.Background() }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {

@@ -308,6 +308,74 @@ func (c *Client) PutNotificationPrefsWithBounds(ctx context.Context, prefs Notif
 	return &out, nil
 }
 
+// GetNotificationPolicy returns the admin-set boundary that per-user
+// preferences are resolved within, together with the channels and event types
+// this server build knows about. Admin-only.
+func (c *Client) GetNotificationPolicy(ctx context.Context) (*NotificationPolicyResult, error) {
+	var out NotificationPolicyResult
+	if err := c.Do(ctx, http.MethodGet, "/admin/notifications/policy", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PutNotificationPolicy replaces the notification policy. Admin-only.
+//
+// The submitted policy replaces the stored one outright, so send the complete
+// document rather than the fields being changed.
+func (c *Client) PutNotificationPolicy(ctx context.Context, policy NotificationPolicy) (*NotificationPolicy, error) {
+	var out NotificationPolicy
+	if err := c.Do(ctx, http.MethodPut, "/admin/notifications/policy", policy, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListNotificationTemplates returns the copy for every templatable event,
+// each with its built-in default and supported placeholders. Admin-only.
+func (c *Client) ListNotificationTemplates(ctx context.Context) ([]NotificationTemplateEntry, error) {
+	var out struct {
+		Templates []NotificationTemplateEntry `json:"templates"`
+	}
+	if err := c.Do(ctx, http.MethodGet, "/admin/notifications/templates", nil, &out); err != nil {
+		return nil, err
+	}
+	if out.Templates == nil {
+		out.Templates = []NotificationTemplateEntry{}
+	}
+	return out.Templates, nil
+}
+
+// PutNotificationTemplate overrides the copy for one event. Admin-only.
+//
+// The event in the path wins: the server rejects a body naming a different
+// one rather than guessing which was meant.
+func (c *Client) PutNotificationTemplate(ctx context.Context, event string, tmpl NotificationTemplate) (*NotificationTemplate, error) {
+	tmpl.EventType = event
+	var out NotificationTemplate
+	if err := c.Do(ctx, http.MethodPut, "/admin/notifications/templates/"+url.PathEscape(event), tmpl, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteNotificationTemplate drops an event's override, returning it to the
+// built-in copy. Admin-only.
+func (c *Client) DeleteNotificationTemplate(ctx context.Context, event string) error {
+	return c.Do(ctx, http.MethodDelete, "/admin/notifications/templates/"+url.PathEscape(event), nil, nil)
+}
+
+// GetGatewayInfo returns the addresses the gateway advertises to clients and
+// agents. It needs no authentication, so it also works before a client has
+// credentials.
+func (c *Client) GetGatewayInfo(ctx context.Context) (*GatewayInfo, error) {
+	var out GatewayInfo
+	if err := c.DoPublic(ctx, http.MethodGet, "/api/v1/gateway-info", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetSetupStatus returns first-run setup checklist status.
 func (c *Client) GetSetupStatus(ctx context.Context) (*SetupStatus, error) {
 	var out SetupStatus
