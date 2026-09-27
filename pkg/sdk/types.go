@@ -430,3 +430,36 @@ type FileUploadResponse struct {
 	Path    string `json:"path"`
 	Size    int    `json:"size"`
 }
+
+// Capability is one thing a user could ask for (a remote login on a machine
+// with a given access type), why it is offered, and whether it is already
+// held.
+type Capability struct {
+	ID            string            `json:"id"`
+	MachineID     string            `json:"machine_id"`
+	MachineName   string            `json:"machine_name"`
+	Hostname      string            `json:"hostname,omitempty"`
+	Port          int               `json:"port,omitempty"`
+	MachineActive bool              `json:"machine_active"`
+	Tags          map[string]string `json:"tags,omitempty"`
+	// RemoteUser is the login on the target machine. Empty means any login
+	// the approver allows.
+	RemoteUser   string     `json:"remote_user"`
+	AccessType   string     `json:"access_type"`
+	Status       string     `json:"status"`
+	Source       string     `json:"source"`
+	Reason       string     `json:"reason"`
+	PermissionID string     `json:"permission_id,omitempty"`
+	RequestID    string     `json:"request_id,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
+}
+
+// CapabilityCatalog is the response of GET /capabilities.
+type CapabilityCatalog struct {
+	UserID       string       `json:"user_id"`
+	Scope        string       `json:"scope"`
+	GeneratedAt  string       `json:"generated_at"`
+	Truncated    bool         `json:"truncated"`
+	Capabilities []Capability `json:"capabilities"`
+}

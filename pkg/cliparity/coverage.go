@@ -113,6 +113,7 @@ var Coverage = map[string]Cover{
 	// --- Access requests ---------------------------------------------------
 	"POST /api/v1/access-requests":                   {Command: "osh --request-access"},
 	"GET /api/v1/access-requests":                    {Command: "osh requests list"},
+	"GET /api/v1/capabilities":                       {Command: "osh catalog"},
 	"GET /api/v1/access-requests/:id":                {Command: "osh requests get"},
 	"GET /api/v1/admin/access-requests/pending":      {Command: "oadmin requests list"},
 	"POST /api/v1/admin/access-requests/:id/approve": {Command: "oadmin requests approve"},
