@@ -87,8 +87,10 @@ case "$http_code" in
     cat "$tmp"
     echo
     ;;
-  409)
-    echo "Admin already registered (HTTP 409) — OK, key above is what you use to sign in"
+  401|409)
+    # Anonymous registration only works on an empty install; once any
+    # account exists the server answers 401.
+    echo "Server already bootstrapped (HTTP $http_code); keeping the existing admin"
     ;;
   *)
     echo "Registration failed (HTTP ${http_code:-none}):" >&2

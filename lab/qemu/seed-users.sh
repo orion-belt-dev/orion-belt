@@ -26,8 +26,7 @@ http_json() {
   if [[ -n "$token" ]]; then
     code="$(curl -sS -o "$tmp" -w '%{http_code}' -X "$method" "$url" \
       -H 'Content-Type: application/json' \
-      -H "X-Session-Token: $token" \
-      -H "Authorization: Bearer $token" \
+      -H "X-API-Key: $token" \
       -d "$data" || true)"
   else
     code="$(curl -sS -o "$tmp" -w '%{http_code}' -X "$method" "$url" \
@@ -59,7 +58,7 @@ print(json.dumps({
 }))
 PY
 )"
-  http_json POST "$API/api/v1/public/register/client" "$payload"
+  http_json POST "$API/api/v1/public/register/client" "$payload" "$TOKEN"
   case "$HTTP_CODE" in
     201) echo "  registered $user" ;;
     409) echo "  $user already exists" ;;
@@ -70,23 +69,7 @@ PY
 }
 
 admin_login() {
-  local pub payload
-  [[ -f "${ADMIN_KEY}.pub" ]] || { echo "missing admin key ${ADMIN_KEY}.pub — run bootstrap-admin first" >&2; exit 1; }
-  pub="$(tr -d '\n' <"${ADMIN_KEY}.pub")"
-  payload="$(ORION_U="$ADMIN_USER" ORION_P="$pub" python3 - <<'PY'
-import json, os
-print(json.dumps({"username": os.environ["ORION_U"], "public_key": os.environ["ORION_P"]}))
-PY
-)"
-  http_json POST "$API/api/v1/public/login" "$payload"
-  if [[ "$HTTP_CODE" != "200" ]]; then
-    echo "admin login failed HTTP $HTTP_CODE: $(cat "$HTTP_BODY_FILE")" >&2
-    rm -f "$HTTP_BODY_FILE"
-    exit 1
-  fi
-  TOKEN="$(python3 -c "import json; d=json.load(open('$HTTP_BODY_FILE')); print(d.get('access_token') or d.get('session_token') or '')")"
-  rm -f "$HTTP_BODY_FILE"
-  [[ -n "$TOKEN" ]] || { echo "no token in login response" >&2; exit 1; }
+  TOKEN="$(lab_admin_api_key)" || exit 1
   export TOKEN
 }
 
@@ -106,10 +89,10 @@ set_role() {
 user_id_by_name() {
   local name="$1"
   curl -sS "$API/api/v1/users" \
-    -H "X-Session-Token: $TOKEN" -H "Authorization: Bearer $TOKEN" \
+    -H "X-API-Key: $TOKEN" \
     | ORION_N="$name" python3 -c 'import json,os,sys
 name=os.environ["ORION_N"]
-for u in json.load(sys.stdin):
+for u in json.load(sys.stdin) or []:
   if u.get("username")==name:
     print(u["id"]); break'
 }
@@ -117,10 +100,10 @@ for u in json.load(sys.stdin):
 machine_id_by_name() {
   local name="$1"
   curl -sS "$API/api/v1/machines" \
-    -H "X-Session-Token: $TOKEN" -H "Authorization: Bearer $TOKEN" \
+    -H "X-API-Key: $TOKEN" \
     | ORION_N="$name" python3 -c 'import json,os,sys
 name=os.environ["ORION_N"]
-for m in json.load(sys.stdin):
+for m in json.load(sys.stdin) or []:
   if m.get("name")==name:
     print(m["id"]); break'
 }
@@ -129,7 +112,7 @@ grant() {
   local user_id="$1" machine_id="$2" access="$3"
   [[ -n "$user_id" && -n "$machine_id" ]] || { echo "  skip grant (missing ids)"; return 0; }
   local payload
-  payload="$(python3 -c "import json; print(json.dumps({'user_id':'$user_id','machine_id':'$machine_id','access_type':'$access'}))")"
+  payload="$(python3 -c "import json; print(json.dumps({'user_id':'$user_id','machine_id':'$machine_id','access_type':'$access','remote_users':['root']}))")"
   http_json POST "$API/api/v1/admin/permissions" "$payload" "$TOKEN"
   case "$HTTP_CODE" in
     201) echo "  granted $access → $machine_id" ;;
@@ -139,12 +122,11 @@ grant() {
 }
 
 echo "==> Seeding demo users (roles + grants)"
+admin_login
 register_user operator "operator@lab.local" "$CRED_DIR/operator_ed25519" false
 register_user auditor  "auditor@lab.local"  "$CRED_DIR/auditor_ed25519"  false
 register_user alice    "alice@lab.local"    "$CRED_DIR/alice_ed25519"    false
 register_user bob      "bob@lab.local"      "$CRED_DIR/bob_ed25519"      false
-
-admin_login
 
 OP_ID="$(user_id_by_name operator || true)"
 AUD_ID="$(user_id_by_name auditor || true)"

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Register QEMU agents with the running Orion Belt server via the API.
 # Requires pubkeys in lab/qemu/run/<name>.pub (see collect-agent-keys.sh).
-# Agent registration requires an admin/operator credential: set
-# ORION_API_KEY (oadmin/console API key) or ORION_SESSION_TOKEN.
+# Registration requires an admin or operator credential. Set ORION_API_KEY or
+# ORION_SESSION_TOKEN; otherwise a short-lived key is minted for the lab admin
+# (lab/credentials/admin_ed25519).
 set -euo pipefail
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -17,8 +18,8 @@ if [[ -n "${ORION_API_KEY:-}" ]]; then
 elif [[ -n "${ORION_SESSION_TOKEN:-}" ]]; then
   auth_headers=(-H "X-Session-Token: ${ORION_SESSION_TOKEN}")
 else
-  echo "ORION_API_KEY or ORION_SESSION_TOKEN must be set (admin/operator) to register agents" >&2
-  exit 1
+  lab_key="$(lab_admin_api_key)"
+  auth_headers=(-H "X-API-Key: ${lab_key}")
 fi
 
 register_one() {

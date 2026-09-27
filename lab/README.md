@@ -1,26 +1,31 @@
 # Multi-distro test lab
 
-Two ways to run the server and attach agents across current Linux releases:
+The lab runs a gateway and agents on current Linux releases in one of two ways:
 
-| Lab | When to use | Command |
+| Lab | Use it for | Command |
 |-----|-------------|---------|
-| **Docker Compose** (`lab/compose`) | Fast CI / laptop smoke test | `make lab-compose-up` |
-| **QEMU cloud images** (`lab/qemu`) | Near-native packages + cloud-init | `make lab-qemu-start` |
+| Docker Compose (`lab/compose`) | Quick smoke tests in CI or on a laptop | `make lab-compose-up` |
+| QEMU cloud images (`lab/qemu`) | Real packages and cloud-init on full VMs | `make lab-qemu-start` |
 
-**QA / E2E procedures (professional test plan):** [docs/E2E_TEST_PLAN.md](../docs/E2E_TEST_PLAN.md)
+Test procedures are in [docs/E2E_TEST_PLAN.md](../docs/E2E_TEST_PLAN.md).
 
-## Admin UI login (`/ui`)
+## Signing in to the console
 
-There is **no password**. Sign-in is **username + SSH public key**.
+Lab accounts have no password. You sign in with a username and SSH key.
 
-After the API is up, bootstrap creates an admin automatically (also part of `make lab-qemu-start`):
+Once the API is up, create the admin account (`make lab-qemu-start` does this
+for you):
 
 ```bash
 make lab-bootstrap-admin
 ```
 
-Then sign in with the CLI — the console has no public-key field, so `osh` does
-the SSH-key challenge-response and opens the browser already signed in:
+This only works on an empty install, because the server allows an
+unauthenticated registration only for the first account. Re-running it later
+is harmless: the script reports that the server is already bootstrapped.
+
+The console cannot sign a login challenge with a key file, so sign in through
+`osh`, which signs the challenge and opens the browser already signed in:
 
 ```bash
 make build-client   # if bin/osh isn't built yet
@@ -28,10 +33,21 @@ make build-client   # if bin/osh isn't built yet
     -i lab/credentials/admin_ed25519 login
 ```
 
-Add `--code` to print a one-time code instead of opening a browser, then paste
-it into **Device code** on the login screen (single-use, 5 min TTL).
+Add `--code` to print a one-time code instead of opening a browser, and enter
+it under **Device code** on the login screen. Codes are single-use and expire
+after five minutes.
 
-Helper details: `lab/credentials/UI-LOGIN.txt`. Demo users: `lab/credentials/USERS.txt`.
+The admin's details are in `lab/credentials/UI-LOGIN.txt`, and the demo users
+in `lab/credentials/USERS.txt`.
+
+### Admin credentials for lab scripts
+
+Creating users and registering agents requires an admin or operator
+credential. `seed-users.sh` and `register-agents.sh` obtain one themselves:
+they call `osh` with `lab/credentials/admin_ed25519` to create an API key that
+expires after a day, building `bin/osh` first if needed. To use your own
+credential instead, set `ORION_API_KEY` or `ORION_SESSION_TOKEN` before running
+`register-agents.sh`.
 
 ## Current OS images (latest pins)
 
@@ -92,7 +108,7 @@ KVM is used when `/dev/kvm` exists; otherwise TCG (slower).
 # Wipe VMs, overlays, downloaded images, and lab credentials (default)
 make lab-qemu-clean
 
-# Clean (default) → boot → admin → connect agents → seed RBAC users → SSH howto
+# Cleans, boots the VMs, creates the admin, connects agents, seeds demo users, prints SSH examples
 make lab-qemu-start
 
 # Re-run without wiping images (faster after first download):
@@ -104,11 +120,12 @@ SKIP_CLEAN=1 make lab-qemu-start
 
 `make lab-qemu-start` prints admin/demo credentials under `lab/credentials/` and OpenSSH examples for this host.
 
-**Execute and record results using the formal plan:** [docs/E2E_TEST_PLAN.md](../docs/E2E_TEST_PLAN.md) (TC-QEMU-001 … TC-QEMU-012).
+Record results against the test plan in [docs/E2E_TEST_PLAN.md](../docs/E2E_TEST_PLAN.md) (TC-QEMU-001 to TC-QEMU-012).
 
 ### Connect agents to the running server
 
-Agents dial `10.0.2.2:2222`, but the server must know their public keys first:
+Agents connect to `10.0.2.2:2222`, but the server must know their public keys
+first:
 
 ```bash
 make lab-qemu-connect-agents
@@ -118,9 +135,9 @@ make lab-qemu-connect-agents AGENTS="alpine debian"
 
 That runs:
 
-1. `lab/qemu/collect-agent-keys.sh` — SSH into each guest, save `run/<name>.pub`
-2. `lab/qemu/register-agents.sh` — `POST /api/v1/public/register/agent`
-3. `lab/qemu/restart-agents.sh` — restart `orion-belt-agent` so it reconnects
+1. `lab/qemu/collect-agent-keys.sh` connects to each guest and saves its key as `run/<name>.pub`.
+2. `lab/qemu/register-agents.sh` registers each key with `POST /api/v1/public/register/agent`, as the lab admin.
+3. `lab/qemu/restart-agents.sh` restarts `orion-belt-agent` so it reconnects.
 
 Helpers:
 
@@ -149,7 +166,7 @@ make lab-bootstrap-admin
 Networking:
 
 - Server VM publishes host ports `2222` (gateway SSH) and `8080` (API).
-- Agent VMs dial **`10.0.2.2:2222`** (QEMU usermode → host → server).
+- Agent VMs connect to `10.0.2.2:2222`, which QEMU user-mode networking routes through the host to the server VM.
 - Management SSH: server `:2200`, agents `:2201`–`:2204`.
 
 `dist/` is served over HTTP on `:8765` so cloud-init can install packages or raw binaries.
