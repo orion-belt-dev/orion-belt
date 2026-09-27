@@ -23,4 +23,8 @@ var (
 
 	// ErrPermissionDenied is returned when permission check fails
 	ErrPermissionDenied = errors.New("permission denied")
+
+	// ErrAlreadyInitialized is returned by CreateFirstUser when any user
+	// account already exists.
+	ErrAlreadyInitialized = errors.New("users already exist")
 )

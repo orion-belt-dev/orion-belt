@@ -165,10 +165,14 @@ func (a *AuthService) CheckPermissionWithRemoteUser(ctx context.Context, userID,
 		} else if allowed {
 			// Still enforce remote_users via local ReBAC when available
 			hasLocal, localErr := a.store.HasPermissionWithRemoteUser(ctx, userID, machineID, accessType, remoteUser)
-			if localErr == nil && hasLocal {
-				return nil
+			if localErr != nil {
+				// Fail closed: OpenFGA only answers "may this user reach the
+				// machine", not "as which Unix account" — without the local
+				// check an unreachable DB would allow any remote user (root).
+				a.logger.Error("Remote-user check failed for user %s on machine %s: %v", userID, machineID, localErr)
+				return fmt.Errorf("failed to check permission: %w", localErr)
 			}
-			if localErr == nil && !hasLocal {
+			if !hasLocal {
 				// OpenFGA allowed machine access; remote user restriction from local store
 				a.logger.Warn("Permission denied for remote user %s on machine %s", remoteUser, machineID)
 				return fmt.Errorf("permission denied: %s not allowed to access %s", remoteUser, machineID)

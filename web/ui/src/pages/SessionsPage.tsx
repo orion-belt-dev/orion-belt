@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../components/Badge";
 import { api, apiDownload, apiRaw } from "../lib/api";
 import { fmtTime, shortId } from "../lib/format";
-import type { Machine, Session, User } from "../lib/types";
+import type { Machine, Session } from "../lib/types";
 import { CastPlayer } from "../components/CastPlayer";
 import { LiveSessionWatch } from "../components/LiveSessionWatch";
 import { Pagination, SortTh, TableToolbar, useTableState } from "../components/DataTable";
+import { useUserDirectory } from "../lib/useUserDirectory";
 
 export function SessionsPage() {
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
@@ -26,7 +27,7 @@ export function SessionsPage() {
       return all || [];
     },
   });
-  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/users") });
+  const usersQ = useUserDirectory();
   const machinesQ = useQuery({ queryKey: ["machines"], queryFn: () => api<Machine[]>("/machines") });
 
   const userName = useMemo(() => {

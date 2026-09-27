@@ -1,7 +1,8 @@
 # First-run setup
 
-After installing the `orion-belt` package (or via
-[`scripts/install-server.sh`](../scripts/install-server.sh)), follow this path.
+This guide takes a new server from package installation to a first recorded
+session. It assumes you installed the `orion-belt` package or ran
+[`scripts/install-server.sh`](../scripts/install-server.sh).
 
 ## 1. Configure the server
 
@@ -9,36 +10,44 @@ After installing the `orion-belt` package (or via
 sudoedit /etc/orion-belt/server.yaml
 ```
 
-Set at least:
+Set at least these values:
 
-- `server.public_url` — origin browsers and API clients use (e.g. `https://orion.example.com`). **Not** the bind address. Agents default to this URL's host on port `2222` unless you set `public_ssh_host` / `public_ssh_port`.
-- `database.connection_string` — Postgres DSN
-- `auth.jwt_secret` — long random string (not the example value)
+| Setting | Value |
+|---|---|
+| `server.public_url` | The origin browsers and API clients use, such as `https://orion.example.com`. This is not the bind address. Agents connect to this URL's host on port 2222 unless `public_ssh_host` or `public_ssh_port` say otherwise. |
+| `database.connection_string` | PostgreSQL connection string. |
+| `auth.jwt_secret` | A long random string, for example from `openssl rand -hex 32`. Do not keep the example value. |
 
-The install script and `orion-belt-server setup` both prompt for the public URL and write it for you.
+The install script and `orion-belt-server setup` both ask for the public URL
+and write it for you.
 
-This is enough to start the server, but it leaves every optional hardening
-control at its default. Before going further, diff your config against
-[`config/server.example.yaml`](../config/server.example.yaml) — it's the only
-place these are documented:
+These settings are enough to start the server, but every optional security
+control is still at its default. Compare your file with
+[`config/server.example.yaml`](../config/server.example.yaml), which documents
+each option. The ones to review before going live:
 
-- `auth.webauthn.*` — hardware-key (FIDO2/YubiKey) login; see [WebAuthn](#webauthn-fido2) below. When empty, `rp_id` / `origins` are filled from `server.public_url`.
-- `auth.mfa_required` — require TOTP after SSH-key API login (`osh`/`ocp`/`oadmin`); off by default so device login (`osh login`) is key-only. Password login always requires TOTP regardless.
-- `auth.rate_limit_per_minute` — per-user/IP request cap on protected API routes (default `600`)
-- `auth.openfga.*` — optional ReBAC via an external OpenFGA server instead of the built-in permission tables
-- `ssh_ca.enabled` / `ssh_ca.master_key` — internal SSH CA (user + host certs); see [SSH_CA.md](SSH_CA.md). `master_key` is required when enabled (encrypts CA keys at rest)
-- `ssh_ca.host_principals` — hostnames/IPs clients use to reach the gateway (embedded in the gateway Host cert); often the same host as `public_url`
-- `recording.encryption_key` — AES-256-GCM key for session recordings at rest; leave empty only if you accept plaintext recordings
-- `recording.compression` — `gzip` (default) or `none` for cast files at flush
-- `recording.retention_days` — how long recordings are kept before the retention loop deletes them
+| Setting | Purpose |
+|---|---|
+| `server.trusted_proxies` | Reverse proxies allowed to report the client address. Required behind a proxy; see [REVERSE_PROXY.md](REVERSE_PROXY.md). |
+| `auth.webauthn.*` | Hardware-key (FIDO2) login; see [WebAuthn](#webauthn-fido2). When `rp_id` and `origins` are empty they are derived from `server.public_url`. |
+| `auth.mfa_required` | Require a TOTP code after SSH-key login from `osh`, `ocp` and `oadmin`. Off by default, so device login (`osh login`) uses the key alone. Password login always requires TOTP. |
+| `auth.rate_limit_per_minute` | Request limit per user or IP address on authenticated API routes. Default 600. Sign-in and registration endpoints have a separate, fixed limit of 30 requests per minute per IP address. |
+| `auth.openfga.*` | Use an external OpenFGA server for authorization instead of the built-in permission tables. |
+| `ssh_ca.enabled`, `ssh_ca.master_key` | Built-in SSH certificate authority for user and host certificates; see [SSH_CA.md](SSH_CA.md). `master_key` encrypts the CA keys at rest and is required when the CA is enabled. |
+| `ssh_ca.host_principals` | Hostnames and addresses clients use to reach the gateway, embedded in its host certificate. Usually the host from `public_url`. |
+| `recording.encryption_key` | AES-256-GCM key for recordings at rest. Leave it empty only if plaintext recordings are acceptable. |
+| `recording.compression` | `gzip` (default) or `none`. |
+| `recording.retention_days` | How long recordings are kept before they are deleted. |
 
-See also [DEPLOYMENT_HARDENING.md](DEPLOYMENT_HARDENING.md) and [OBSERVABILITY.md](OBSERVABILITY.md).
+See also [DEPLOYMENT_HARDENING.md](DEPLOYMENT_HARDENING.md) and
+[OBSERVABILITY.md](OBSERVABILITY.md).
 
 ### WebAuthn (FIDO2)
 
-Registration happens in the console (**Security → WebAuthn**) while signed in. Login only uses keys that are already registered.
+Security keys are registered in the console under **Security > WebAuthn**
+while signed in. Login accepts only keys that are already registered.
 
-Configure `auth.webauthn` in `server.yaml`, then restart the gateway:
+Configure `auth.webauthn` in `server.yaml` and restart the gateway:
 
 ```yaml
 server:
@@ -47,33 +56,39 @@ auth:
   webauthn:
     enabled: true
     rp_display_name: "Orion Belt"
-    rp_id: "orion.example.com"   # hostname only (no port) — match public_url
+    rp_id: "orion.example.com"   # hostname only, without a port; must match public_url
     origins:
       - "https://orion.example.com"
 ```
 
-- **`rp_id`** must match the browser hostname (e.g. `orion.example.com`).
-- Every UI origin you use must be listed under **`origins`**.
-- After config, open **Security → WebAuthn → Register YubiKey / FIDO2**, then use **Security key** on the login page.
+- `rp_id` must be the hostname the browser shows.
+- Every origin the console is served from must be listed under `origins`.
+- After restarting, register a key under **Security > WebAuthn**, then choose
+  **Security key** on the login page.
+
+### Start the service
 
 ```bash
 sudo systemctl enable --now orion-belt-server
-# Alpine / OpenRC:
+# Alpine (OpenRC):
 #   sudo rc-update add orion-belt-server default
 #   sudo rc-service orion-belt-server start
 ```
 
-UI: `<public_url>/ui` (or `http://<host>:8080/ui` only for local labs).
+The console is at `<public_url>/ui`. Plain `http://<host>:8080/ui` is only
+suitable for local labs; in production, terminate TLS in a reverse proxy as
+described in [REVERSE_PROXY.md](REVERSE_PROXY.md).
 
-Confirm the running build (footer / workspace bar, or):
+To confirm the running build, check the console footer or run:
 
 ```bash
 curl -s http://localhost:8080/api/v1/version
-curl -s http://localhost:8080/api/v1/gateway-info   # advertised public URL / SSH host
+curl -s http://localhost:8080/api/v1/gateway-info   # advertised public URL and SSH host
 orion-belt-server --version
 ```
 
-OpenAPI: `http://<host>:8080/api/v1/openapi.yaml` — see [API/README.md](API/README.md).
+The OpenAPI specification is served at `/api/v1/openapi.yaml`; see
+[API/README.md](API/README.md).
 
 ## 2. Run the setup wizard
 
@@ -81,71 +96,110 @@ OpenAPI: `http://<host>:8080/api/v1/openapi.yaml` — see [API/README.md](API/RE
 sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-Sets **public_url** (if missing), creates the first **admin** (if missing), and prints agent/user guidance.
+The wizard sets `public_url` if it is missing, creates the first admin
+account if none exists, and prints next steps for agents and users.
 
-Non-interactive:
+To run it without prompts:
 
 ```bash
 export ORION_SETUP_PUBLIC_URL=https://orion.example.com
 export ORION_SETUP_ADMIN_NAME=admin
 export ORION_SETUP_ADMIN_EMAIL=admin@example.com
-export ORION_SETUP_ADMIN_KEY_FILE=/path/to/admin.pub   # or YubiKey sk-*.pub
+export ORION_SETUP_ADMIN_KEY_FILE=/path/to/admin.pub   # a YubiKey sk-*.pub also works
 orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
+### Creating the first admin over the API
+
+On a new install with no accounts, `POST /api/v1/public/register/client` with
+`"is_admin": true` creates the first admin without authentication. The check
+and the insert happen in one transaction, so two simultaneous requests cannot
+both succeed. Once any account exists, the endpoint requires an admin or
+operator credential. Prefer the setup wizard, which does not expose this
+window on the network.
+
 ## 3. Add agents
 
-### Recommended — UI install script
+### Install script (recommended)
 
-1. Sign in as **admin** or **operator**.
-2. Open **Add agent** in the console.
-3. Choose the target OS (Debian/Ubuntu, RHEL/Rocky, openSUSE, Alpine, or generic Linux).
-4. Set agent name, gateway host (SSH port **2222**), and **package base URL**. The UI defaults to the public mirror [`https://orion-belt-dev.github.io/packages`](https://orion-belt-dev.github.io/packages) and loads **Package version** from that mirror’s `VERSION` file. For a local `dist/` build instead: `make packages && make serve-packages`, then set the base URL to `http://127.0.0.1:8765` (or your host IP).
-5. **Generate install script** — the server registers the agent and returns a root shell script that embeds the agent private key, downloads the package, writes `/etc/orion-belt/agent.yaml`, and starts the service.
-6. Copy or download the script and run it on the target host as root.
+1. Sign in as an admin or operator.
+2. Open **Add agent**.
+3. Choose the target OS: Debian or Ubuntu, RHEL or Rocky, openSUSE, Alpine, or
+   generic Linux.
+4. Enter the agent name, the gateway host (SSH port 2222), and the package base
+   URL. The console defaults to the public mirror at
+   [`https://orion-belt-dev.github.io/packages`](https://orion-belt-dev.github.io/packages)
+   and reads the package version from that mirror's `VERSION` file. To use a
+   local `dist/` build, run `make packages && make serve-packages` and set the
+   base URL to `http://127.0.0.1:8765` or your host's address.
+5. Select **Generate install script**. The server registers the agent and
+   returns a shell script that contains the agent's private key, downloads the
+   package, writes `/etc/orion-belt/agent.yaml` and starts the service. Treat
+   the script as a secret.
+6. Run the script as root on the target host.
 
-API equivalent: `POST /api/v1/admin/agents/install-script` (see OpenAPI).
+The API equivalent is `POST /api/v1/admin/agents/install-script`.
 
-### Manual
+### Manual installation
 
 On each target host:
 
-1. Install `orion-belt-agent` (see [PACKAGING.md](PACKAGING.md) for apt/dnf/apk/Arch).
-2. Edit `/etc/orion-belt/agent.yaml` — gateway host and port **2222**.
-3. Generate a key (`ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""`) and register the **public** key (`POST /api/v1/public/register/agent` or `orion-belt-server agent register`).
-   - With **SSH CA** enabled, registration returns a Host certificate — write it to `/etc/orion-belt/agent_key-cert.pub` and set `auth.host_ca_public_key` from `oadmin ca export` (see [SSH_CA.md](SSH_CA.md)).
-   - Without CA, registration creates a synthetic agent user (legacy path).
-4. `systemctl enable --now orion-belt-agent`
+1. Install `orion-belt-agent`; see [PACKAGING.md](PACKAGING.md) for apt, dnf,
+   apk and Arch.
+2. Edit `/etc/orion-belt/agent.yaml` and set the gateway host and port 2222.
+3. Generate a key with `ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""`
+   and register its public half, either with
+   `orion-belt-server agent register` on the gateway or with
+   `POST /api/v1/public/register/agent` using an admin or operator API key or
+   session.
+   - With the SSH CA enabled, registration returns a host certificate. Save it
+     as `/etc/orion-belt/agent_key-cert.pub` and set
+     `auth.host_ca_public_key` from `oadmin ca export`; see
+     [SSH_CA.md](SSH_CA.md).
+   - Without the CA, registration creates a service account for the agent
+     (the legacy path).
+4. Run `systemctl enable --now orion-belt-agent`.
 
-Connected tunnels appear under **Agents**.
+Connected agents appear under **Agents**.
 
 ## 4. Users and grants
 
-- UI **Users** — create operators / auditors / users
-- Grant machine access with `remote_users` (e.g. `root`)
-- CLI:
+There is no self-service signup. An admin or operator creates each account,
+either in the console under **Users** or from the command line. Operators can
+create operator, auditor and user accounts; only admins can create or modify
+admins.
+
+Access to a machine is granted per remote account through `remote_users`, for
+example `root`:
 
 ```bash
-orion-belt-server user create --name alice --email a@x --key "$(cat alice.pub)"
+orion-belt-server user create --name alice --email alice@example.com --key "$(cat alice.pub)"
 orion-belt-server permission grant --user alice --machine web-01 --type both --remote-users root
 ```
 
-## 5. Connect (everything is recorded)
+## 5. Connect
 
-OpenSSH through the gateway:
+Every session through the gateway is recorded. With OpenSSH:
 
 ```bash
 ssh -i alice.pem -p 2222 alice+web-01@gateway-host
 ```
 
-Web **Terminal** in the UI also creates auditable sessions with timed cast recordings (PTY output).
+The console's **Terminal** also creates recorded sessions.
 
-Direct SSH to an agent host **bypasses** Orion (no recording). Point users at the gateway.
+Connecting to an agent host directly, without the gateway, bypasses Orion Belt
+and is not recorded. Point users at the gateway and restrict direct SSH access
+to the targets.
 
-## UI checklist
+## In the console
 
-Admins/operators see **Setup guide** and **Add agent** in the nav, plus a dashboard banner until agents are connected.
+Admins and operators see **Setup guide** and **Add agent** in the navigation,
+and a dashboard banner until the first agent connects.
 
-Admins/operators/auditors also get a live **Access analytics** card on the dashboard (rolling window selector) showing access volume, approval latency, and top targets without generating manual reports.
+Admins, operators and auditors also see an **Access analytics** card on the
+dashboard with access volume, approval latency and most-used targets over a
+selectable window.
 
-Web **Terminal** sessions are recorded (`source=web`, `.cast`) and show under **Sessions** with xterm playback (play/pause/seek). Full UI requirements: [SRS-UI.md](SRS-UI.md).
+Web terminal sessions are recorded as `.cast` files with `source=web` and can
+be replayed under **Sessions**. The full UI requirements are in
+[SRS-UI.md](SRS-UI.md).

@@ -314,7 +314,9 @@ paths:
     post:
       tags: [Auth]
       summary: Register an agent / machine
-      security: []
+      description: >-
+        Requires an authenticated admin or operator (API key, session, or
+        bearer token), despite the /public path.
       requestBody:
         required: true
         content:
@@ -328,6 +330,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RegisterAgentResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Caller is not an admin or operator
         "409":
           description: Already registered
           content:
@@ -338,8 +344,13 @@ paths:
   /api/v1/public/register/client:
     post:
       tags: [Auth]
-      summary: Register a client user
-      security: []
+      summary: Create a user account
+      description: >-
+        Requires an admin or operator credential; only an admin may set
+        `is_admin: true`. The one exception is first-run bootstrap: while no
+        account exists, an unauthenticated request with `is_admin: true`
+        creates the first admin. The emptiness check and insert are atomic,
+        so concurrent bootstrap requests create at most one account.
       requestBody:
         required: true
         content:
@@ -356,6 +367,10 @@ paths:
                 properties:
                   user_id: { type: string }
                   message: { type: string }
+        "401":
+          description: Not authenticated, and the install already has accounts
+        "403":
+          description: Caller is not an admin or operator, or a non-admin requested is_admin
         "409":
           $ref: "#/components/responses/Conflict"
 
@@ -700,6 +715,9 @@ paths:
     get:
       tags: [Users]
       summary: List users
+      description: >-
+        Admins, operators and auditors receive every account. Other users
+        receive a list containing only their own account.
       responses:
         "200":
           description: Users
@@ -714,6 +732,9 @@ paths:
     get:
       tags: [Users]
       summary: Get user by ID
+      description: >-
+        Admins, operators and auditors can read any account. Other users can
+        read only their own; any other ID returns 404.
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
@@ -2702,7 +2723,7 @@ components:
           nullable: true
     GrantPermissionRequest:
       type: object
-      required: [user_id, machine_id, access_type]
+      required: [user_id, machine_id, access_type, remote_users]
       properties:
         user_id: { type: string }
         machine_id: { type: string }
@@ -2711,6 +2732,8 @@ components:
           enum: [ssh, scp, both]
         remote_users:
           type: array
+          minItems: 1
+          description: Target accounts the grant allows, such as ["root"].
           items: { type: string }
         expires_at: { type: string, format: date-time }
         duration_seconds: { type: integer }

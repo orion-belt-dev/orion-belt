@@ -4,7 +4,10 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -40,19 +43,98 @@ func TestChallengeStoreUnknownUserRejected(t *testing.T) {
 	}
 }
 
-func TestChallengeStoreReissueInvalidatesPrior(t *testing.T) {
+// Issuing a new challenge must not cancel one already handed out, or anyone
+// could abort a victim's in-flight login by requesting challenges for them.
+func TestChallengeStoreReissueKeepsPriorValid(t *testing.T) {
 	s := newChallengeStore()
 	first, _ := s.Issue("alice")
 	second, _ := s.Issue("alice")
 	if first == second {
 		t.Fatal("expected two Issue calls to produce different challenges")
 	}
-	if s.Verify("alice", first) {
-		t.Fatal("expected the superseded challenge to no longer verify")
+	if !s.Verify("alice", first) {
+		t.Fatal("an earlier challenge should still verify after a reissue")
 	}
 	if !s.Verify("alice", second) {
 		t.Fatal("expected the latest challenge to verify")
 	}
+}
+
+func TestChallengeStoreBoundToUsername(t *testing.T) {
+	s := newChallengeStore()
+	c, _ := s.Issue("alice")
+	if s.Verify("bob", c) {
+		t.Fatal("a challenge issued for alice must not verify for bob")
+	}
+	if !s.Verify("alice", c) {
+		t.Fatal("a failed attempt for another user must not consume alice's challenge")
+	}
+}
+
+func TestChallengeStoreRejectsExpired(t *testing.T) {
+	s := newChallengeStore()
+	now := time.Now()
+	s.now = func() time.Time { return now }
+	c, _ := s.Issue("alice")
+	s.now = func() time.Time { return now.Add(challengeTTL + time.Second) }
+	if s.Verify("alice", c) {
+		t.Fatal("expected an expired challenge to be rejected")
+	}
+}
+
+func TestChallengeStoreRejectsTampered(t *testing.T) {
+	s := newChallengeStore()
+	c, _ := s.Issue("alice")
+	payload, mac, _ := strings.Cut(c, ".")
+	raw, _ := base64.RawURLEncoding.DecodeString(payload)
+	raw[len(raw)-1]++ // push the expiry out by a second
+	forged := base64.RawURLEncoding.EncodeToString(raw) + "." + mac
+	if s.Verify("alice", forged) {
+		t.Fatal("expected a challenge with a modified payload to be rejected")
+	}
+	if s.Verify("alice", c+"x") {
+		t.Fatal("expected a challenge with a modified MAC to be rejected")
+	}
+	if s.Verify("alice", newChallengeStore().mustIssue(t, "alice")) {
+		t.Fatal("expected a challenge from another server key to be rejected")
+	}
+}
+
+// Anonymous callers can request challenges for any username; that must not
+// consume server memory.
+func TestChallengeStoreIssueIsStateless(t *testing.T) {
+	s := newChallengeStore()
+	for i := 0; i < 1000; i++ {
+		if _, err := s.Issue(fmt.Sprintf("user-%d", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(s.redeemed); n != 0 {
+		t.Fatalf("Issue retained %d entries; it should store nothing", n)
+	}
+}
+
+func TestChallengeStoreForgetsExpiredRedemptions(t *testing.T) {
+	s := newChallengeStore()
+	now := time.Now()
+	s.now = func() time.Time { return now }
+	c, _ := s.Issue("alice")
+	if !s.Verify("alice", c) {
+		t.Fatal("first Verify should succeed")
+	}
+	s.gcLocked(now.Add(challengeTTL + time.Second))
+	if n := len(s.redeemed); n != 0 {
+		t.Fatalf("expired redemption not collected (%d left)", n)
+	}
+}
+
+func (s *challengeStore) mustIssue(t *testing.T, username string) string {
+	t.Helper()
+	c, err := s.Issue(username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func genSigner(t *testing.T) ssh.Signer {

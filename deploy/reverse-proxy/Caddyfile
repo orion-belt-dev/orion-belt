@@ -1,0 +1,32 @@
+# Orion Belt behind Caddy, with automatic HTTPS from Let's Encrypt.
+#
+# ORION_PUBLIC_HOST is the public hostname (orion.example.com) and
+# ORION_UPSTREAM the gateway's HTTP address. Both come from the environment;
+# docker-compose.proxy.yml sets them. On a plain host, export them or
+# replace the placeholders.
+#
+# Caddy already does what the gateway needs from a proxy:
+#   - forwards the Host header unchanged (used by the WebSocket origin check)
+#   - proxies WebSocket upgrades (web terminal, live session watch)
+#   - sets X-Forwarded-For to the connecting client and discards any value
+#     the client supplied
+#
+# Set server.trusted_proxies (or ORION_TRUSTED_PROXIES) on the gateway to the
+# address Caddy connects from. See docs/REVERSE_PROXY.md.
+
+{$ORION_PUBLIC_HOST} {
+	encode zstd gzip
+
+	# Prometheus metrics are unauthenticated; scrape them on the internal
+	# network instead of publishing them.
+	respond /metrics 404
+
+	request_body {
+		max_size 100MB
+	}
+
+	reverse_proxy {$ORION_UPSTREAM:127.0.0.1:8080} {
+		# Long-lived terminal sessions: keep WebSockets open across reloads.
+		stream_close_delay 5m
+	}
+}

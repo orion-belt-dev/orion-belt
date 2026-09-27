@@ -51,3 +51,35 @@ agent_ssh() {
   shift 2
   ssh "${ssh_opts[@]}" -i "$SSH_KEY" -p "$port" "${user}@127.0.0.1" "$@"
 }
+
+# lab_admin_api_key prints a one-day API key for the lab admin. Login needs a
+# signature over a server-issued challenge, which curl cannot produce, so this
+# goes through osh with the admin's SSH key (bin/osh is built if missing).
+lab_admin_api_key() {
+  local user="${ORION_ADMIN_USER:-admin}"
+  local key="${ORION_ADMIN_KEY_PATH:-${ORION_ADMIN_KEY_DIR:-$LAB_ROOT/credentials}/admin_ed25519}"
+  local osh="$ROOT/bin/osh"
+  local cfg out
+
+  [[ -f "$key" ]] || { echo "missing admin key $key; run lab/bootstrap-admin.sh first" >&2; return 1; }
+  if [[ ! -x "$osh" ]]; then
+    echo "==> Building bin/osh" >&2
+    (cd "$ROOT" && go build -o bin/osh ./cmd/osh) >&2 || return 1
+  fi
+
+  cfg="$(mktemp)"
+  cat >"$cfg" <<CFG
+server:
+  api_endpoint: "$API"
+auth:
+  user: "$user"
+  key_file: "$key"
+CFG
+  if ! out="$("$osh" -c "$cfg" --json api-keys create "lab-$(date +%Y%m%d%H%M%S)" --expires-in-days 1)"; then
+    rm -f "$cfg"
+    echo "could not create an API key for $user" >&2
+    return 1
+  fi
+  rm -f "$cfg"
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["api_key"])' <<<"$out"
+}

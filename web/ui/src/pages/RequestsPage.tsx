@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import type { AccessRequest, Machine, User } from "../lib/types";
+import type { AccessRequest, Machine } from "../lib/types";
 import { Badge } from "../components/Badge";
 import { fmtTime, fmtTTL, shortId } from "../lib/format";
 import { useAuth } from "../auth/AuthContext";
 import { canApprove } from "../lib/nav";
 import { useToast } from "../components/Toast";
 import { Pagination, SortTh, TableToolbar, useTableState } from "../components/DataTable";
+import { useUserDirectory } from "../lib/useUserDirectory";
 
 const DEFAULT_TTL_SECONDS = 30 * 60;
 
@@ -29,7 +30,7 @@ export function RequestsPage() {
   const qc = useQueryClient();
   const reqs = useQuery({ queryKey: ["requests"], queryFn: () => api<AccessRequest[]>("/access-requests") });
   const machines = useQuery({ queryKey: ["machines"], queryFn: () => api<Machine[]>("/machines") });
-  const users = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/users") });
+  const users = useUserDirectory();
   const table = useTableState<AccessRequest>({ pageSize: 25 });
   const [statusFilter, setStatusFilter] = useState("");
   const [machineId, setMachineId] = useState("");

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -32,6 +33,7 @@ type APIServer struct {
 	logger          *common.Logger
 	router          *gin.Engine
 	rateLimiter     *rateLimiter
+	publicLimiter   *rateLimiter
 	agentCommander  AgentCommander
 	mfaRequired     bool
 	recordingCrypt  *recording.Crypto
@@ -107,6 +109,7 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 		logger:          logger,
 		router:          gin.New(),
 		rateLimiter:     newRateLimiter(rateLimit, time.Minute),
+		publicLimiter:   newRateLimiter(publicAuthRateLimitPerMinute, time.Minute),
 		mfaRequired:     opt.MFARequired,
 		recordingCrypt:  opt.RecordingCrypt,
 		recorder:        opt.Recorder,
@@ -119,6 +122,13 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 		bootstrap:       newBootstrapStore(),
 		passwordTickets: newPasswordTicketStore(),
 		serverCfg:       opt.Server,
+	}
+
+	// Gin trusts X-Forwarded-For from every peer by default, which makes
+	// ClientIP() — and so per-IP rate limits and audit IPs — attacker-chosen.
+	if err := api.router.SetTrustedProxies(opt.Server.TrustedProxies); err != nil {
+		logger.Error("Invalid server.trusted_proxies %v: %v; trusting no proxies", opt.Server.TrustedProxies, err)
+		_ = api.router.SetTrustedProxies(nil)
 	}
 
 	api.router.Use(gin.Recovery())
@@ -177,8 +187,17 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 
 	v1 := s.router.Group("/api/v1")
 
-	// Public endpoints
+	// Inbound plugin webhooks (e.g. chat-platform interaction callbacks).
+	// Unauthenticated at this layer; each plugin verifies its own caller.
+	// Kept off the auth rate limiter below so chat-platform bursts aren't
+	// throttled alongside login attempts.
+	webhooks := v1.Group("/public")
+	webhooks.Any("/plugins/:name/*proxyPath", s.pluginWebhook)
+
+	// Public endpoints. These take unauthenticated credential guesses
+	// (password, TOTP, signatures), so they get a per-IP limit of their own.
 	public := v1.Group("/public")
+	public.Use(s.publicRateLimitMiddleware())
 	{
 		public.POST("/register/agent", s.registerAgent)
 		public.POST("/register/client", s.registerClient)
@@ -187,10 +206,6 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		public.POST("/login", s.login)
 		public.POST("/login/key", s.loginWithKey)
 		public.POST("/login/token", s.loginJWT)
-
-		// Inbound plugin webhooks (e.g. chat-platform interaction callbacks).
-		// Unauthenticated at this layer; each plugin verifies its own caller.
-		public.Any("/plugins/:name/*proxyPath", s.pluginWebhook)
 	}
 
 	// Protected endpoints
@@ -433,8 +448,22 @@ func (s *APIServer) loginWithKey(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// registerAgent handles agent registration
+// registerAgent handles agent registration. It sits on the public router so
+// existing scripts keep their URL, but it mints a machine (and, with the SSH
+// CA on, a signed host certificate; without it, a synthetic user holding the
+// caller's key), so the caller must be an authenticated admin or operator.
 func (s *APIServer) registerAgent(c *gin.Context) {
+	caller := s.optionalCaller(c)
+	if caller == nil {
+		metrics.Default.IncAuthFailure()
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to register an agent"})
+		return
+	}
+	if !caller.HasRole(common.RoleOperator) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin or operator privileges required"})
+		return
+	}
+
 	var req RegisterAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -520,7 +549,13 @@ type RegisterClientResponse struct {
 	Message string `json:"message"`
 }
 
-// registerClient handles client registration
+// registerClient creates a user account. Open signup is not supported: the
+// caller must be an authenticated admin or operator, and only an admin may
+// create another admin. The single exception is first-run bootstrap: while
+// no account exists, an anonymous caller may create the first one, which
+// must be an admin (otherwise nobody could manage the install). The
+// emptiness check and insert are one atomic store operation, so concurrent
+// bootstrap attempts cannot both succeed.
 func (s *APIServer) registerClient(c *gin.Context) {
 	var req RegisterClientRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -528,24 +563,58 @@ func (s *APIServer) registerClient(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
+	user := common.NewUser(req.Username, req.Email, req.PublicKey, req.IsAdmin)
 
-	// Check if user already exists
-	existingUser, _ := s.store.GetUserByUsername(ctx, req.Username)
-	if existingUser != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+	caller := s.optionalCaller(c)
+	if caller == nil {
+		if !req.IsAdmin {
+			metrics.Default.IncAuthFailure()
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to create accounts"})
+			return
+		}
+		err := s.store.CreateFirstUser(ctx, user)
+		if errors.Is(err, database.ErrAlreadyInitialized) {
+			metrics.Default.IncAuthFailure()
+			s.logger.Warn("Rejected anonymous registration of %q from %s: install already bootstrapped", req.Username, c.ClientIP())
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required to create accounts"})
+			return
+		}
+		if err != nil {
+			s.logger.Error("Failed to create bootstrap admin: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register client"})
+			return
+		}
+		s.logger.Info("Bootstrap admin registered: %s (user_id=%s)", user.Username, user.ID)
+		s.recordAuditAs(c, user.ID, "user.bootstrap", "user:"+user.ID, map[string]interface{}{"username": user.Username})
+		c.JSON(http.StatusCreated, RegisterClientResponse{UserID: user.ID, Message: "Bootstrap admin registered"})
 		return
 	}
 
-	// Create user account
-	user := common.NewUser(req.Username, req.Email, req.PublicKey, req.IsAdmin)
+	if !caller.HasRole(common.RoleOperator) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin or operator privileges required"})
+		return
+	}
+	if req.IsAdmin && !caller.HasRole(common.RoleAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only an admin can create admin accounts"})
+		return
+	}
+
+	if existing, _ := s.store.GetUserByUsername(ctx, req.Username); existing != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+		return
+	}
 	if err := s.store.CreateUser(ctx, user); err != nil {
 		s.logger.Error("Failed to create user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register client"})
 		return
 	}
 
-	s.logger.Info("Client registered: %s (user_id=%s, is_admin=%v)", req.Username, user.ID, req.IsAdmin)
+	s.logger.Info("Client registered: %s (user_id=%s, is_admin=%v) by %s", req.Username, user.ID, req.IsAdmin, caller.Username)
+	s.recordAuditAs(c, caller.ID, "user.create", "user:"+user.ID, map[string]interface{}{
+		"username": user.Username,
+		"role":     user.Role,
+	})
 
 	c.JSON(http.StatusCreated, RegisterClientResponse{
 		UserID:  user.ID,
@@ -663,6 +732,24 @@ type ApproveAccessRequestRequest struct {
 	Duration *int `json:"duration"`
 }
 
+// resolveReviewerID returns the authenticated caller as the reviewer.
+// reviewer_id in the body is accepted only when it names the caller: the
+// reviewer is recorded as the grantor of the resulting permission and in the
+// audit trail, so it must never be attributable to someone else.
+func resolveReviewerID(c *gin.Context, requested string) (string, bool) {
+	uid, _ := c.Get("user_id")
+	callerID, _ := uid.(string)
+	if callerID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return "", false
+	}
+	if requested != "" && requested != callerID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "reviewer_id must be the authenticated user"})
+		return "", false
+	}
+	return callerID, true
+}
+
 // approveAccessRequest handles access request approval
 func (s *APIServer) approveAccessRequest(c *gin.Context) {
 	requestID := c.Param("id")
@@ -670,14 +757,8 @@ func (s *APIServer) approveAccessRequest(c *gin.Context) {
 	var req ApproveAccessRequestRequest
 	_ = c.ShouldBindJSON(&req)
 
-	reviewerID := req.ReviewerID
-	if reviewerID == "" {
-		if uid, ok := c.Get("user_id"); ok {
-			reviewerID, _ = uid.(string)
-		}
-	}
-	if reviewerID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "reviewer_id required"})
+	reviewerID, ok := resolveReviewerID(c, req.ReviewerID)
+	if !ok {
 		return
 	}
 	if req.Duration != nil && *req.Duration < 0 {
@@ -736,14 +817,8 @@ func (s *APIServer) rejectAccessRequest(c *gin.Context) {
 	var req RejectAccessRequestRequest
 	_ = c.ShouldBindJSON(&req)
 
-	reviewerID := req.ReviewerID
-	if reviewerID == "" {
-		if uid, ok := c.Get("user_id"); ok {
-			reviewerID, _ = uid.(string)
-		}
-	}
-	if reviewerID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "reviewer_id required"})
+	reviewerID, ok := resolveReviewerID(c, req.ReviewerID)
+	if !ok {
 		return
 	}
 
@@ -812,9 +887,21 @@ func (s *APIServer) listAccessRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, requests)
 }
 
-// Placeholder section marker kept for readability of legacy handlers.
+// listUsers returns the user directory to admins, operators and auditors.
+// A plain user only ever sees their own records elsewhere in the API, so
+// they get their own account back and nothing about anyone else (emails,
+// public keys, roles).
 func (s *APIServer) listUsers(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
+	if !isPrivilegedViewer(c) {
+		self, err := s.store.GetUser(ctx, c.GetString("user_id"))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+			return
+		}
+		c.JSON(http.StatusOK, []*common.User{self})
+		return
+	}
 	users, err := s.store.ListUsers(ctx, 100, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -823,9 +910,16 @@ func (s *APIServer) listUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
+// getUser returns one account: any account to a privileged viewer, only
+// their own to a plain user. Other IDs report not-found so the endpoint
+// can't be used to probe which IDs exist.
 func (s *APIServer) getUser(c *gin.Context) {
-	ctx := context.Background()
-	user, err := s.store.GetUser(ctx, c.Param("id"))
+	id := c.Param("id")
+	if !isPrivilegedViewer(c) && id != c.GetString("user_id") {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	user, err := s.store.GetUser(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
@@ -849,6 +943,12 @@ func (s *APIServer) updateUser(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	grantsAdmin := (req.Role != nil && *req.Role == common.RoleAdmin) || (req.IsAdmin != nil && *req.IsAdmin)
+	if !callerIsAdmin(c) && (user.HasRole(common.RoleAdmin) || grantsAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only an admin can modify admin accounts or grant the admin role"})
 		return
 	}
 
@@ -892,6 +992,10 @@ func (s *APIServer) deleteUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	id := c.Param("id")
 	user, _ := s.store.GetUser(ctx, id)
+	if user != nil && user.HasRole(common.RoleAdmin) && !callerIsAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only an admin can delete admin accounts"})
+		return
+	}
 	if err := s.store.DeleteUser(ctx, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -926,6 +1030,10 @@ func (s *APIServer) getMachine(c *gin.Context) {
 
 func (s *APIServer) getUserPermissions(c *gin.Context) {
 	ctx := c.Request.Context()
+	if !isPrivilegedViewer(c) && c.Param("id") != c.GetString("user_id") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
 	permissions, err := s.store.ListUserPermissions(ctx, c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -940,6 +1048,18 @@ func (s *APIServer) getMachinePermissions(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if !isPrivilegedViewer(c) {
+		// A plain user only sees their own grants on the machine, not who
+		// else holds access to it.
+		uid := c.GetString("user_id")
+		own := make([]*common.Permission, 0, len(permissions))
+		for _, p := range permissions {
+			if p.UserID == uid {
+				own = append(own, p)
+			}
+		}
+		permissions = own
 	}
 	c.JSON(http.StatusOK, permissions)
 }
@@ -969,6 +1089,10 @@ func (s *APIServer) createUser(c *gin.Context) {
 	case common.RoleAdmin, common.RoleOperator, common.RoleAuditor, common.RoleUser:
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role (admin|operator|auditor|user)"})
+		return
+	}
+	if role == common.RoleAdmin && !callerIsAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only an admin can create admin accounts"})
 		return
 	}
 
@@ -1153,6 +1277,12 @@ func (s *APIServer) grantPermission(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Access is always checked for a specific remote account, so a grant
+	// without one could never be used.
+	if len(req.RemoteUsers) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "remote_users is required (the target accounts the grant allows, e.g. [\"root\"])"})
 		return
 	}
 

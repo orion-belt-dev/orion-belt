@@ -10,6 +10,10 @@ server:
   # public_ssh_host: "orion.example.com"
   # public_ssh_port: 2222
   metrics_enabled: true
+  # Reverse proxies allowed to report the client address (X-Forwarded-For),
+  # which rate limits and audit logs use. Empty trusts none and uses the TCP
+  # peer. List only your proxies; see docs/REVERSE_PROXY.md.
+  # trusted_proxies: ["127.0.0.1"]
 
 database:
   driver: "postgres"

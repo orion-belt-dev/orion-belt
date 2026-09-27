@@ -384,3 +384,29 @@ func (c *Client) GetSetupStatus(ctx context.Context) (*SetupStatus, error) {
 	}
 	return &out, nil
 }
+
+// ListCapabilities returns the capability catalog: what the caller holds or
+// could request. scope is "related" (default, machines tied to the user) or
+// "all". userID asks on behalf of another user, which requires an admin,
+// operator or auditor caller; leave it empty for yourself.
+func (c *Client) ListCapabilities(ctx context.Context, scope, userID string) (*CapabilityCatalog, error) {
+	q := url.Values{}
+	if s := strings.TrimSpace(scope); s != "" {
+		q.Set("scope", s)
+	}
+	if u := strings.TrimSpace(userID); u != "" {
+		q.Set("user_id", u)
+	}
+	path := "/capabilities"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out CapabilityCatalog
+	if err := c.Do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	if out.Capabilities == nil {
+		out.Capabilities = []Capability{}
+	}
+	return &out, nil
+}

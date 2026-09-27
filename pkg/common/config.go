@@ -67,6 +67,11 @@ type ServerConfig struct {
 	// PublicSSHPort is the SSH port agents dial. Empty/0 means server.port.
 	PublicSSHPort  int  `yaml:"public_ssh_port,omitempty"`
 	MetricsEnabled bool `yaml:"metrics_enabled,omitempty"`
+	// TrustedProxies lists reverse-proxy IPs/CIDRs whose X-Forwarded-For /
+	// X-Real-IP headers the API honors for the client address. Empty means
+	// trust none and use the TCP peer address, so clients can't spoof their
+	// IP to dodge per-IP rate limits or falsify audit-log addresses.
+	TrustedProxies []string `yaml:"trusted_proxies,omitempty"`
 }
 
 // EffectiveAPIPort returns the HTTP API listen port (default 8080).

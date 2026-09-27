@@ -12,6 +12,10 @@ import (
 type Store interface {
 	// User operations
 	CreateUser(ctx context.Context, user *common.User) error
+	// CreateFirstUser creates user only if no user exists yet, atomically
+	// across concurrent callers and server replicas; otherwise it returns
+	// ErrAlreadyInitialized. Used for unauthenticated first-run bootstrap.
+	CreateFirstUser(ctx context.Context, user *common.User) error
 	GetUser(ctx context.Context, id string) (*common.User, error)
 	GetUserByUsername(ctx context.Context, username string) (*common.User, error)
 	UpdateUser(ctx context.Context, user *common.User) error

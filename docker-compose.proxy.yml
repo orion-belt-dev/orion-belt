@@ -1,0 +1,52 @@
+# Orion Belt behind Caddy (automatic HTTPS). Overlay for docker-compose.prod.yml.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.proxy.yml \
+#     --env-file .env.prod up -d
+#
+# Caddy terminates TLS on 80/443 and becomes the only route to the HTTP API:
+# the gateway's port 8080 is no longer published. SSH on 2222 is still
+# published directly, since it is not HTTP.
+#
+# The overlay pins the compose network to 172.30.0.0/24 so that Caddy has a
+# fixed address, which the gateway trusts for X-Forwarded-For. If an existing
+# stack already created the network, run "docker compose down" once before
+# switching (volumes are kept). Change the subnet if it clashes with yours.
+#
+# Requires Docker Compose 2.24.4 or later (for !override).
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ORION_PUBLIC_HOST: "${ORION_PUBLIC_HOST:?set ORION_PUBLIC_HOST in .env.prod}"
+      ORION_UPSTREAM: "server:8080"
+    volumes:
+      - ./deploy/reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - orion_caddy_data:/data
+      - orion_caddy_config:/config
+    networks:
+      default:
+        ipv4_address: 172.30.0.10
+
+  server:
+    ports: !override
+      - "${ORION_SSH_PORT:-2222}:2222"
+    environment:
+      ORION_TRUSTED_PROXIES: "172.30.0.10"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  orion_caddy_data:
+  orion_caddy_config:

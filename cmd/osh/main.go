@@ -64,6 +64,7 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(newWhoamiCmd())
 	rootCmd.AddCommand(newRequestsCmd())
+	rootCmd.AddCommand(newCatalogCmd())
 	rootCmd.AddCommand(newKeysCmd())
 	rootCmd.AddCommand(newAPIKeysCmd())
 	rootCmd.AddCommand(newMFACmd())

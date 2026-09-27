@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiDownload } from "../lib/api";
-import type { AuditLog, User } from "../lib/types";
+import type { AuditLog } from "../lib/types";
 import { fmtTime, shortId } from "../lib/format";
 import { Pagination, SortTh, useTableState } from "../components/DataTable";
+import { useUserDirectory } from "../lib/useUserDirectory";
 
 export function AuditPage() {
   const [actionFilter, setActionFilter] = useState("");
@@ -14,7 +15,7 @@ export function AuditPage() {
     queryKey: ["audit", limit],
     queryFn: () => api<AuditLog[]>(`/audit-logs?limit=${limit}`),
   });
-  const users = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/users") });
+  const users = useUserDirectory();
   const table = useTableState<AuditLog>({ pageSize: 25 });
 
   const userName = (id?: string) => {

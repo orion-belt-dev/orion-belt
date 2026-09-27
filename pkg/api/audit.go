@@ -7,11 +7,17 @@ import (
 
 // recordAudit writes a DB audit log entry (best-effort; never fails the request).
 func (s *APIServer) recordAudit(c *gin.Context, action, resource string, meta map[string]interface{}) {
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(string)
+	s.recordAuditAs(c, uid, action, resource, meta)
+}
+
+// recordAuditAs writes an audit entry attributed to uid, for public routes
+// where the caller is not in the request context.
+func (s *APIServer) recordAuditAs(c *gin.Context, uid, action, resource string, meta map[string]interface{}) {
 	if s.store == nil {
 		return
 	}
-	userID, _ := c.Get("user_id")
-	uid, _ := userID.(string)
 	if meta == nil {
 		meta = map[string]interface{}{}
 	}
