@@ -472,11 +472,14 @@ func pqQuoteIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
-// CreateUser creates a new user
-func (s *PostgresStore) CreateUser(ctx context.Context, user *common.User) error {
-	query := `INSERT INTO users (id, username, email, public_key, is_admin, role, created_at, updated_at)
+const insertUserQuery = `INSERT INTO users (id, username, email, public_key, is_admin, role, created_at, updated_at)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
+// firstUserLockKey is the pg_advisory_xact_lock key that serializes
+// first-run bootstrap. Arbitrary, but must stay stable across releases.
+const firstUserLockKey = 0x6f72696f6e0001
+
+func userInsertArgs(user *common.User) []interface{} {
 	role := user.Role
 	if role == "" {
 		if user.IsAdmin {
@@ -485,13 +488,44 @@ func (s *PostgresStore) CreateUser(ctx context.Context, user *common.User) error
 			role = common.RoleUser
 		}
 	}
+	return []interface{}{user.ID, user.Username, user.Email, user.PublicKey,
+		user.IsAdmin, role, user.CreatedAt, user.UpdatedAt}
+}
 
-	_, err := s.db.ExecContext(ctx, query,
-		user.ID, user.Username, user.Email, user.PublicKey,
-		user.IsAdmin, role, user.CreatedAt, user.UpdatedAt)
-
-	if err != nil {
+// CreateUser creates a new user
+func (s *PostgresStore) CreateUser(ctx context.Context, user *common.User) error {
+	if _, err := s.db.ExecContext(ctx, insertUserQuery, userInsertArgs(user)...); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
+	}
+	return nil
+}
+
+// CreateFirstUser inserts user only when the users table is empty. The
+// transaction-scoped advisory lock makes the emptiness check and the insert
+// one step, so two concurrent bootstrap requests (even on different server
+// replicas) cannot both create an account.
+func (s *PostgresStore) CreateFirstUser(ctx context.Context, user *common.User) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, firstUserLockKey); err != nil {
+		return fmt.Errorf("failed to acquire bootstrap lock: %w", err)
+	}
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM users)`).Scan(&exists); err != nil {
+		return fmt.Errorf("failed to check for existing users: %w", err)
+	}
+	if exists {
+		return ErrAlreadyInitialized
+	}
+	if _, err := tx.ExecContext(ctx, insertUserQuery, userInsertArgs(user)...); err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
 	}
 	return nil
 }

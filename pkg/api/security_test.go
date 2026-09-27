@@ -43,6 +43,16 @@ func (s *secStore) CreateUser(_ context.Context, u *common.User) error {
 	return nil
 }
 
+func (s *secStore) CreateFirstUser(_ context.Context, u *common.User) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.users) > 0 {
+		return database.ErrAlreadyInitialized
+	}
+	s.users[u.ID] = u
+	return nil
+}
+
 func (s *secStore) GetUser(_ context.Context, id string) (*common.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -186,33 +196,64 @@ func doJSON(t *testing.T, s *APIServer, method, path, apiKey string, body interf
 
 const testPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test"
 
-func TestRegisterClientRejectsAnonymousAdminAfterBootstrap(t *testing.T) {
-	store := newSecStore()
-	store.addUser(t, "root-admin", common.RoleAdmin)
-	s := newSecServer(t, store, Options{})
-
-	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", map[string]interface{}{
-		"username": "mallory", "email": "m@example.com", "public_key": testPubKey, "is_admin": true,
-	}, nil)
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body)
-	}
-	if u, _ := store.GetUserByUsername(context.Background(), "mallory"); u != nil {
-		t.Fatal("admin self-registration must not create the account")
+func registerBody(name string, admin bool) map[string]interface{} {
+	return map[string]interface{}{
+		"username": name, "email": name + "@example.com", "public_key": testPubKey, "is_admin": admin,
 	}
 }
 
-func TestRegisterClientNonAdminCallerCannotCreateAdmin(t *testing.T) {
+func TestRegisterClientRejectsAnonymousAfterBootstrap(t *testing.T) {
 	store := newSecStore()
 	store.addUser(t, "root-admin", common.RoleAdmin)
+	s := newSecServer(t, store, Options{})
+
+	for _, admin := range []bool{true, false} {
+		w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", registerBody("mallory", admin), nil)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("is_admin=%v: status = %d, want 401; body=%s", admin, w.Code, w.Body)
+		}
+	}
+	if u, _ := store.GetUserByUsername(context.Background(), "mallory"); u != nil {
+		t.Fatal("anonymous registration must not create an account once the install is bootstrapped")
+	}
+}
+
+func TestRegisterClientPlainUserCannotRegister(t *testing.T) {
+	store := newSecStore()
+	_, userKey := store.addUser(t, "alice", common.RoleUser)
+	s := newSecServer(t, store, Options{})
+
+	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", userKey, registerBody("friend", false), nil)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body)
+	}
+}
+
+func TestRegisterClientOperatorCreatesPlainUserOnly(t *testing.T) {
+	store := newSecStore()
 	_, opKey := store.addUser(t, "op", common.RoleOperator)
 	s := newSecServer(t, store, Options{})
 
-	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", opKey, map[string]interface{}{
-		"username": "sneaky", "email": "s@example.com", "public_key": testPubKey, "is_admin": true,
-	}, nil)
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body)
+	if w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", opKey, registerBody("carol", false), nil); w.Code != http.StatusCreated {
+		t.Fatalf("plain user: status = %d, want 201; body=%s", w.Code, w.Body)
+	}
+	u, _ := store.GetUserByUsername(context.Background(), "carol")
+	if u == nil || u.HasRole(common.RoleAuditor) {
+		t.Fatalf("operator-created account should be a plain user, got %+v", u)
+	}
+	if w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", opKey, registerBody("sneaky", true), nil); w.Code != http.StatusForbidden {
+		t.Fatalf("admin by operator: status = %d, want 403; body=%s", w.Code, w.Body)
+	}
+}
+
+func TestRegisterClientAdminCallerCanCreateAdmin(t *testing.T) {
+	store := newSecStore()
+	_, adminKey := store.addUser(t, "root-admin", common.RoleAdmin)
+	s := newSecServer(t, store, Options{})
+
+	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", adminKey, registerBody("second-admin", true), nil)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body)
 	}
 }
 
@@ -220,9 +261,7 @@ func TestRegisterClientFirstRunBootstrapCreatesAdmin(t *testing.T) {
 	store := newSecStore()
 	s := newSecServer(t, store, Options{})
 
-	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", map[string]interface{}{
-		"username": "admin", "email": "a@example.com", "public_key": testPubKey, "is_admin": true,
-	}, nil)
+	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", registerBody("admin", true), nil)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body)
 	}
@@ -232,33 +271,82 @@ func TestRegisterClientFirstRunBootstrapCreatesAdmin(t *testing.T) {
 	}
 }
 
-func TestRegisterClientAdminCallerCanCreateAdmin(t *testing.T) {
+// The first account must be an admin; a non-admin bootstrap would leave an
+// install nobody can manage.
+func TestRegisterClientFirstRunRequiresAdmin(t *testing.T) {
 	store := newSecStore()
-	_, adminKey := store.addUser(t, "root-admin", common.RoleAdmin)
 	s := newSecServer(t, store, Options{})
 
-	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", adminKey, map[string]interface{}{
-		"username": "second-admin", "email": "b@example.com", "public_key": testPubKey, "is_admin": true,
-	}, nil)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body)
+	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", registerBody("first", false), nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401; body=%s", w.Code, w.Body)
+	}
+	if len(store.users) != 0 {
+		t.Fatal("non-admin bootstrap must not create an account")
 	}
 }
 
-func TestRegisterClientAnonymousPlainUserStillAllowed(t *testing.T) {
+func TestRegisterClientConcurrentBootstrapCreatesOneAdmin(t *testing.T) {
 	store := newSecStore()
-	store.addUser(t, "root-admin", common.RoleAdmin)
 	s := newSecServer(t, store, Options{})
 
-	w := doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", map[string]interface{}{
-		"username": "carol", "email": "c@example.com", "public_key": testPubKey,
-	}, nil)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body)
+	const n = 10
+	codes := make(chan int, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			codes <- doJSON(t, s, http.MethodPost, "/api/v1/public/register/client", "", registerBody("admin-"+itoa(i), true), nil).Code
+		}(i)
 	}
-	u, _ := store.GetUserByUsername(context.Background(), "carol")
-	if u == nil || u.IsAdmin || u.EffectiveRole() != common.RoleUser {
-		t.Fatalf("self-registered user should be a plain user, got %+v", u)
+	wg.Wait()
+	close(codes)
+
+	created := 0
+	for c := range codes {
+		if c == http.StatusCreated {
+			created++
+		}
+	}
+	if created != 1 || len(store.users) != 1 {
+		t.Fatalf("concurrent bootstrap created %d accounts (%d responses 201), want exactly 1", len(store.users), created)
+	}
+}
+
+func TestListUsersLeastPrivilege(t *testing.T) {
+	store := newSecStore()
+	alice, aliceKey := store.addUser(t, "alice", common.RoleUser)
+	bob, _ := store.addUser(t, "bob", common.RoleUser)
+	_, auditorKey := store.addUser(t, "aud", common.RoleAuditor)
+	s := newSecServer(t, store, Options{})
+
+	var got []common.User
+	w := doJSON(t, s, http.MethodGet, "/api/v1/users", aliceKey, nil, nil)
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body)
+	}
+	if len(got) != 1 || got[0].ID != alice.ID {
+		t.Fatalf("plain user should only get their own account, got %+v", got)
+	}
+
+	got = nil
+	w = doJSON(t, s, http.MethodGet, "/api/v1/users", auditorKey, nil, nil)
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body)
+	}
+	if len(got) != 3 {
+		t.Fatalf("auditor should see the full directory, got %d users", len(got))
+	}
+
+	if w := doJSON(t, s, http.MethodGet, "/api/v1/users/"+bob.ID, aliceKey, nil, nil); w.Code != http.StatusNotFound {
+		t.Fatalf("other user's record: status = %d, want 404", w.Code)
+	}
+	if w := doJSON(t, s, http.MethodGet, "/api/v1/users/"+alice.ID, aliceKey, nil, nil); w.Code != http.StatusOK {
+		t.Fatalf("own record: status = %d, want 200", w.Code)
+	}
+	if w := doJSON(t, s, http.MethodGet, "/api/v1/users/"+bob.ID, auditorKey, nil, nil); w.Code != http.StatusOK {
+		t.Fatalf("auditor: status = %d, want 200", w.Code)
 	}
 }
 
@@ -466,5 +554,22 @@ func TestCheckWSOrigin(t *testing.T) {
 				t.Fatalf("checkWSOrigin(host=%q, origin=%q) = %v, want %v", tc.host, tc.origin, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestGrantPermissionRequiresRemoteUsers(t *testing.T) {
+	store := newSecStore()
+	_, adminKey := store.addUser(t, "root-admin", common.RoleAdmin)
+	alice, _ := store.addUser(t, "alice", common.RoleUser)
+	s := newSecServer(t, store, Options{})
+
+	for _, body := range []map[string]interface{}{
+		{"user_id": alice.ID, "machine_id": "m1", "access_type": "ssh"},
+		{"user_id": alice.ID, "machine_id": "m1", "access_type": "ssh", "remote_users": []string{}},
+	} {
+		w := doJSON(t, s, http.MethodPost, "/api/v1/admin/permissions", adminKey, body, nil)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("body %v: status = %d, want 400; body=%s", body, w.Code, w.Body)
+		}
 	}
 }

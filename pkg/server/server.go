@@ -902,6 +902,13 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 	recordingPath := s.recorder.GetRecordingStoragePath()
 	session := common.NewSession(userID, machine.ID, remoteUser, recordingPath)
 
+	// TODO(security): fail closed when the session record or recording cannot
+	// be created. Today both errors are logged and the session still starts,
+	// so an SSH session can run with no audit trail (e.g. recording disk full
+	// or unwritable). The web terminal already refuses in this case
+	// (pkg/api/terminal.go); this path should match it: write an error to
+	// the client, send exit-status 1, and return before opening the agent
+	// channel.
 	if err := s.store.CreateSession(ctx, session); err != nil {
 		s.logger.Error("Failed to create session record: %v", err)
 	}
