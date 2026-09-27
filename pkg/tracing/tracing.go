@@ -15,6 +15,7 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -318,17 +319,34 @@ func protocolOf(cfg Config) string {
 	return p
 }
 
+// otlpTracesPath is the OTLP/HTTP path for trace exports.
+const otlpTracesPath = "/v1/traces"
+
 // normalizeHTTPEndpoint accepts a bare "host:port" as well as a full URL, so
 // the same config value shape works for both protocols.
+//
+// An endpoint without a path gets the standard traces path. The exporter
+// used to add it itself, but since otlptracehttp v1.46 a URL passed to
+// WithEndpointURL is used as-is and a missing path means "/", which a
+// standard collector answers with 404. An explicit path is kept.
 func normalizeHTTPEndpoint(cfg Config) string {
 	ep := strings.TrimSpace(cfg.Endpoint)
-	if strings.HasPrefix(ep, "http://") || strings.HasPrefix(ep, "https://") {
+	if !strings.HasPrefix(ep, "http://") && !strings.HasPrefix(ep, "https://") {
+		if cfg.Insecure {
+			ep = "http://" + ep
+		} else {
+			ep = "https://" + ep
+		}
+	}
+	u, err := url.Parse(ep)
+	if err != nil {
+		// Leave it to the exporter to report the malformed endpoint.
 		return ep
 	}
-	if cfg.Insecure {
-		return "http://" + ep
+	if u.Path == "" || u.Path == "/" {
+		u.Path = otlpTracesPath
 	}
-	return "https://" + ep
+	return u.String()
 }
 
 func endpointForLog(cfg Config) string {
