@@ -314,7 +314,9 @@ paths:
     post:
       tags: [Auth]
       summary: Register an agent / machine
-      security: []
+      description: >-
+        Requires an authenticated admin or operator (API key, session, or
+        bearer token), despite the /public path.
       requestBody:
         required: true
         content:
@@ -328,6 +330,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RegisterAgentResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Caller is not an admin or operator
         "409":
           description: Already registered
           content:
@@ -339,7 +345,10 @@ paths:
     post:
       tags: [Auth]
       summary: Register a client user
-      security: []
+      description: >-
+        Anonymous callers may self-register a plain user. `is_admin: true` is
+        honored only for an authenticated admin caller, or for the first
+        account on a fresh install; otherwise it returns 403.
       requestBody:
         required: true
         content:
@@ -356,6 +365,8 @@ paths:
                 properties:
                   user_id: { type: string }
                   message: { type: string }
+        "403":
+          description: is_admin requested by a non-admin after first-run bootstrap
         "409":
           $ref: "#/components/responses/Conflict"
 

@@ -43,7 +43,7 @@ A background loop renews the gateway Host cert before TTL expiry and swaps `ssh.
 With CA enabled, agent registration **does not** create a synthetic user row:
 
 - UI install script / `POST /api/v1/admin/agents/install-script`
-- `POST /api/v1/public/register/agent`
+- `POST /api/v1/public/register/agent` (admin/operator credential required)
 - `orion-belt-server agent register`
 
 …issue a Host cert for the agent’s pubkey, write `<key_file>-cert.pub`, and set `auth.host_ca_public_key` on the agent.

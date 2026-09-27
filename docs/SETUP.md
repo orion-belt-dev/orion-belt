@@ -112,7 +112,7 @@ On each target host:
 
 1. Install `orion-belt-agent` (see [PACKAGING.md](PACKAGING.md) for apt/dnf/apk/Arch).
 2. Edit `/etc/orion-belt/agent.yaml` — gateway host and port **2222**.
-3. Generate a key (`ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""`) and register the **public** key (`POST /api/v1/public/register/agent` or `orion-belt-server agent register`).
+3. Generate a key (`ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""`) and register the **public** key (`POST /api/v1/public/register/agent` with an admin/operator API key or session, or `orion-belt-server agent register`).
    - With **SSH CA** enabled, registration returns a Host certificate — write it to `/etc/orion-belt/agent_key-cert.pub` and set `auth.host_ca_public_key` from `oadmin ca export` (see [SSH_CA.md](SSH_CA.md)).
    - Without CA, registration creates a synthetic agent user (legacy path).
 4. `systemctl enable --now orion-belt-agent`

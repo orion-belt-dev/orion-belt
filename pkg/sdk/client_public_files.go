@@ -201,19 +201,22 @@ func (c *Client) RedeemBrowserBootstrap(ctx context.Context, code string) (*Pass
 	return &out, nil
 }
 
-// RegisterAgent registers an agent through the public endpoint.
+// RegisterAgent registers an agent. The server requires an admin or
+// operator caller, so the client's credentials are sent.
 func (c *Client) RegisterAgent(ctx context.Context, req RegisterAgentRequest) (*RegisterAgentResponse, error) {
 	var out RegisterAgentResponse
-	if err := c.DoPublic(ctx, http.MethodPost, "/public/register/agent", req, &out); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, "/public/register/agent", req, &out, true); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// RegisterClient registers a new user through the public endpoint.
+// RegisterClient registers a new user. Credentials are sent when the
+// client has them: the server only honors is_admin for an admin caller
+// (or the first account on a fresh install).
 func (c *Client) RegisterClient(ctx context.Context, req RegisterClientRequest) (*RegisterClientResponse, error) {
 	var out RegisterClientResponse
-	if err := c.DoPublic(ctx, http.MethodPost, "/public/register/client", req, &out); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, "/public/register/client", req, &out, true); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -61,6 +61,7 @@ var groupPrefixes = map[string]string{
 	"api.route": "",
 	"v1":        "/api/v1",
 	"public":    "/api/v1/public",
+	"webhooks":  "/api/v1/public",
 	"protected": "/api/v1",
 	"admin":     "/api/v1/admin",
 }

@@ -42,55 +42,69 @@ func (s *APIServer) loggingMiddleware() gin.HandlerFunc {
 	}
 }
 
+// authenticate resolves the caller from an API key, session token (header,
+// cookie, or ?token= for WebSocket), or JWT bearer token (header or
+// ?access_token= for WebSocket/SSE). ok is false when none validates.
+func (s *APIServer) authenticate(c *gin.Context) (user *common.User, method string, ok bool) {
+	ctx := c.Request.Context()
+
+	if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
+		if u, err := s.validateAPIKey(ctx, apiKey); err == nil {
+			return u, "api_key", true
+		}
+	}
+
+	sessionToken := c.GetHeader("X-Session-Token")
+	if sessionToken == "" {
+		if cookie, err := c.Cookie("session_token"); err == nil {
+			sessionToken = cookie
+		}
+	}
+	if sessionToken == "" {
+		sessionToken = c.Query("token")
+	}
+	if sessionToken != "" {
+		if u, err := s.validateSession(ctx, sessionToken); err == nil {
+			return u, "session", true
+		}
+	}
+
+	bearerToken := ""
+	if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		bearerToken = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	if bearerToken == "" {
+		bearerToken = c.Query("access_token")
+	}
+	if bearerToken != "" {
+		if u, err := s.validateBearerToken(ctx, bearerToken); err == nil {
+			return u, "bearer", true
+		}
+	}
+
+	return nil, "", false
+}
+
+// optionalCaller authenticates the request if it carries credentials, for
+// public endpoints whose behavior depends on who (if anyone) is calling.
+// Returns nil for anonymous or invalid credentials.
+func (s *APIServer) optionalCaller(c *gin.Context) *common.User {
+	user, _, ok := s.authenticate(c)
+	if !ok {
+		return nil
+	}
+	return user
+}
+
 // authMiddleware enforces authentication for protected endpoints
 func (s *APIServer) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-
-		// Try API Key authentication
-		if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
-			if user, err := s.validateAPIKey(ctx, apiKey); err == nil {
-				s.setAuthContext(c, user.ID, user.Username, user.IsAdmin, "api_key")
-				c.Next()
-				return
-			}
+		if user, method, ok := s.authenticate(c); ok {
+			s.setAuthContext(c, user.ID, user.Username, user.IsAdmin, method)
+			c.Next()
+			return
 		}
 
-		// Session: header, cookie, or ?token= (WebSocket cannot set custom headers)
-		sessionToken := c.GetHeader("X-Session-Token")
-		if sessionToken == "" {
-			if cookie, err := c.Cookie("session_token"); err == nil {
-				sessionToken = cookie
-			}
-		}
-		if sessionToken == "" {
-			sessionToken = c.Query("token")
-		}
-		if sessionToken != "" {
-			if user, err := s.validateSession(ctx, sessionToken); err == nil {
-				s.setAuthContext(c, user.ID, user.Username, user.IsAdmin, "session")
-				c.Next()
-				return
-			}
-		}
-
-		// JWT: Authorization Bearer, or ?access_token= for WebSocket/SSE
-		bearerToken := ""
-		if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-			bearerToken = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-		if bearerToken == "" {
-			bearerToken = c.Query("access_token")
-		}
-		if bearerToken != "" {
-			if user, err := s.validateBearerToken(ctx, bearerToken); err == nil {
-				s.setAuthContext(c, user.ID, user.Username, user.IsAdmin, "bearer")
-				c.Next()
-				return
-			}
-		}
-
-		// No valid authentication found
 		metrics.Default.IncAuthFailure()
 		s.logger.Warn("Authentication failed for %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -126,6 +140,20 @@ func isPrivilegedViewer(c *gin.Context) bool {
 	r, _ := role.(string)
 	switch r {
 	case common.RoleAdmin, common.RoleOperator, common.RoleAuditor:
+		return true
+	}
+	isAdmin, _ := c.Get("is_admin")
+	admin, _ := isAdmin.(bool)
+	return admin
+}
+
+// callerIsAdmin reports whether the authenticated caller holds the admin
+// role. Operators pass adminMiddleware but must not be able to create,
+// promote, modify, or delete admin accounts — that would let an operator
+// escalate to admin.
+func callerIsAdmin(c *gin.Context) bool {
+	role, _ := c.Get("role")
+	if r, _ := role.(string); r == common.RoleAdmin {
 		return true
 	}
 	isAdmin, _ := c.Get("is_admin")

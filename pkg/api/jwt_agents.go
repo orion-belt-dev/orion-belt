@@ -74,6 +74,26 @@ func (s *APIServer) rateLimitMiddleware() gin.HandlerFunc {
 	}
 }
 
+// publicAuthRateLimitPerMinute caps unauthenticated login/registration calls
+// per client IP. A console login is two calls (challenge + login), so this
+// leaves ample room for people while making online password/TOTP guessing
+// impractical.
+const publicAuthRateLimitPerMinute = 30
+
+// publicRateLimitMiddleware throttles the unauthenticated /public endpoints
+// per client IP, on a limiter separate from authenticated traffic.
+func (s *APIServer) publicRateLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s.publicLimiter != nil && !s.publicLimiter.allow("public:"+c.ClientIP()) {
+			c.Header("Retry-After", "60")
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // loginJWT issues a JWT after verifying the user's SSH public key.
 func (s *APIServer) loginJWT(c *gin.Context) {
 	var req struct {

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,7 +23,45 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin:     checkWSOrigin,
+}
+
+// checkWSOrigin blocks cross-site WebSocket hijacking: the console's session
+// cookie rides along on the upgrade, so accepting any Origin would let another
+// page the victim visits open a root shell (/terminal/ws) as them. Allowed:
+//   - no Origin header (osh and other non-browser clients);
+//   - Origin host matching the request Host (the embedded /ui);
+//   - a loopback Origin when the request also targets loopback — the Vite dev
+//     server proxies /api with changeOrigin, so Host is rewritten to the
+//     gateway while Origin stays http://localhost:5173.
+func checkWSOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	return isLoopbackHost(u.Hostname()) && isLoopbackHost(hostOnly(r.Host))
+}
+
+func hostOnly(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+	return strings.Trim(hostport, "[]")
+}
+
+func isLoopbackHost(h string) bool {
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // TerminalBridge opens agent sessions for the web terminal / file browser.
