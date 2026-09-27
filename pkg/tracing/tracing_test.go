@@ -286,10 +286,13 @@ func TestNormalizeHTTPEndpoint(t *testing.T) {
 		cfg  Config
 		want string
 	}{
-		{"bare host insecure", Config{Endpoint: "collector:4318", Insecure: true}, "http://collector:4318"},
-		{"bare host secure", Config{Endpoint: "collector:4318"}, "https://collector:4318"},
-		{"explicit http url kept", Config{Endpoint: "http://collector:4318", Insecure: true}, "http://collector:4318"},
-		{"explicit https url kept", Config{Endpoint: "https://collector:4318"}, "https://collector:4318"},
+		{"bare host insecure", Config{Endpoint: "collector:4318", Insecure: true}, "http://collector:4318/v1/traces"},
+		{"bare host secure", Config{Endpoint: "collector:4318"}, "https://collector:4318/v1/traces"},
+		{"explicit http url gets traces path", Config{Endpoint: "http://collector:4318", Insecure: true}, "http://collector:4318/v1/traces"},
+		{"explicit https url gets traces path", Config{Endpoint: "https://collector:4318"}, "https://collector:4318/v1/traces"},
+		{"root path means default", Config{Endpoint: "https://collector:4318/"}, "https://collector:4318/v1/traces"},
+		{"explicit path kept", Config{Endpoint: "https://gw.example.com/otlp/v1/traces"}, "https://gw.example.com/otlp/v1/traces"},
+		{"surrounding space trimmed", Config{Endpoint: "  collector:4318 ", Insecure: true}, "http://collector:4318/v1/traces"},
 	}
 
 	for _, tc := range tests {
