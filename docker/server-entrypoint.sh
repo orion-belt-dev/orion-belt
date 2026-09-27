@@ -39,6 +39,13 @@ esac
 PUBLIC_SSH_HOST="${ORION_PUBLIC_SSH_HOST:-$PUBLIC_HOST}"
 PUBLIC_SSH_PORT="${ORION_PUBLIC_SSH_PORT:-2222}"
 
+# Reverse proxies allowed to report the client address via X-Forwarded-For,
+# as a comma-separated list of IPs/CIDRs. Empty trusts none.
+TRUSTED_PROXIES="[]"
+if [ -n "${ORION_TRUSTED_PROXIES:-}" ]; then
+  TRUSTED_PROXIES="[\"$(printf '%s' "$ORION_TRUSTED_PROXIES" | sed 's/[[:space:]]//g; s/,/","/g')\"]"
+fi
+
 cat > "$CFG" <<EOF
 server:
   host: "0.0.0.0"
@@ -49,6 +56,7 @@ server:
   public_ssh_host: "${PUBLIC_SSH_HOST}"
   public_ssh_port: ${PUBLIC_SSH_PORT}
   metrics_enabled: true
+  trusted_proxies: ${TRUSTED_PROXIES}
 
 database:
   driver: "postgres"

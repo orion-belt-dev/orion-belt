@@ -57,6 +57,7 @@ services:
       ORION_PUBLIC_SSH_PORT: "${ORION_PUBLIC_SSH_PORT:-}"
       ORION_RECORDING_ENCRYPTION_KEY: "${ORION_RECORDING_ENCRYPTION_KEY:-}"
       ORION_RECORDING_RETENTION_DAYS: "${ORION_RECORDING_RETENTION_DAYS:-90}"
+      ORION_TRUSTED_PROXIES: "${ORION_TRUSTED_PROXIES:-}"
     volumes:
       - orion_prod_recordings:/var/lib/orion-belt/recordings
       - orion_prod_hostkey:/etc/orion-belt
