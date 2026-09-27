@@ -7,26 +7,22 @@
 [![Release](https://img.shields.io/github/v/release/orion-belt-dev/orion-belt?include_prereleases&style=flat-square)](https://github.com/orion-belt-dev/orion-belt/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/orion-belt-dev/orion-belt/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/orion-belt-dev/orion-belt/actions)
 
-**Self-hosted SSH access gateway with PAM workflows.**
+Orion Belt is a self-hosted SSH access gateway with privileged access management (PAM) workflows. Agents on your servers connect out to the gateway over reverse SSH, so targets need no inbound ports. The gateway adds session recording and live watch, just-in-time access with approvals, MFA and WebAuthn, relationship-based access control (ReBAC), and an optional SSH certificate authority.
 
-Self-hosted SSH/RDP access gateway with PAM workflows, without opening inbound ports or adopting a large platform. Agents dial **out** over reverse SSH; you get session recording, live watch, JIT approvals, MFA/WebAuthn, ReBAC, and optional SSH CA.
-
-> **v1.0.0** — stable and public. Free to self-host and use internally under [Apache 2.0 + Commons Clause](LICENSE). You cannot sell Orion Belt as a product or hosted service. Details: [orion-belt.dev](https://orion-belt.dev).
+> Version 1.0.0 is stable. Orion Belt is free to self-host and use internally under [Apache 2.0 with the Commons Clause](LICENSE); it may not be sold as a product or hosted service. See [orion-belt.dev](https://orion-belt.dev) for details.
 
 ![Orion Belt](assets/banner-2.png)
 
-## Why Orion Belt?
+## Why Orion Belt
 
-| | |
-| --- | --- |
-| ✓ | Self-hosted — no SaaS dependency |
-| ✓ | Reverse SSH agents — no inbound firewall holes on targets |
-| ✓ | Session recording + live watch |
-| ✓ | JIT access with approvals (UI / API / ChatOps) |
-| ✓ | MFA — TOTP + WebAuthn |
-| ✓ | ReBAC authorization (optional OpenFGA) |
-| ✓ | Optional SSH Certificate Authority |
-| ✓ | Linux packages (deb / rpm / apk) |
+- Self-hosted, with no SaaS dependency.
+- Agents connect out over reverse SSH, so target hosts need no inbound firewall rules.
+- Every session is recorded and can be watched live.
+- Just-in-time access with approvals from the console, the API, or chat (ChatOps).
+- MFA with TOTP and WebAuthn.
+- ReBAC authorization, optionally backed by OpenFGA.
+- Optional SSH certificate authority.
+- Linux packages for deb, rpm and apk distributions.
 
 ## Orion Belt in Action
 
@@ -34,8 +30,8 @@ Self-hosted SSH/RDP access gateway with PAM workflows, without opening inbound p
 
 ## Try Orion Belt in 10 minutes
 
-Goal: gateway up → agent dials out → SSH works → session recorded. All you need
-is Docker.
+The quickstart brings up a gateway and a connected agent, opens a shell through
+it, and records the session. It needs only Docker.
 
 ```bash
 git clone https://github.com/orion-belt-dev/orion-belt.git
@@ -43,22 +39,19 @@ cd orion-belt
 ./scripts/docker-quickstart.sh
 ```
 
-One command: it generates its own secrets, starts the gateway, creates your
-admin user, registers a demo machine (`lab-1`), and prints a link that signs you
-in to the console.
+The script generates its own secrets, starts the gateway, creates your admin
+user, registers a demo machine (`lab-1`), and prints a link that signs you in to
+the console. Then, in the console:
 
-Then, in the console:
+1. Open **Machines**, select **lab-1**, open the web terminal, and run a few commands.
+2. Open **Sessions** and select **Playback** to replay what you just did.
 
-1. **Machines** → **lab-1** → web terminal — run a few commands
-2. **Sessions** → **Playback** — watch the recording of what you just did
-
-Same thing from a terminal, if you prefer:
-`./bin/osh -c client.yaml root@lab-1`
+From a terminal instead: `./bin/osh -c client.yaml root@lab-1`
 
 Stop everything with `./scripts/docker-quickstart.sh --down`.
 
-Full walkthrough, including running an agent on a real machine:
-**[Try Orion Belt in 10 minutes](docs/TRY_IN_10_MINUTES.md)**.
+For the full walkthrough, including an agent on a real machine, see
+[Try Orion Belt in 10 minutes](docs/TRY_IN_10_MINUTES.md).
 
 ## Orion Belt vs alternatives
 
@@ -66,23 +59,23 @@ Full walkthrough, including running an agent on a real machine:
 | --- | --- | --- | --- | --- |
 | Scope | SSH-focused PAM / bastion | Broad zero-trust platform | Credential brokering / sessions | Jump host |
 | Deploy | Self-hosted, Linux-first | Self-hosted or cloud | Self-hosted or HCP | DIY |
-| Target reach | Agents dial **out** (no inbound on hosts) | Node agents / reverse tunnels | Workers / proxies | Inbound to bastion + often to hosts |
-| Session recording | Yes (+ live watch) | Yes | Yes (with workers) | Usually custom / none |
-| JIT approvals | Built-in (+ ChatOps) | Yes | Via workflows / IdP | Rarely |
+| Target reach | Agents dial out (no inbound on hosts) | Node agents / reverse tunnels | Workers / proxies | Inbound to bastion, often to hosts too |
+| Session recording | Yes, with live watch | Yes | Yes (with workers) | Usually custom or none |
+| JIT approvals | Built in, with ChatOps | Yes | Via workflows / IdP | Rarely |
 | Weight | Lighter SSH PAM slice | Large platform | Identity-centric | Minimal features |
 
-Pick Orion Belt when you want **SSH access management you run yourself**, without exposing SSH on every box or operating a full Teleport-scale stack.
+Orion Belt fits teams that want to run their own SSH access management without exposing SSH on every host or operating a platform the size of Teleport.
 
 ## Features
 
-- **Gateway** — SSH/SCP proxy with recording, ReBAC, MFA, optional SSH CA
-- **Agents** — dial out over reverse SSH; no inbound holes on targets
-- **Clients** — `osh` / `ocp` / `oadmin`, or vanilla OpenSSH (`user+machine@gateway`)
-- **JIT access** — request → approve → time-boxed grant (UI, API, Slack/Discord/Teams/Rocket.Chat)
-- **Web console** — live terminal, file browser, session playback/watch, users, machines, permissions
-- **Usage analytics dashboard** — rolling access volume, approval latency, and top targets (auto-refreshing)
-- **Plugins** — audit, email/webhook/Slack, ChatOps approvals — configure live from the UI
-- **Ops** — Prometheus metrics, JSON logs, OpenAPI, deb/rpm/apk + GPG-signed repos
+- **Gateway:** SSH and SCP proxy with recording, ReBAC, MFA and an optional SSH CA.
+- **Agents:** connect out over reverse SSH; targets need no inbound ports.
+- **Clients:** `osh`, `ocp` and `oadmin`, or standard OpenSSH (`user+machine@gateway`).
+- **Just-in-time access:** request, approve, and receive a time-limited grant from the console, the API, or Slack, Discord, Teams and Rocket.Chat.
+- **Web console:** terminal, file browser, session playback and live watch, and management of users, machines and permissions.
+- **Usage dashboard:** access volume, approval latency and most-used targets over a rolling window.
+- **Plugins:** audit logging, email, webhook and Slack notifications, and ChatOps approvals, configured from the console.
+- **Operations:** Prometheus metrics, JSON logs, an OpenAPI specification, and GPG-signed deb, rpm and apk repositories.
 
 ## Architecture
 
@@ -117,21 +110,24 @@ cd orion-belt
 ./scripts/docker-quickstart.sh
 ```
 
-The script asks whether to **build from this checkout** or **pull published GHCR images**. Non-interactive:
+The script asks whether to build from this checkout or pull the published images from GHCR. To choose up front:
 
 ```bash
 ./scripts/docker-quickstart.sh --images        # ghcr.io/orion-belt-dev/...:latest
 ./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
 ```
 
-See [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) for agent + first session.
+See [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) to add an agent and open a first session.
 
-Make targets: `docker-up` / `docker-down` / `docker-agent-up`. Production compose:
+Make targets: `docker-up`, `docker-down` and `docker-agent-up`. For production:
 
 ```bash
-cp .env.prod.example .env.prod   # set secrets + ORION_PUBLIC_URL
+cp .env.prod.example .env.prod   # set the secrets and ORION_PUBLIC_URL
 make docker-prod-up
 ```
+
+To serve the console over HTTPS, add the Caddy overlay described in
+[REVERSE_PROXY.md](docs/REVERSE_PROXY.md).
 
 ### curl | bash (Linux server)
 
@@ -139,7 +135,7 @@ make docker-prod-up
 curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/scripts/install-server.sh | sudo bash
 ```
 
-Distro-aware: installs deb/rpm/apk when available (else the release binary), writes `/etc/orion-belt/server.yaml` with your **public URL**, enables systemd or OpenRC, and runs the setup wizard (admin SSH key — file, paste, or generate). Can also install local PostgreSQL (`--install-postgres` / interactive choice).
+The installer uses the distribution's deb, rpm or apk package when one is available and the release binary otherwise. It writes `/etc/orion-belt/server.yaml` with your public URL, enables the systemd or OpenRC service, and runs the setup wizard, which takes the admin's SSH public key from a file, from a paste, or generates one. It can also install a local PostgreSQL (`--install-postgres`, or when prompted).
 
 Unattended:
 
@@ -152,7 +148,7 @@ curl -fsSL .../install-server.sh | sudo bash -s -- --unattended \
   --admin-key-file /root/admin.pub
 ```
 
-(`--install-postgres` installs/starts local Postgres and creates the `orionbelt` DB; or pass `--db-url` instead.)
+`--install-postgres` installs and starts a local PostgreSQL and creates the `orionbelt` database. To use an existing database, pass `--db-url` instead.
 
 Uninstall (asks separately whether to keep the DB, logs, and recordings):
 
@@ -166,10 +162,10 @@ sudo bash scripts/install-server.sh --uninstall --unattended --drop-db --drop-lo
 
 ```bash
 make packages
-# then install from dist/ — see docs/PACKAGING.md
+# then install from dist/; see docs/PACKAGING.md
 ```
 
-First-run after packages: [SETUP.md](docs/SETUP.md). Set `server.public_url` (and optional `public_ssh_host` / `public_ssh_port`) so the UI and agents advertise a real address instead of localhost.
+After installing packages, follow [SETUP.md](docs/SETUP.md). Set `server.public_url`, and `public_ssh_host` and `public_ssh_port` if they differ, so the console and agents advertise a reachable address instead of localhost.
 
 ### From source
 
@@ -190,26 +186,29 @@ make build   # Go 1.26.6+ (see go.mod)
 | [MULTI_LANGUAGE_SDK.md](docs/MULTI_LANGUAGE_SDK.md) | Python / .NET / JS SDK plan |
 | [openssh-clients.md](docs/openssh-clients.md) | Vanilla `ssh` via the gateway |
 | [DEPLOYMENT_HARDENING.md](docs/DEPLOYMENT_HARDENING.md) | Hardening checklist |
-| [OBSERVABILITY.md](docs/OBSERVABILITY.md) | Metrics + logging |
-| [BENCHMARKS.md](docs/BENCHMARKS.md) | Session/throughput benchmarks + perf gate |
+| [REVERSE_PROXY.md](docs/REVERSE_PROXY.md) | TLS with nginx or Caddy, trusted proxies |
+| [OBSERVABILITY.md](docs/OBSERVABILITY.md) | Metrics and logging |
+| [BENCHMARKS.md](docs/BENCHMARKS.md) | Session and throughput benchmarks, performance gate |
 | [OpenAPI](docs/openapi/openapi.yaml) | HTTP/WS API |
-| [ROADMAP.md](docs/ROADMAP.md) | What’s next (OIDC, HA, …) |
+| [ROADMAP.md](docs/ROADMAP.md) | Planned work (OIDC, HA and more) |
 
-## Security notes
+## Security
 
-- Connections use SSH; recordings can be AES-GCM encrypted at rest
-- ReBAC (and optional OpenFGA) enforce per-machine access
-- MFA: TOTP and/or WebAuthn; SSH supports FIDO `sk-*` keys
-- Temporary access expires automatically; audit trail covers access and changes
+- All connections use SSH. Recordings can be encrypted at rest with AES-GCM.
+- ReBAC, optionally backed by OpenFGA, controls access to each machine and remote account.
+- MFA supports TOTP and WebAuthn, and SSH logins accept FIDO `sk-*` keys.
+- Temporary access expires automatically. The audit log records access and configuration changes.
+- There is no open signup. Accounts are created by an admin or operator; only the very first account on a new install can be created without signing in.
+- Plain users see only their own sessions, requests, grants and account details.
 
 ## License
 
-Apache License 2.0 with the [Commons Clause](https://commonsclause.com/) — see [LICENSE](LICENSE).
+Apache License 2.0 with the [Commons Clause](https://commonsclause.com/). See [LICENSE](LICENSE).
 
 You may use, modify, and run Orion Belt internally (including commercially). The Clause withholds selling Orion Belt itself, or a hosted service whose value derives substantially from it, as a product.
 
 ## Contributing
 
-Issues and PRs welcome — see [CONTRIBUTING.md](docs/CONTRIBUTING.md).
+Issues and pull requests are welcome. See [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
-Looking for early operators (labs / small teams) willing to deploy v1.0 and give feedback? Join [Discord](https://discord.gg/w62S8jxTHJ), open a [Discussion](https://github.com/orion-belt-dev/orion-belt/discussions), or file an issue.
+If you run Orion Belt in a lab or a small team and are willing to share feedback, join [Discord](https://discord.gg/w62S8jxTHJ), start a [discussion](https://github.com/orion-belt-dev/orion-belt/discussions), or open an issue.

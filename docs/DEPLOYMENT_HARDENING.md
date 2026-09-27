@@ -1,49 +1,93 @@
 # Deployment hardening
 
-Things to tighten before you put a gateway on a real network. Useful alongside [SETUP.md](SETUP.md) and [OBSERVABILITY.md](OBSERVABILITY.md). We also expect this list to be walked before tagging [v1.0](V1_RELEASE_CRITERIA.md).
+Work through this checklist before exposing a gateway on a production
+network, and again before tagging a release (see
+[V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md)). It complements
+[SETUP.md](SETUP.md), [REVERSE_PROXY.md](REVERSE_PROXY.md) and
+[OBSERVABILITY.md](OBSERVABILITY.md).
 
 ## Network
 
-- [ ] Prefer binding SSH (`server.ssh_port`, usually 2222) and HTTP to interfaces that aren’t the whole internet; put TLS in front of `:8080`.
-- [ ] Don’t expose Postgres to the world — private net, TLS, or a managed DB with IP allows.
-- [ ] Limit who can reach the bastion (VPN, ztna, firewall from your ops nets).
-- [ ] Agents connect **out** to the gateway — no inbound agent ports on targets.
+- [ ] Terminate TLS for the console and API in a reverse proxy
+      ([REVERSE_PROXY.md](REVERSE_PROXY.md)).
+- [ ] Block port 8080 from everywhere except the proxy. The API binds to the
+      same address as SSH, so a direct connection would bypass TLS.
+- [ ] Restrict who can reach the gateway's SSH port (2222) with a VPN,
+      zero-trust access or firewall rules.
+- [ ] Keep PostgreSQL off public networks: use a private network, TLS, or a
+      managed database with an address allowlist.
+- [ ] Do not open inbound ports on target hosts. Agents connect out to the
+      gateway.
+- [ ] Do not publish `/metrics`. It is unauthenticated; scrape it on the
+      internal network.
 
-## TLS and cookies
+## Client addresses
 
-- [ ] Real cert on the reverse proxy; WebAuthn RP ID / origins match the public hostname.
-- [ ] HTTPS for the console and API in real deploys (cookies + WebAuthn).
-- [ ] Short session TTLs; turn on `auth.mfa_required` or use password login only when you know what you’re doing.
+- [ ] Behind a proxy, set `server.trusted_proxies` to the proxy's address and
+      nothing broader. Without it, all clients share one rate-limit
+      allowance and the audit log records the proxy's address.
+- [ ] Confirm the proxy replaces `X-Forwarded-For` instead of appending the
+      client's value, and that a forged header does not change the address in
+      the gateway's logs ([verification steps](REVERSE_PROXY.md#verifying-the-setup)).
 
-## Secrets and config
+## TLS and browser sign-in
 
-- [ ] `server.yaml` mode `0600`, owned by the service user; never commit live secrets.
-- [ ] Put encryption keys, DB passwords, JWT material, webhook URLs in a secret store or a locked-down `EnvironmentFile`.
-- [ ] Rotate webhooks / API keys when people leave; revoke unused keys in Security → API keys.
-- [ ] Treat SSH CA private material like the keys to the kingdom.
+- [ ] Use a certificate from a trusted CA on the proxy.
+- [ ] Set the WebAuthn `rp_id` and `origins` to the public hostname.
+- [ ] Keep session lifetimes short. Enable `auth.mfa_required`, and allow
+      password login only if you need it.
 
-## Auth
+## Accounts
 
-- [ ] Turn off login paths you don’t need; enroll admins with WebAuthn or TOTP before go-live.
-- [ ] Prefer key / challenge login for CLI; password+TOTP for break-glass / browser if you must.
-- [ ] Keep grants tight; glance at Permissions → All grants now and then.
-- [ ] Few `admin` / `operator` accounts; auditors stay read-mostly.
+- [ ] Create the first admin with `orion-belt-server setup` rather than the
+      unauthenticated first-run API call, so the window never exists on the
+      network.
+- [ ] Keep admin and operator accounts few. Operators can manage users and
+      grants but cannot create or change admins.
+- [ ] Enrol admins in WebAuthn or TOTP before go-live.
+- [ ] Prefer SSH-key challenge login for the CLI. Reserve password plus TOTP
+      for browser and break-glass access.
+- [ ] Review **Permissions > All grants** regularly and remove grants that are
+      no longer needed.
+
+## Secrets and configuration
+
+- [ ] Make `server.yaml` mode `0600`, owned by the service user. Never commit
+      real secrets.
+- [ ] Keep the recording encryption key, database password, JWT secret and
+      webhook URLs in a secret store or a restricted `EnvironmentFile`.
+- [ ] Rotate webhooks and API keys when people leave. Revoke unused keys under
+      **Security > API keys**.
+- [ ] Protect `ssh_ca.master_key` and the CA private keys as the most
+      sensitive material in the deployment. Anyone holding them can sign
+      certificates for any user or host.
+- [ ] Treat agent install scripts as secrets. Each contains the agent's
+      private key.
 
 ## Recording
 
-- [ ] `recording.enabled` on, `retention_days` set to whatever your policy is.
-- [ ] `compression: gzip` is fine; set `encryption_key` if casts can’t sit plaintext on disk.
-- [ ] Back up the recording volume separately from the DB; test playback after a restore.
+- [ ] Enable `recording.enabled` and set `retention_days` to your policy.
+- [ ] Set `recording.encryption_key` unless plaintext recordings on disk are
+      acceptable. `compression: gzip` is fine either way.
+- [ ] Back up the recording volume separately from the database, and test
+      playback after a restore.
+- [ ] Monitor free space on the recording volume. SSH sessions currently
+      continue if a recording cannot be started.
 
 ## Runtime
 
-- [ ] Non-root where you can; agents may still need privilege to drop into session users.
-- [ ] Use the packaged unit hardening (`ProtectSystem=`, etc.) or something equivalent.
-- [ ] Scrape `/metrics`, ship JSON logs; alerts in [OBSERVABILITY.md](OBSERVABILITY.md) are a starting point.
-- [ ] Keep packages updated.
+- [ ] Run the gateway as an unprivileged user. Agents need root to start
+      sessions as other local users.
+- [ ] Keep the hardening in the packaged service units (`ProtectSystem=` and
+      related settings), or apply equivalent restrictions.
+- [ ] Scrape `/metrics` and ship the JSON logs. The alerts in
+      [OBSERVABILITY.md](OBSERVABILITY.md) are a starting point.
+- [ ] Apply package updates promptly, and run `make cve` in CI.
 
 ## Drills
 
-- [ ] Revoke a compromised user (disable, yank keys/API keys, expire grants).
-- [ ] Disconnect / reinstall an agent with the install script.
-- [ ] Confirm audit shows login, grant, approve/reject, session start/stop.
+- [ ] Offboard a user: revoke their grants, API keys and SSH certificates,
+      then delete the account.
+- [ ] Disconnect an agent and reinstall it from a fresh install script.
+- [ ] Confirm the audit log shows sign-in, grant, approval and rejection, and
+      session start and end.

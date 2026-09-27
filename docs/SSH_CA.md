@@ -1,75 +1,99 @@
-# SSH Certificate Authority
+# SSH certificate authority
 
-Orion Belt can act as an internal **SSH CA**: short-lived **User** certificates for operators, and **Host** certificates for the gateway and agents.
+Orion Belt can run an internal SSH certificate authority. It issues
+short-lived user certificates to people, and host certificates to the gateway
+and to agents.
 
-Enable with:
+Enable it in `server.yaml`:
 
 ```yaml
 ssh_ca:
   enabled: true
-  master_key: "<32-byte secret, raw or base64>"  # required — encrypts CA keys at rest
+  master_key: "<32-byte secret, raw or base64>"  # required; encrypts the CA keys at rest
   user_cert_ttl_hours: 12
   max_user_cert_ttl_hours: 24
-  host_cert_ttl_hours: 8760   # 1y; auto-renewed before expiry
-  host_principals:            # hostnames/IPs clients use to reach the gateway
+  host_cert_ttl_hours: 8760   # one year; renewed automatically before expiry
+  host_principals:            # hostnames and addresses clients use to reach the gateway
     - orion.example.com
 ```
 
-See `config/server.example.yaml`. On first enable, User + Host CA keypairs are generated and stored encrypted in Postgres (`ssh_ca_keys`). Issued certs are recorded in `ssh_certificates`.
+See [`config/server.example.yaml`](../config/server.example.yaml) for all
+options. When the CA is first enabled, the gateway generates a user CA and a
+host CA key pair and stores them, encrypted, in the `ssh_ca_keys` table. Every
+issued certificate is recorded in `ssh_certificates`.
 
-## Operator (user) certs
+## User certificates
 
-1. Export the User CA pubkey (and Host CA for clients that verify the gateway):
+1. Export the user CA public key, and the host CA public key for clients that
+   verify the gateway:
 
    ```bash
    oadmin ca export
    # or GET /api/v1/admin/ca/export
    ```
 
-2. Clients (`osh` / `ocp` / `oadmin`) auto-detect CA via `GET /api/v1/ssh-cert/ca`, request a user cert (`POST /api/v1/ssh-cert`), cache it, and renew when within 20% of TTL remaining (`pkg/ca.NeedsRenewal`).
+2. `osh`, `ocp` and `oadmin` detect the CA through `GET /api/v1/ssh-cert/ca`,
+   request a certificate with `POST /api/v1/ssh-cert`, cache it, and renew it
+   once less than 20% of its lifetime remains.
 
-3. HTTP login also requires **challenge-response** proof-of-possession (`POST /api/v1/auth/challenge` + signed login) so a stolen pubkey string alone is not enough.
+3. HTTP login still requires proof of possession: the client signs a
+   server-issued challenge (`POST /api/v1/public/auth/challenge`) with its
+   key, so knowing a user's public key is not enough to sign in.
 
-4. Legacy raw-pubkey SSH/API auth still works when CA is off, and for users that have not migrated while CA is on (dispatcher in `pkg/server`).
+4. Plain public-key authentication keeps working when the CA is off, and for
+   users who have not moved to certificates while it is on.
 
-## Gateway host cert
+## Gateway host certificate
 
-When CA is enabled, the gateway presents a Host-CA-signed cert for its SSH host key alongside the raw key. Cert-aware clients verify against `auth.host_ca_public_key` (see `config/client.example.yaml` / `config/agent.example.yaml`) instead of TOFU.
+With the CA enabled, the gateway presents a host certificate for its SSH host
+key alongside the plain key. Clients that support certificates verify it
+against `auth.host_ca_public_key` (see `config/client.example.yaml` and
+`config/agent.example.yaml`) instead of trusting the key on first use.
 
-A background loop renews the gateway Host cert before TTL expiry and swaps `ssh.ServerConfig` for new connections.
+The gateway renews its host certificate before it expires and applies the new
+one to subsequent connections.
 
-## Agent identity (Host cert)
+## Agent identity
 
-With CA enabled, agent registration **does not** create a synthetic user row:
+With the CA enabled, registering an agent issues a host certificate for the
+agent's key instead of creating a service account. Agents can be registered
+through:
 
-- UI install script / `POST /api/v1/admin/agents/install-script`
-- `POST /api/v1/public/register/agent` (admin/operator credential required)
-- `orion-belt-server agent register`
+- the console's install script, or `POST /api/v1/admin/agents/install-script`;
+- `POST /api/v1/public/register/agent`, which requires an admin or operator
+  credential;
+- `orion-belt-server agent register` on the gateway.
 
-…issue a Host cert for the agent’s pubkey, write `<key_file>-cert.pub`, and set `auth.host_ca_public_key` on the agent.
+Each writes `<key_file>-cert.pub` and sets `auth.host_ca_public_key` in the
+agent's configuration. The agent authenticates with the certificate, and the
+gateway identifies it by machine. Agents registered before the CA was enabled
+keep connecting with their service account until they receive a certificate.
 
-The agent authenticates with that cert; the gateway uses `handleAgentCertAuth` and routes by machine. Legacy synthetic-user agents still connect when no cert is present.
+### Renewal
 
-### Auto-renewal
-
-Agents send SSH global request `orion-renew-cert@orionbelt` (payload = agent pubkey) when the cached Host cert enters the renewal window. The server replies with a fresh authorized_keys cert line; the agent writes it atomically and uses it on the next reconnect.
+When its cached host certificate enters the renewal window, the agent sends
+the SSH global request `orion-renew-cert@orionbelt` with its public key. The
+gateway replies with a new certificate, which the agent writes atomically and
+uses on its next connection.
 
 ## Revocation
 
 ```bash
 oadmin ca list-certs [--type user|host]
 oadmin ca revoke <serial> [--reason "..."]
-# or GET/POST /api/v1/admin/ssh-certificates[/:serial/revoke]
+# or GET /api/v1/admin/ssh-certificates and POST /api/v1/admin/ssh-certificates/:serial/revoke
 ```
 
-Revocation updates the in-memory cache immediately on that process. Other processes refresh every 30s (`runCARevocationRefreshLoop`).
+A revocation takes effect immediately on the gateway process that handled it.
+Other gateway processes pick it up within 30 seconds.
 
-## Migration notes
+## Migrating
 
-| Phase | Behavior |
+| State | Behavior |
 |-------|----------|
-| CA off | Unchanged pubkey / synthetic-agent flow |
-| CA on, old agent | Still connects with synthetic user if registered that way |
-| CA on, new agent | Host cert only; place `agent_key-cert.pub` next to the private key |
+| CA disabled | Public-key authentication; agents use service accounts. |
+| CA enabled, existing agent | Keeps connecting with its service account. |
+| CA enabled, new agent | Host certificate only. Place `agent_key-cert.pub` next to the private key. |
 
-Rotate `ssh_ca.master_key` only with a deliberate CA key rotation procedure (not covered here) — losing it makes existing encrypted CA private keys unusable.
+Change `ssh_ca.master_key` only as part of a planned CA key rotation. If the
+key is lost, the encrypted CA private keys cannot be recovered.

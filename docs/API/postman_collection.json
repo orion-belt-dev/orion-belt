@@ -103,6 +103,7 @@
 			"item": [
 				{
 					"name": "Register Admin User (Alice)",
+					"description": "Creates the first admin. Works without authentication only while the install has no accounts; afterwards it needs an admin API key.",
 					"event": [
 						{
 							"listen": "test",
@@ -172,6 +173,11 @@
 							{
 								"key": "Content-Type",
 								"value": "application/json"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"description": "Admin or operator API key. Required unless this is the first account on an empty install."
 							}
 						],
 						"body": {
@@ -222,6 +228,11 @@
 							{
 								"key": "Content-Type",
 								"value": "application/json"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"description": "Admin or operator API key. Required unless this is the first account on an empty install."
 							}
 						],
 						"body": {
