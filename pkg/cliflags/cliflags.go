@@ -20,6 +20,7 @@ type Common struct {
 	Insecure    bool // maps to auth.strict_host_key_checking=no
 	Verbose     bool
 	JSON        bool
+	LogFile     string
 	Timeout     time.Duration
 
 	// SSH gateway overrides (osh / ocp)
@@ -33,7 +34,8 @@ func (c *Common) BindPersistent(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&c.User, "user", "u", "", "gateway username (overrides auth.user / $USER / $ORION_USER)")
 	cmd.PersistentFlags().StringVar(&c.APIEndpoint, "api-endpoint", "", "HTTP API base URL (overrides server.api_endpoint / $ORION_API_ENDPOINT)")
 	cmd.PersistentFlags().StringVarP(&c.Identity, "identity", "i", "", "SSH private key path (overrides auth.key_file)")
-	cmd.PersistentFlags().BoolVarP(&c.Verbose, "verbose", "v", false, "verbose logging")
+	cmd.PersistentFlags().BoolVarP(&c.Verbose, "verbose", "v", false, "also print debug logs to the terminal")
+	cmd.PersistentFlags().StringVar(&c.LogFile, "log-file", "", "log file (overrides $ORION_LOG_FILE; default ~/.orion-belt/logs/<cli>.log)")
 	cmd.PersistentFlags().BoolVar(&c.JSON, "json", false, "machine-readable JSON where supported")
 	cmd.PersistentFlags().DurationVar(&c.Timeout, "timeout", 30*time.Second, "HTTP / dial timeout")
 }
@@ -86,12 +88,4 @@ func (c *Common) Username(cfg *common.Config) (string, error) {
 		return u, nil
 	}
 	return "", fmt.Errorf("username not set: use --user, auth.user in config, or $ORION_USER")
-}
-
-// Logger returns INFO or DEBUG based on --verbose.
-func (c *Common) Logger() *common.Logger {
-	if c.Verbose {
-		return common.NewLogger(common.DEBUG)
-	}
-	return common.NewLogger(common.INFO)
 }

@@ -45,6 +45,20 @@ func NewLoggerTo(level LogLevel, w io.Writer) *Logger {
 	}
 }
 
+// NewLoggerWithHandler creates a logger that emits through h, for callers that
+// need their own routing (e.g. CLIs sending logs to a file, not the terminal).
+func NewLoggerWithHandler(level LogLevel, h slog.Handler) *Logger {
+	return &Logger{
+		level:  level,
+		logger: slog.New(h),
+	}
+}
+
+// SlogLevel maps a LogLevel to the equivalent slog level.
+func SlogLevel(level LogLevel) slog.Level {
+	return slogLevel(level)
+}
+
 func slogLevel(level LogLevel) slog.Level {
 	switch level {
 	case DEBUG:

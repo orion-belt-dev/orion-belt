@@ -1,6 +1,8 @@
 package client
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,22 +29,34 @@ func NewSSHClient(config *common.Config, logger *common.Logger) (*SSHClient, err
 	}, nil
 }
 
-// Connect connects to a target machine through the Orion-Belt server
+// ExitStatusError reports that the remote command or shell exited non-zero.
+// Callers exit with Status after their own cleanup, instead of Connect calling
+// os.Exit and skipping deferred terminal restores.
+type ExitStatusError struct{ Status int }
+
+func (e *ExitStatusError) Error() string {
+	return fmt.Sprintf("remote exited with status %d", e.Status)
+}
+
+// Connect connects to a target machine through the Orion-Belt server.
+// Without user@, the remote UNIX user defaults to the gateway username.
 func (c *SSHClient) Connect(target string, username string) error {
 	// Parse target for user@machine format
 	targetMachine := target
 	targetUser := username
 	targetSSHUser := username
+	explicitUser := false
 
 	if strings.Contains(target, "@") {
 		parts := strings.SplitN(target, "@", 2)
 		if len(parts) == 2 {
 			targetMachine = parts[1]
 			targetSSHUser = parts[0]
+			explicitUser = true
 		}
 	}
 
-	c.logger.Info("Connecting to %s through Orion-Belt server", targetMachine)
+	c.logger.Info("Connecting to %s@%s through Orion-Belt server", targetSSHUser, targetMachine)
 
 	// Uses a short-lived SSH cert when the server has SSH CA enabled,
 	// transparently falling back to the raw static key otherwise.
@@ -119,16 +133,19 @@ func (c *SSHClient) Connect(target string, username string) error {
 		if err := session.RequestPty("xterm-256color", height, width, modes); err != nil {
 			return fmt.Errorf("failed to request PTY: %w", err)
 		}
+		defer forwardWindowChanges(session, fd)()
 	}
 
-	// Set up I/O
+	// Set up I/O. The head of the output is kept so a failed login can be
+	// explained after the session ends.
+	head := &headBuffer{max: 1024}
 	if term.IsTerminal(fd) {
 		// Wrap Stdout and Stderr to handle the "staircase" effect
-		session.Stdout = &rawModeWriter{os.Stdout}
-		session.Stderr = &rawModeWriter{os.Stderr}
+		session.Stdout = io.MultiWriter(&rawModeWriter{os.Stdout}, head)
+		session.Stderr = io.MultiWriter(&rawModeWriter{os.Stderr}, head)
 	} else {
-		session.Stdout = os.Stdout
-		session.Stderr = os.Stderr
+		session.Stdout = io.MultiWriter(os.Stdout, head)
+		session.Stderr = io.MultiWriter(os.Stderr, head)
 	}
 	session.Stdin = os.Stdin
 
@@ -140,14 +157,43 @@ func (c *SSHClient) Connect(target string, username string) error {
 
 	err = session.Wait()
 	if err != nil {
-		if exitErr, ok := err.(*ssh.ExitError); ok {
-			os.Exit(exitErr.ExitStatus())
+		var exitErr *ssh.ExitError
+		if errors.As(err, &exitErr) {
+			if !explicitUser && missingRemoteUser(head.Bytes(), targetSSHUser) {
+				return fmt.Errorf("no account %q on %s; choose the target user with user@machine, e.g. osh root@%s",
+					targetSSHUser, targetMachine, targetMachine)
+			}
+			return &ExitStatusError{Status: exitErr.ExitStatus()}
 		}
 		return fmt.Errorf("session wait error: %w", err)
 	}
 
 	return nil
 }
+
+// missingRemoteUser reports whether the agent rejected the session because
+// user has no account on the target (agent: `unknown user "<name>"`).
+func missingRemoteUser(output []byte, user string) bool {
+	return bytes.Contains(output, []byte(fmt.Sprintf("unknown user %q", user)))
+}
+
+// headBuffer keeps the first max bytes written to it and drops the rest.
+type headBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.max - h.buf.Len(); room > 0 {
+		if len(p) < room {
+			room = len(p)
+		}
+		h.buf.Write(p[:room])
+	}
+	return len(p), nil
+}
+
+func (h *headBuffer) Bytes() []byte { return h.buf.Bytes() }
 
 type rawModeWriter struct {
 	io.Writer

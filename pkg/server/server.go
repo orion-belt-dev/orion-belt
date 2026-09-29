@@ -748,7 +748,9 @@ func (s *Server) handleClientSession(channel ssh.Channel, requests <-chan *ssh.R
 			}
 			s.logger.Info("Client exec command: '%s'", payload.Command)
 			req.Reply(true, nil)
-			s.proxyToMachine(channel, payload.Command, userID, username, ptyReq, nil)
+			// Hand over the request stream so window-change keeps reaching the
+			// agent (e.g. `ssh -tt alice@gw web-01`) and requests don't back up.
+			s.proxyToMachine(channel, payload.Command, userID, username, ptyReq, requests)
 			return
 
 		case "shell":

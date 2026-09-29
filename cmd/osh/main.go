@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/client"
 	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
@@ -34,9 +36,19 @@ Beyond connecting, it manages your own account from the terminal: sign-in
 credentials (SSH keys, API keys, password, MFA, WebAuthn), your access
 requests, and your notification preferences. Administrative operations live in
 oadmin.`,
-	Version: version.String(),
-	Args:    cobra.MaximumNArgs(1),
-	Run:     runSSH,
+	Example: `  osh web-01                      shell on web-01 as your gateway username
+  osh root@web-01                 shell as root
+  osh --list                      machines you can reach (--json for scripts)
+  osh -r root@web-01 --reason "incident 42" -d 1800
+                                  request temporary access and wait for approval
+  osh login                       sign in to the web console
+
+Logs are written to ~/.orion-belt/logs/osh.log (change with --log-file);
+-v also prints them to the terminal.`,
+	Version:      version.String(),
+	Args:         cobra.MaximumNArgs(1),
+	SilenceUsage: true,
+	Run:          runSSH,
 }
 
 var loginCmd = &cobra.Command{
@@ -181,18 +193,15 @@ func runSSH(cmd *cobra.Command, args []string) {
 	}
 
 	if listMachines {
-		if err := sshClient.ListMachines(); err != nil {
+		if err := printMachines(config, logger); err != nil {
 			logger.Fatal("Failed to list machines: %v", err)
 		}
 		return
 	}
 
 	if len(args) == 0 {
-		fmt.Println("Usage: osh [user@]machine")
-		fmt.Println("       osh --list")
-		fmt.Println("       osh login")
-		fmt.Println("       osh --request-access [user@]machine --reason \"reason\" --duration 3600")
-		os.Exit(1)
+		_ = cmd.Help()
+		os.Exit(2)
 	}
 
 	target := args[0]
@@ -216,6 +225,44 @@ func runSSH(cmd *cobra.Command, args []string) {
 	}
 
 	if err := sshClient.Connect(target, user); err != nil {
-		logger.Fatal("Connection failed: %v", err)
+		// The remote's own exit status is the result, not an osh failure.
+		var exitErr *client.ExitStatusError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.Status)
+		}
+		logger.Fatal("%v", err)
 	}
+}
+
+// printMachines lists reachable machines as a table, or JSON with --json.
+func printMachines(config *common.Config, logger *common.Logger) error {
+	apiClient, err := client.LoadAPIClient(config, flags.User, logger)
+	if err != nil {
+		return err
+	}
+	machines, err := apiClient.ListMachines()
+	if err != nil {
+		return err
+	}
+	if flags.JSON {
+		return cliflags.PrintJSON(machines)
+	}
+	if len(machines) == 0 {
+		cliflags.Print("No machines available.")
+		return nil
+	}
+	t := cliflags.NewTable("NAME", "STATUS", "LAST SEEN", "TAGS")
+	for _, m := range machines {
+		status := "offline"
+		if m.IsActive {
+			status = "online"
+		}
+		lastSeen := "never"
+		if m.LastSeenAt != nil {
+			lastSeen = cliflags.FormatDuration(time.Since(*m.LastSeenAt)) + " ago"
+		}
+		t.Row(m.Name, status, lastSeen, cliflags.FormatTags(m.Tags))
+	}
+	t.Flush()
+	return nil
 }

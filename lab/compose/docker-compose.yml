@@ -32,6 +32,9 @@ services:
       - lab_hostkey:/etc/orion-belt
     environment:
       ORION_DB_CONNECTION: postgres://orionbelt:password@postgres:5432/orionbelt?sslmode=disable
+      # Use the mounted lab config as-is; without this the entrypoint ignores
+      # it and templates one from env, which requires ORION_JWT_SECRET.
+      ORION_CONFIG_FILE: /config/config.yaml
     networks: [orion-lab]
     restart: unless-stopped
 
