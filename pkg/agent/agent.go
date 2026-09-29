@@ -246,7 +246,7 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 
 			req.Reply(true, nil)
 
-			a.startShell(ctx, channel, username, ptyReq)
+			a.startShell(ctx, channel, requests, username, ptyReq)
 			channel.Close()
 			return
 
@@ -264,6 +264,10 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 			execCommand = payload.Command
 			a.logger.Info("Exec requested: %s", execCommand)
 			req.Reply(true, nil)
+
+			// Exec has no PTY to resize, but the gateway still forwards
+			// window-change; unread requests would stall the agent connection.
+			go gossh.DiscardRequests(requests)
 
 			// Server control commands (orion:*) — do not execute as shell
 			if strings.HasPrefix(execCommand, "orion:") {
@@ -298,10 +302,62 @@ type ptyRequestMsg struct {
 	Modelist string
 }
 
+// windowChangeMsg is the RFC 4254 §6.7 "window-change" payload.
+type windowChangeMsg struct {
+	Columns uint32
+	Rows    uint32
+	Width   uint32
+	Height  uint32
+}
+
+// clampUint16 keeps an SSH uint32 dimension from wrapping when narrowed to a
+// winsize field.
+func clampUint16(v uint32) uint16 {
+	if v > 0xffff {
+		return 0xffff
+	}
+	return uint16(v)
+}
+
+// applyWindowChange resizes ptmx to the dimensions in a window-change payload.
+func applyWindowChange(ptmx *os.File, payload []byte) error {
+	var msg windowChangeMsg
+	if err := gossh.Unmarshal(payload, &msg); err != nil {
+		return fmt.Errorf("parse window-change: %w", err)
+	}
+	return pty.Setsize(ptmx, &pty.Winsize{
+		Rows: clampUint16(msg.Rows),
+		Cols: clampUint16(msg.Columns),
+		X:    clampUint16(msg.Width),
+		Y:    clampUint16(msg.Height),
+	})
+}
+
+// serveShellRequests handles the session requests that arrive after the shell
+// has started. It must keep draining until the channel closes: unread requests
+// back up in the SSH mux and stall the whole connection.
+func (a *Agent) serveShellRequests(requests <-chan *gossh.Request, ptmx *os.File) {
+	for req := range requests {
+		switch req.Type {
+		case "window-change":
+			if err := applyWindowChange(ptmx, req.Payload); err != nil {
+				a.logger.Debug("Failed to apply window-change: %v", err)
+			}
+			if req.WantReply {
+				req.Reply(true, nil)
+			}
+		default:
+			if req.WantReply {
+				req.Reply(false, nil)
+			}
+		}
+	}
+}
+
 // startShell runs the interactive login shell on the target. The span it opens
 // is the final gateway -> agent -> target hop; its duration is how long the
 // user stayed connected, not a latency figure.
-func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, username string, ptyReq *ptyRequestMsg) {
+func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, requests <-chan *gossh.Request, username string, ptyReq *ptyRequestMsg) {
 	_, span := tracing.Start(ctx, "agent.target.shell")
 	defer span.End()
 	tracing.SetAttributes(span,
@@ -323,7 +379,17 @@ func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, username 
 		return
 	}
 
-	ptmx, err := pty.Start(cmd)
+	// Size the PTY before the shell starts so it never sees a 0x0 terminal.
+	var ws *pty.Winsize
+	if ptyReq != nil {
+		ws = &pty.Winsize{
+			Rows: clampUint16(ptyReq.Rows),
+			Cols: clampUint16(ptyReq.Columns),
+			X:    clampUint16(ptyReq.Width),
+			Y:    clampUint16(ptyReq.Height),
+		}
+	}
+	ptmx, err := pty.StartWithSize(cmd, ws)
 	if err != nil {
 		a.logger.Error("Failed to start shell with PTY: %v", err)
 		channel.Write([]byte(fmt.Sprintf("Failed to start shell: %v\r\n", err)))
@@ -332,12 +398,7 @@ func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, username 
 	}
 	defer ptmx.Close()
 
-	if ptyReq != nil {
-		pty.Setsize(ptmx, &pty.Winsize{
-			Rows: uint16(ptyReq.Rows),
-			Cols: uint16(ptyReq.Columns),
-		})
-	}
+	go a.serveShellRequests(requests, ptmx)
 
 	a.logger.Info("Shell started with PTY (PID: %d)", cmd.Process.Pid)
 
