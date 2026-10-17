@@ -1234,10 +1234,20 @@ func (s *Server) handleAgentCertRenewal(req *ssh.Request, machine *common.Machin
 	req.Reply(true, ssh.MarshalAuthorizedKey(cert))
 }
 
+// Intervals of the background loops and the agent command deadline.
+// Variables so tests can run the loops without real-time waits.
+var (
+	revocationRefreshInterval = 30 * time.Second
+	hostCertRenewalInterval   = time.Hour
+	sessionCleanupInterval    = time.Hour
+	retentionInterval         = 6 * time.Hour
+	agentCommandTimeout       = 15 * time.Second
+)
+
 // runCARevocationRefreshLoop reloads revoked serials so multi-instance or
 // out-of-band DB revocations take effect without restart.
 func (s *Server) runCARevocationRefreshLoop() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(revocationRefreshInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1254,7 +1264,7 @@ func (s *Server) runCARevocationRefreshLoop() {
 // runGatewayHostCertRenewalLoop re-issues the gateway's own Host cert before
 // expiry so clients using Host-CA trust keep verifying without downtime.
 func (s *Server) runGatewayHostCertRenewalLoop() {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(hostCertRenewalInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1296,7 +1306,7 @@ func (s *Server) renewGatewayHostCertIfNeeded() {
 // regardless of whether the row still exists), so this only reclaims storage —
 // without it, http_sessions grows unbounded.
 func (s *Server) runSessionCleanupLoop() {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(sessionCleanupInterval)
 	defer ticker.Stop()
 	cleanup := func() {
 		if err := s.authService.CleanupExpiredSessions(context.Background()); err != nil {
@@ -1316,7 +1326,7 @@ func (s *Server) runSessionCleanupLoop() {
 
 // runRetentionLoop periodically deletes expired recordings.
 func (s *Server) runRetentionLoop() {
-	ticker := time.NewTicker(6 * time.Hour)
+	ticker := time.NewTicker(retentionInterval)
 	defer ticker.Stop()
 	path := s.recorder.GetRecordingStoragePath()
 	days := s.config.Recording.RetentionDays
@@ -1453,7 +1463,7 @@ func (s *Server) SendAgentCommand(machineID, command string) ([]byte, error) {
 
 	select {
 	case <-done:
-	case <-time.After(15 * time.Second):
+	case <-time.After(agentCommandTimeout):
 		return nil, fmt.Errorf("agent command timed out")
 	}
 
