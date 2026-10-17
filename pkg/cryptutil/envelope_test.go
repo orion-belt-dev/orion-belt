@@ -3,6 +3,7 @@ package cryptutil
 import (
 	"bytes"
 	"encoding/base64"
+	"io"
 	"strings"
 	"testing"
 )
@@ -259,6 +260,21 @@ func TestDecryptRejectsTamperedCiphertext(t *testing.T) {
 		t.Error("Decrypt of tampered ciphertext succeeded, want an authentication failure")
 	}
 }
+
+func TestEncryptFailsWhenRandomnessIsUnavailable(t *testing.T) {
+	e := mustEnvelope(t, "key material")
+	prev := randReader
+	randReader = failReader{}
+	t.Cleanup(func() { randReader = prev })
+
+	if _, err := e.Encrypt([]byte("plain")); err == nil {
+		t.Fatal("Encrypt succeeded with a failing random source, want an error")
+	}
+}
+
+type failReader struct{}
+
+func (failReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
 
 func TestDecryptWithWrongKeyFails(t *testing.T) {
 	sealed, err := mustEnvelope(t, "the right key").Encrypt([]byte("secret"))

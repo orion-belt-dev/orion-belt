@@ -14,6 +14,10 @@ import (
 	"strings"
 )
 
+// randReader is the nonce source. Tests replace it to force the read error;
+// production always uses crypto/rand.
+var randReader io.Reader = rand.Reader
+
 const envelopeMagic = "OBENC1\n"
 
 // Envelope wraps AES-256-GCM sealing/opening for a single key.
@@ -68,7 +72,7 @@ func (e *Envelope) Encrypt(plain []byte) ([]byte, error) {
 		return nil, err
 	}
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	if _, err := io.ReadFull(randReader, nonce); err != nil {
 		return nil, err
 	}
 	out := append([]byte(envelopeMagic), nonce...)
