@@ -40,6 +40,7 @@ type Server struct {
 	hostPrivate   ssh.Signer
 	hostCert      *ssh.Certificate
 	listener      net.Listener
+	listenerMu    sync.Mutex // Start sets listener while Stop may run concurrently
 	apiServer     *api.APIServer
 	agents        map[string]*AgentConnection
 	agentsMu      sync.RWMutex
@@ -340,7 +341,9 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
+	s.listenerMu.Lock()
 	s.listener = listener
+	s.listenerMu.Unlock()
 
 	s.logger.Info("Starting Orion-Belt SSH server on %s", addr)
 
@@ -1168,9 +1171,11 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	close(s.shutdown)
 
+	s.listenerMu.Lock()
 	if s.listener != nil {
 		s.listener.Close()
 	}
+	s.listenerMu.Unlock()
 
 	if err := s.pluginManager.ShutdownAll(ctx); err != nil {
 		s.logger.Error("Failed to shutdown plugins: %v", err)
