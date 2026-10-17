@@ -63,11 +63,7 @@ func (e *Envelope) Encrypt(plain []byte) ([]byte, error) {
 	if !e.Enabled() {
 		return plain, nil
 	}
-	block, err := aes.NewCipher(e.key)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := e.aead()
 	if err != nil {
 		return nil, err
 	}
@@ -90,11 +86,7 @@ func (e *Envelope) Decrypt(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("data is encrypted but no key is configured")
 	}
 	payload := data[len(envelopeMagic):]
-	block, err := aes.NewCipher(e.key)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
+	gcm, err := e.aead()
 	if err != nil {
 		return nil, err
 	}
@@ -104,4 +96,12 @@ func (e *Envelope) Decrypt(data []byte) ([]byte, error) {
 	}
 	nonce, ct := payload[:ns], payload[ns:]
 	return gcm.Open(nil, nonce, ct, nil)
+}
+
+func (e *Envelope) aead() (cipher.AEAD, error) {
+	block, err := aes.NewCipher(e.key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
 }
