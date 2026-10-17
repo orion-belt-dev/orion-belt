@@ -61,18 +61,22 @@ func (a *Agent) Start() error {
 	defer ticker.Stop()
 
 	for {
-		select {
-		case <-ticker.C:
-			if err := a.maybeRenewHostCert(); err != nil {
-				a.logger.Warn("Host cert renewal: %v", err)
-			}
-			if err := a.sendHeartbeat(); err != nil {
-				a.logger.Error("Heartbeat failed: %v", err)
-				// Attempt to reconnect
-				if err := a.connectToServer(); err != nil {
-					a.logger.Error("Failed to reconnect: %v", err)
-				}
-			}
+		<-ticker.C
+		a.keepAlive()
+	}
+}
+
+// keepAlive is one tick of the connection maintenance loop: renew the host
+// cert when due, then heartbeat, reconnecting if the heartbeat fails.
+func (a *Agent) keepAlive() {
+	if err := a.maybeRenewHostCert(); err != nil {
+		a.logger.Warn("Host cert renewal: %v", err)
+	}
+	if err := a.sendHeartbeat(); err != nil {
+		a.logger.Error("Heartbeat failed: %v", err)
+		// Attempt to reconnect
+		if err := a.connectToServer(); err != nil {
+			a.logger.Error("Failed to reconnect: %v", err)
 		}
 	}
 }
@@ -551,8 +555,12 @@ func (a *Agent) buildShellCommand(username string, ptyReq *ptyRequestMsg) (*exec
 // falling back to /bin/sh if it's unset or the db can't be read. Never assumes
 // /bin/bash exists — minimal distro images frequently don't ship it.
 func loginShell(username string) string {
-	return loginShellFromPasswd("/etc/passwd", username)
+	return loginShellFromPasswd(passwdPath, username)
 }
+
+// passwdPath is the user database loginShell reads. A variable so tests can
+// give a user a stand-in shell instead of launching their real login shell.
+var passwdPath = "/etc/passwd"
 
 func loginShellFromPasswd(passwdPath, username string) string {
 	data, err := os.ReadFile(passwdPath)
@@ -799,14 +807,20 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 	channel.CloseWrite()
 
 	if controlVerb == "orion:restart" {
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			cmd := exec.Command("systemctl", "restart", "orion-belt-agent")
-			if err := cmd.Start(); err != nil {
-				a.logger.Warn("systemctl restart failed (%v); exiting for process supervisor", err)
-				os.Exit(0)
-			}
-		}()
+		go restartAgent(a)
+	}
+}
+
+// restartAgent restarts this agent through systemd, or exits so a process
+// supervisor brings it back when systemd is unavailable. The short delay lets
+// the control reply reach the gateway first. A variable so tests can observe a
+// restart request without restarting or exiting anything.
+var restartAgent = func(a *Agent) {
+	time.Sleep(500 * time.Millisecond)
+	cmd := exec.Command("systemctl", "restart", "orion-belt-agent")
+	if err := cmd.Start(); err != nil {
+		a.logger.Warn("systemctl restart failed (%v); exiting for process supervisor", err)
+		os.Exit(0)
 	}
 }
 

@@ -195,12 +195,14 @@ func session(t *testing.T, conn *gossh.ServerConn, stdin string, reqs ...request
 	}
 	var res result
 	done := make(chan struct{})
+	statusSeen := make(chan struct{})
 	go func() {
 		defer close(done)
 		for r := range in {
 			if r.Type == "exit-status" && len(r.Payload) == 4 {
 				res.status = int(binary.BigEndian.Uint32(r.Payload))
 				res.gotStatus = true
+				close(statusSeen)
 			}
 			if r.WantReply {
 				_ = r.Reply(true, nil)
@@ -228,6 +230,12 @@ func session(t *testing.T, conn *gossh.ServerConn, stdin string, reqs ...request
 	go func() { defer wg.Done(); _, _ = io.Copy(&out, ch) }()
 	go func() { defer wg.Done(); _, _ = io.Copy(&errOut, ch.Stderr()) }()
 	wg.Wait()
+	// SSH allows exit-status after EOF, and the agent's shell path sends it
+	// that way. Wait for it the way the gateway does before closing.
+	select {
+	case <-statusSeen:
+	case <-time.After(5 * time.Second):
+	}
 	_ = ch.Close()
 	<-done
 	res.stdout, res.stderr = out.String(), errOut.String()
