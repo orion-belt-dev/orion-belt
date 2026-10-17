@@ -1,4 +1,4 @@
-.PHONY: build build-server build-client build-agent build-ui test clean install \
+.PHONY: help build build-server build-client build-agent build-ui test coverage clean install \
         test-coverage coverage-check coverage-baseline \
         bench perf-check perf-baseline \
         docker-build docker-build-server docker-build-agent docker-build-client \
@@ -11,6 +11,29 @@
         lab-qemu-images lab-qemu-images-refresh lab-qemu-up lab-qemu-down lab-qemu-restart lab-qemu-test \
         lab-qemu-connect-agents lab-qemu-collect-keys lab-qemu-register-agents \
         lab-qemu-clean lab-qemu-start lab-qemu-update
+
+.DEFAULT_GOAL := help
+
+help:
+	@echo "Orion Belt build and ops targets"
+	@echo "  make build                  - Build UI + server + client + admin + agent"
+	@echo "  make test                   - Run Go tests"
+	@echo "  make coverage               - Run Go coverage report"
+	@echo "  make clean                  - Remove build artifacts"
+	@echo "  make install                - Install built binaries into GOPATH/bin"
+	@echo "  make docker-build           - Build server and agent Docker images"
+	@echo "  make docker-push            - Push server and agent Docker images"
+	@echo "  make docker-up              - Start local server stack"
+	@echo "  make docker-down            - Stop local server stack"
+	@echo "  make docker-prod-up         - Start production stack from GHCR"
+	@echo "  make cve                    - Run CVE gate"
+	@echo "  make packages               - Build Linux package artifacts"
+	@echo "  make repos                  - Build apt/rpm/apk repos"
+	@echo "  make release-smoke          - Run release smoke checks"
+	@echo "  make lab-qemu-start         - Boot QEMU lab environment"
+	@echo "  make lab-qemu-up            - Start QEMU lab VMs"
+	@echo "  make lab-qemu-down          - Stop QEMU lab VMs"
+	@echo "  make lab-qemu-test          - Run QEMU end-to-end checks"
 
 # Build variables
 BINARY_NAME=orion-belt
@@ -104,6 +127,8 @@ run-server: build-server
 	$(BUILD_DIR)/$(BINARY_NAME)-server
 
 # Run tests with coverage
+coverage: test-coverage
+
 test-coverage:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out
