@@ -600,15 +600,13 @@ func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, comma
 		id, err := resolveUnixIdentity(username)
 		if err != nil {
 			a.logger.Error("Failed to resolve user %s for exec: %v", username, err)
-			channel.Write([]byte(fmt.Sprintf("Failed to execute command as %s: %v\n", username, err)))
-			a.sendExitStatus(channel, 1)
+			a.failExec(channel, fmt.Sprintf("Failed to execute command as %s: %v\n", username, err))
 			return
 		}
 		cred, err := credentialForIdentity(id)
 		if err != nil {
 			a.logger.Error("Failed to prepare credential for %s: %v", username, err)
-			channel.Write([]byte(fmt.Sprintf("Failed to execute command as %s: %v\n", username, err)))
-			a.sendExitStatus(channel, 1)
+			a.failExec(channel, fmt.Sprintf("Failed to execute command as %s: %v\n", username, err))
 			return
 		}
 		if cred != nil {
@@ -630,31 +628,27 @@ func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, comma
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		a.logger.Error("Failed to get stdin pipe: %v", err)
-		channel.Write([]byte(fmt.Sprintf("Failed to execute command: %v\n", err)))
-		a.sendExitStatus(channel, 1)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command: %v\n", err))
 		return
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		a.logger.Error("Failed to get stdout pipe: %v", err)
-		channel.Write([]byte(fmt.Sprintf("Failed to execute command: %v\n", err)))
-		a.sendExitStatus(channel, 1)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command: %v\n", err))
 		return
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		a.logger.Error("Failed to get stderr pipe: %v", err)
-		channel.Write([]byte(fmt.Sprintf("Failed to execute command: %v\n", err)))
-		a.sendExitStatus(channel, 1)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command: %v\n", err))
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
 		a.logger.Error("Failed to start command: %v", err)
-		channel.Write([]byte(fmt.Sprintf("Failed to execute command: %v\n", err)))
-		a.sendExitStatus(channel, 1)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command: %v\n", err))
 		return
 	}
 
@@ -678,11 +672,13 @@ func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, comma
 		a.logger.Debug("stderr->Channel copy finished")
 	}()
 
-	cmdErr := cmd.Wait()
-	a.logger.Debug("Command process finished, waiting for output I/O to complete")
-
+	// Drain stdout and stderr before Wait: os/exec closes both pipes once the
+	// process has exited, dropping any output the copies have not read yet.
 	wg.Wait()
 	a.logger.Debug("All output I/O finished")
+
+	cmdErr := cmd.Wait()
+	a.logger.Debug("Command process finished")
 
 	exitStatus := 0
 	if cmdErr != nil {
@@ -698,6 +694,15 @@ func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, comma
 
 	a.sendExitStatus(channel, exitStatus)
 	a.logger.Debug("Closing write side of channel after command completion")
+	channel.CloseWrite()
+}
+
+// failExec reports a command that could not be run: the message, a non-zero
+// exit status, then EOF. The gateway proxies exec output until EOF, so
+// without it the client session never ends.
+func (a *Agent) failExec(channel gossh.Channel, msg string) {
+	channel.Write([]byte(msg))
+	a.sendExitStatus(channel, 1)
 	channel.CloseWrite()
 }
 
