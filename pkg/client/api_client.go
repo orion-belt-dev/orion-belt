@@ -176,9 +176,13 @@ func (c *APIClient) authenticate(username string, signer ssh.Signer) error {
 	return loginOnce(totp)
 }
 
+// readPassword reads stdin without echo. A variable so tests can answer the
+// TOTP prompt without a terminal.
+var readPassword = func() ([]byte, error) { return term.ReadPassword(int(syscall.Stdin)) }
+
 func promptTOTP() (string, error) {
 	fmt.Fprint(os.Stderr, "TOTP code: ")
-	b, err := term.ReadPassword(int(syscall.Stdin))
+	b, err := readPassword()
 	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return "", err
