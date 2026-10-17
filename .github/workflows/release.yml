@@ -35,7 +35,7 @@ jobs:
 
       - name: CVE gate before release
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           bash scripts/cve-check.sh
 
       - name: Import packaging GPG key
