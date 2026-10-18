@@ -13,9 +13,12 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// rejectExec, returned by a handler, makes the agent refuse the exec request.
+const rejectExec = "\x00reject"
+
 func sqlOpen(dsn string) (*sql.DB, error) { return sql.Open("postgres", dsn) }
 
-// pipeSession returns the client end of a session channel on an in-memory
+// pipeSession returns the client end of a session channel on a loopback
 // SSH connection whose server side plays an agent: exec runs handle, shell
 // greets and echoes input until the client closes.
 func pipeSession(handle func(cmd string, stdin []byte) (string, uint32)) (ssh.Channel, <-chan *ssh.Request, error) {
@@ -27,7 +30,23 @@ func pipeSession(handle func(cmd string, stdin []byte) (string, uint32)) (ssh.Ch
 	serverCfg := &ssh.ServerConfig{NoClientAuth: true}
 	serverCfg.AddHostKey(hostKey)
 
-	clientSide, serverSide := net.Pipe()
+	// Loopback TCP rather than net.Pipe: both SSH peers send their version
+	// line before reading, which deadlocks on an unbuffered pipe.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
+	}
+	clientSide, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		ln.Close()
+		return nil, nil, err
+	}
+	serverSide, err := ln.Accept()
+	ln.Close()
+	if err != nil {
+		clientSide.Close()
+		return nil, nil, err
+	}
 	go func() {
 		_, chans, reqs, err := ssh.NewServerConn(serverSide, serverCfg)
 		if err != nil {
@@ -89,8 +108,12 @@ func servePipeSession(ch ssh.Channel, reqs <-chan *ssh.Request, handle func(stri
 				_ = req.Reply(false, nil)
 				continue
 			}
-			_ = req.Reply(true, nil)
 			out, status := handle(p.Command, nil)
+			if out == rejectExec {
+				_ = req.Reply(false, nil)
+				continue
+			}
+			_ = req.Reply(true, nil)
 			_, _ = io.WriteString(ch, out)
 			var b [4]byte
 			binary.BigEndian.PutUint32(b[:], status)
