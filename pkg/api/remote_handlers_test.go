@@ -440,3 +440,18 @@ func TestAgentInstallScript(t *testing.T) {
 		t.Error("install script not audited")
 	}
 }
+
+// Deleting a key is scoped to its owner: another user gets the same 404 as
+// for a missing ID, and the key survives.
+func TestSSHKeys_CannotDeleteAnotherUsersKey(t *testing.T) {
+	e := newEnv(t, nil)
+	key := e.do("POST", "/api/v1/ssh-keys", e.aliceKey, map[string]any{"name": "laptop", "public_key": testPubKey}).obj(t)
+	id := key["id"].(string)
+
+	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+id, e.bobKey, nil), 404)
+	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+id, e.adminKey, nil), 404)
+	if l := e.do("GET", "/api/v1/ssh-keys", e.aliceKey, nil).list(t); len(l) != 1 {
+		t.Fatalf("alice has %d keys after others tried to delete hers, want 1", len(l))
+	}
+	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+id, e.aliceKey, nil), 200)
+}

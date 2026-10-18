@@ -408,8 +408,29 @@ func (s *APIServer) addSSHKey(c *gin.Context) {
 	c.JSON(http.StatusCreated, key)
 }
 
+// deleteSSHKey removes one of the caller's own keys. A key belonging to
+// someone else reports not-found, the same as a missing ID, so the endpoint
+// can neither strip another user's login keys nor confirm which IDs exist.
 func (s *APIServer) deleteSSHKey(c *gin.Context) {
-	if err := s.store.DeleteSSHKey(c.Request.Context(), c.Param("id")); err != nil {
+	ctx := c.Request.Context()
+	id := c.Param("id")
+	keys, err := s.store.ListUserSSHKeys(ctx, c.GetString("user_id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	owned := false
+	for _, k := range keys {
+		if k.ID == id {
+			owned = true
+			break
+		}
+	}
+	if !owned {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if err := s.store.DeleteSSHKey(ctx, id); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
