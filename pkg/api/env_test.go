@@ -322,14 +322,20 @@ func (b *brokenStore) UpdateAPIKeyLastUsed(ctx context.Context, id string, at ti
 	return b.live.UpdateAPIKeyLastUsed(ctx, id, at)
 }
 
-func (e *env) brokenServer() *APIServer {
+// brokenServerWith builds a server over a failing store sharing this env's
+// fakes, accounts and log buffer.
+func (e *env) brokenServerWith(mutate func(*Options)) *APIServer {
 	e.t.Helper()
 	bs := newBrokenStore(e.t, e.store)
-	logger := common.NewLoggerTo(common.ERROR, io.Discard)
-	return NewAPIServer(bs, auth.NewAuthService(bs, logger), logger, Options{
+	logger := common.NewLoggerTo(common.DEBUG, e.logs)
+	opt := Options{
 		JWTSecret: "test-jwt-secret", PluginManager: e.plugins, AgentCommander: e.agents,
 		TerminalBridge: e.bridge, Recorder: e.recorder,
-	})
+	}
+	if mutate != nil {
+		mutate(&opt)
+	}
+	return NewAPIServer(bs, auth.NewAuthService(bs, logger), logger, opt)
 }
 
 func writeFile(t *testing.T, dir, name, content string) string {
