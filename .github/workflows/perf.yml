@@ -26,7 +26,7 @@ permissions:
 jobs:
   benchmark:
     name: Gateway benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
     # The suite is a few minutes; cap it so a hung benchmark cannot burn an
     # hour of runner time every night.
     timeout-minutes: 30
