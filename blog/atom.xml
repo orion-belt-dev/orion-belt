@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?><?xml-stylesheet type="text/xsl" href="atom.xsl"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://orion-belt.dev/blog</id>
-    <title>Orion-Belt Blog</title>
+    <title>Orion Belt Blog</title>
     <updated>2026-07-16T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://orion-belt.dev/blog"/>
-    <subtitle>Orion-Belt Blog</subtitle>
-    <icon>https://orion-belt.dev/img/favicon.ico</icon>
+    <subtitle>Orion Belt Blog</subtitle>
+    <icon>https://orion-belt.dev/favicon.ico</icon>
     <entry>
         <title type="html"><![CDATA[Orion Belt vs Teleport — a practical Teleport alternative for SSH PAM]]></title>
         <id>https://orion-belt.dev/blog/orion-belt-vs-teleport</id>
