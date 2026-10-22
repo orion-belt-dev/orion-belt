@@ -116,7 +116,7 @@ func TestAnsibleThroughGateway(t *testing.T) {
     web-01:
       ansible_host: 127.0.0.1
       ansible_port: %d
-      ansible_user: svc+%s%%web-01
+      ansible_user: svc+%s@web-01
       ansible_ssh_private_key_file: %s
       ansible_ssh_transfer_method: piped
       ansible_ssh_common_args: -F /dev/null -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
