@@ -49,6 +49,8 @@ recordings/
 
 # Release / packaging output
 dist/
+# Installers and the public key goreleaser attaches to a release (release.yml).
+dist-extra/
 repos/
 packages-site/
 

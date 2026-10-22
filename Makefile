@@ -59,7 +59,7 @@ DOCKER_TAG ?= latest
 DOCKER_DIR=docker
 DOCKERFILE=$(DOCKER_DIR)/Dockerfile
 DOCKERFILE_AGENT=$(DOCKER_DIR)/Dockerfile.agent
-DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
+DOCKER_PLATFORMS ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
 
 # Helper to prefix image name with registry if set
 ifdef DOCKER_REGISTRY
@@ -214,7 +214,7 @@ docker-push-agent: docker-build-agent
 
 docker-push: docker-push-server docker-push-agent
 	@echo "Pushed $(IMAGE_PREFIX)-server:$(DOCKER_TAG) and $(IMAGE_PREFIX)-agent:$(DOCKER_TAG)"
-	@echo "Also listed on https://orion-belt-dev.github.io/packages (CONTAINERS)"
+	@echo "Also listed on https://pkgs.orion-belt.dev (CONTAINERS)"
 
 # Start the server + Postgres via Docker Compose (see .env.server.example)
 docker-up:
@@ -274,17 +274,18 @@ packages:
 serve-packages:
 	bash scripts/serve-packages.sh
 
-# Build flat GitHub Pages tree (packages-site/). Push: make publish-packages-pages PUSH=1
+# Build the package site (packages-site/: signed apt, rpm, apk and pacman
+# repositories for pkgs.orion-belt.dev). Push: make publish-packages-pages PUSH=1
 # From release assets: make publish-packages-pages FROM_RELEASE=1
 publish-packages-pages:
 	bash scripts/publish-packages-pages.sh \
 		$(if $(filter 1,$(FROM_RELEASE)),--from-release,) \
 		$(if $(filter 1,$(PUSH)),--push,)
 
-# Build static apt/rpm/apk repos under repos/ (after make packages)
-# Signed: ./scripts/gen-packaging-key.sh && ORION_REQUIRE_SIGN=1 make repos
+# Same as publish-packages-pages without pushing (after make packages).
+# Signed: ORION_GPG_KEY=<fpr> ORION_REQUIRE_SIGN=1 make repos
 repos:
-	bash scripts/publish-repos.sh
+	bash scripts/publish-packages-pages.sh
 
 # Generate packaging GPG key → packaging/keys/ (private key is gitignored)
 packaging-key:

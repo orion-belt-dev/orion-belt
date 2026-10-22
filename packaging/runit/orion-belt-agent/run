@@ -1,0 +1,5 @@
+#!/bin/sh
+# runit service for the Orion Belt agent (Void Linux, Artix runit, ...),
+# installed by orion-belt-service.
+exec 2>&1
+exec /usr/bin/orion-belt-agent -c /etc/orion-belt/agent.yaml

@@ -11,7 +11,7 @@ import (
 // defaultPackageBaseURL is where generated installers fetch agent packages
 // from. It matches the console's Add-agent default (the public GitHub Pages
 // mirror); air-gapped installs point --package-base-url at their own mirror.
-const defaultPackageBaseURL = "https://orion-belt-dev.github.io/packages"
+const defaultPackageBaseURL = "https://pkgs.orion-belt.dev"
 
 func newAgentsCmd() *cobra.Command {
 	agents := &cobra.Command{

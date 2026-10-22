@@ -1450,7 +1450,7 @@ paths:
 
         The private key is embedded in the script — treat it as a secret.
         `package_base_url` must serve agent artifacts. Default in the UI is
-        the public mirror `https://orion-belt-dev.github.io/packages`
+        the public mirror `https://pkgs.orion-belt.dev`
         (or lab `:8765` via `make serve-packages`).
       requestBody:
         required: true
@@ -2594,7 +2594,7 @@ components:
         package_base_url:
           type: string
           description: Base URL that serves orion-belt-agent packages/binary
-          example: https://orion-belt-dev.github.io/packages
+          example: https://pkgs.orion-belt.dev
         version:
           type: string
           description: Package version string (without leading v). Defaults to server build version.

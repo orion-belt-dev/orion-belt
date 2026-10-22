@@ -1,0 +1,269 @@
+#!/bin/sh
+# orion-belt-service: installs, enables, starts, stops and removes the Orion
+# Belt server or agent service on whatever init system the machine runs:
+# systemd, OpenRC, runit or SysV init. The packages (post-install,
+# pre-remove), install.sh and the console's agent install script all use it,
+# so every install method sets the service up the same way.
+#
+# Installed once per role, named for it, so the server and agent packages
+# never ship the same file: /usr/lib/orion-belt/orion-belt-server-service and
+# /usr/lib/orion-belt/orion-belt-agent-service. Under any other name, the role
+# comes first: orion-belt-service server|agent COMMAND.
+#
+#   orion-belt-agent-service detect     print systemd | openrc | runit | sysv | none
+#   orion-belt-agent-service install    install the service file (not enabled)
+#   orion-belt-agent-service setup      install + enable + start (restart if running)
+#   orion-belt-agent-service teardown   stop + disable + remove what install wrote
+#   orion-belt-agent-service start|stop|restart|status|enable|disable|uninstall
+#   orion-belt-agent-service restart-if-running
+#   orion-belt-agent-service hint       print how to enable and start it
+#
+# Environment:
+#   ORION_BINDIR   directory holding the binaries (default: ../../bin next to this script, else /usr/bin)
+#   ORION_SHARE    service templates (default: ../../share/orion-belt, /usr/share/orion-belt, /usr/local/share/orion-belt)
+#   ORION_INIT     use this init system instead of detecting one
+#   ORION_ROOT     prefix for every path written (tests)
+set -eu
+
+ROOT=${ORION_ROOT:-}
+here=$(cd "$(dirname "$0")" && pwd)
+
+usage() {
+	sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+	exit 2
+}
+
+# SELF is how to call this script again (for hints).
+case $(basename "$0") in
+orion-belt-server-service) ROLE=server SELF=$0 ;;
+orion-belt-agent-service) ROLE=agent SELF=$0 ;;
+*)
+	case ${1:-} in
+	server | agent) ROLE=$1 SELF="$0 $1" ;;
+	*) usage ;;
+	esac
+	shift
+	;;
+esac
+NAME=orion-belt-$ROLE
+CMD=${1:-}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+share() {
+	for d in ${ORION_SHARE:-} "$here/../../share/orion-belt" /usr/share/orion-belt /usr/local/share/orion-belt; do
+		if [ -f "$d/init/$NAME.sysv" ]; then
+			echo "$d/init"
+			return
+		fi
+	done
+	echo "orion-belt-service: service templates not found (set ORION_SHARE)" >&2
+	exit 1
+}
+
+bindir() {
+	if [ -n "${ORION_BINDIR:-}" ]; then
+		echo "$ORION_BINDIR"
+	elif [ -x "$here/../../bin/$NAME" ]; then
+		(cd "$here/../../bin" && pwd)
+	else
+		echo /usr/bin
+	fi
+}
+
+detect() {
+	if [ -n "${ORION_INIT:-}" ]; then
+		echo "$ORION_INIT"
+	elif [ -d "$ROOT/run/systemd/system" ]; then
+		echo systemd
+	elif [ -d "$ROOT/run/openrc" ] || { have openrc-run && have rc-update; }; then
+		echo openrc
+	elif [ -d "$ROOT/run/runit" ] || [ -d "$ROOT/etc/runit/runsvdir" ]; then
+		echo runit
+	elif [ -d "$ROOT/etc/init.d" ] && { have update-rc.d || have chkconfig; }; then
+		echo sysv
+	else
+		echo none
+	fi
+}
+
+# runit keeps enabled services as links in a directory that differs between
+# distributions: the runlevel directory first (Void, Artix), then live ones.
+runit_svdir() {
+	for d in "$ROOT/etc/runit/runsvdir/default" "$ROOT/run/runit/service" "$ROOT/var/service" "$ROOT/etc/service"; do
+		if [ -d "$d" ]; then
+			echo "$d"
+			return
+		fi
+	done
+	echo "$ROOT/var/service"
+}
+
+runit_srcdir() {
+	if [ -d "$ROOT/etc/runit/sv" ]; then echo "$ROOT/etc/runit/sv"; else echo "$ROOT/etc/sv"; fi
+}
+
+# put SRC DST MODE: copy a template, pointing it at this install's binary.
+put() {
+	mkdir -p "$(dirname "$2")"
+	sed "s#/usr/bin/$NAME#$(bindir)/$NAME#g" "$1" >"$2.orion-tmp"
+	chmod "$3" "$2.orion-tmp"
+	mv "$2.orion-tmp" "$2"
+}
+
+# Packages ship the unit under /lib or /usr/lib; install.sh writes one in /etc.
+systemd_unit() {
+	for d in "$ROOT/lib/systemd/system" "$ROOT/usr/lib/systemd/system"; do
+		if [ -f "$d/$NAME.service" ] && [ "$(bindir)" = /usr/bin ]; then
+			echo "$d/$NAME.service"
+			return
+		fi
+	done
+	echo "$ROOT/etc/systemd/system/$NAME.service"
+}
+
+reload_systemd() {
+	if [ -z "$ROOT" ] && [ -d /run/systemd/system ]; then systemctl daemon-reload; fi
+}
+
+install_service() {
+	t=$(share)
+	case $(detect) in
+	systemd)
+		u=$(systemd_unit)
+		case $u in */etc/systemd/*) put "$t/$NAME.service" "$u" 0644 ;; esac
+		reload_systemd
+		;;
+	openrc) put "$t/$NAME.openrc" "$ROOT/etc/init.d/$NAME" 0755 ;;
+	runit) put "$t/runit/$NAME/run" "$(runit_srcdir)/$NAME/run" 0755 ;;
+	sysv) put "$t/$NAME.sysv" "$ROOT/etc/init.d/$NAME" 0755 ;;
+	esac
+}
+
+uninstall_service() {
+	case $(detect) in
+	systemd)
+		rm -f "$ROOT/etc/systemd/system/$NAME.service"
+		reload_systemd || true
+		;;
+	openrc | sysv) rm -f "$ROOT/etc/init.d/$NAME" ;;
+	runit)
+		d=$(runit_srcdir)
+		rm -rf "${d:?}/$NAME"
+		;;
+	esac
+}
+
+enable_service() {
+	case $(detect) in
+	systemd) systemctl enable "$NAME.service" ;;
+	openrc) rc-update add "$NAME" default ;;
+	runit)
+		mkdir -p "$(runit_svdir)"
+		if [ ! -e "$(runit_svdir)/$NAME" ]; then ln -s "$(runit_srcdir)/$NAME" "$(runit_svdir)/$NAME"; fi
+		;;
+	sysv)
+		if have update-rc.d; then
+			update-rc.d "$NAME" defaults
+		elif have chkconfig; then
+			chkconfig --add "$NAME" && chkconfig "$NAME" on
+		fi
+		;;
+	esac
+}
+
+disable_service() {
+	case $(detect) in
+	systemd) systemctl disable "$NAME.service" ;;
+	openrc) rc-update del "$NAME" default ;;
+	runit) rm -f "$(runit_svdir)/$NAME" ;;
+	sysv)
+		if have update-rc.d; then
+			update-rc.d -f "$NAME" remove
+		elif have chkconfig; then
+			chkconfig --del "$NAME"
+		fi
+		;;
+	esac
+}
+
+# ctl start|stop|restart|status
+ctl() {
+	case $(detect) in
+	systemd) systemctl "$1" "$NAME.service" ;;
+	openrc) rc-service "$NAME" "$1" ;;
+	runit)
+		# runsvdir picks a new link up within ~5s; sv needs it to have.
+		i=0
+		while [ ! -p "$(runit_svdir)/$NAME/supervise/control" ] && [ "$i" -lt 10 ]; do
+			sleep 1
+			i=$((i + 1))
+		done
+		d=$(runit_svdir)/$NAME
+		# runsv restarts the daemon whenever it exits; "sv start" and
+		# "sv restart" would instead wait for it to stay up, and fail.
+		case $1 in
+		start) sv up "$d" ;;
+		restart) sv up "$d" && sv term "$d" ;;
+		stop) sv stop "$d" ;;
+		status)
+			out=$(sv status "$d")
+			echo "$out"
+			case $out in run:*) ;; *) return 3 ;; esac
+			;;
+		esac
+		;;
+	sysv) "$ROOT/etc/init.d/$NAME" "$1" ;;
+	*) return 1 ;;
+	esac
+}
+
+running() { ctl status >/dev/null 2>&1; }
+
+hint() {
+	case $(detect) in
+	systemd) echo "  systemctl enable --now $NAME" ;;
+	openrc) echo "  rc-update add $NAME default && rc-service $NAME start" ;;
+	runit) echo "  $SELF setup    # links $(runit_srcdir)/$NAME into $(runit_svdir)" ;;
+	sysv) echo "  $SELF setup    # update-rc.d / chkconfig, then /etc/init.d/$NAME start" ;;
+	*) echo "  no init system found: run $(bindir)/$NAME -c /etc/orion-belt/$ROLE.yaml under your supervisor" ;;
+	esac
+}
+
+setup() {
+	install_service
+	init=$(detect)
+	if [ "$init" = none ]; then
+		hint
+		return 0
+	fi
+	enable_service >/dev/null
+	if running; then
+		ctl restart >/dev/null
+	else
+		ctl start >/dev/null
+	fi
+	echo "$NAME: $init service installed, enabled and running"
+}
+
+teardown() {
+	if [ "$(detect)" != none ]; then
+		ctl stop >/dev/null 2>&1 || true
+		disable_service >/dev/null 2>&1 || true
+	fi
+	uninstall_service
+}
+
+case $CMD in
+detect) detect ;;
+install) install_service ;;
+uninstall) uninstall_service ;;
+setup) setup ;;
+teardown) teardown ;;
+enable) enable_service ;;
+disable) disable_service ;;
+start | stop | restart | status) ctl "$CMD" ;;
+restart-if-running) if [ "$(detect)" != none ] && running; then ctl restart >/dev/null; fi ;;
+hint) hint ;;
+*) usage ;;
+esac

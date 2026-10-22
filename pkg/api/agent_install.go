@@ -64,8 +64,10 @@ func (s *APIServer) generateAgentInstallScript(c *gin.Context) {
 	}
 	osID := strings.ToLower(strings.TrimSpace(req.OS))
 	switch osID {
-	case "debian", "ubuntu", "rhel", "rocky", "centos", "fedora", "suse", "opensuse", "alpine", "linux", "generic":
+	case "debian", "ubuntu", "rhel", "rocky", "centos", "fedora", "suse", "opensuse", "alpine", "arch", "archlinux", "linux", "generic":
 		switch osID {
+		case "archlinux":
+			osID = "arch"
 		case "ubuntu":
 			osID = "debian"
 		case "rocky", "centos", "fedora":
@@ -76,7 +78,7 @@ func (s *APIServer) generateAgentInstallScript(c *gin.Context) {
 			osID = "linux"
 		}
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "os must be one of: debian, rhel, suse, alpine, linux"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "os must be one of: debian, rhel, suse, alpine, arch, linux"})
 		return
 	}
 
@@ -247,92 +249,65 @@ agent:
 	b.WriteString(fmt.Sprintf("PKG_BASE=%q\n", pkgBase))
 	b.WriteString(fmt.Sprintf("VERSION=%q\n\n", ver))
 
+	// The package for this host's architecture, under the names the package
+	// site and release use (pkgs.orion-belt.dev, or a mirror of dist/).
+	b.WriteString(agentInstallArch)
 	switch osID {
 	case "debian":
-		b.WriteString(`echo "==> Installing orion-belt-agent (deb)"
-DEB=""
-for cand in \
-  "$PKG_BASE/orion-belt-agent_${VERSION}_amd64.deb" \
-  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.deb"
-do
-  if curl -fsSL -o /tmp/orion-belt-agent.deb "$cand"; then DEB=1; break; fi
-done
-if [ -n "$DEB" ]; then
+		b.WriteString(`echo "==> Installing orion-belt-agent (deb, $DEB_ARCH)"
+if fetch_first /tmp/orion-belt-agent.deb \
+  "$PKG_BASE/orion-belt-agent_${DEB_V}_${DEB_ARCH}.deb" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.deb" \
+  "$RELEASE/orion-belt-agent_${DEB_V}_${DEB_ARCH}.deb"; then
   dpkg -i /tmp/orion-belt-agent.deb || apt-get install -f -y
   rm -f /tmp/orion-belt-agent.deb
-elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
-  chmod 0755 /usr/bin/orion-belt-agent
 else
-  echo "failed to download agent package from $PKG_BASE" >&2
-  exit 1
+  install_agent_archive
 fi
 `)
-	case "rhel":
-		b.WriteString(`echo "==> Installing orion-belt-agent (rpm)"
-RPM=""
-for cand in \
-  "$PKG_BASE/orion-belt-agent-${VERSION}-1.x86_64.rpm" \
-  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.rpm"
-do
-  if curl -fsSL -o /tmp/orion-belt-agent.rpm "$cand"; then RPM=1; break; fi
-done
-if [ -n "$RPM" ]; then
+	case "rhel", "suse":
+		b.WriteString(`echo "==> Installing orion-belt-agent (rpm, $RPM_ARCH)"
+if fetch_first /tmp/orion-belt-agent.rpm \
+  "$PKG_BASE/orion-belt-agent-${RPM_V}-1.${RPM_ARCH}.rpm" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.rpm" \
+  "$RELEASE/orion-belt-agent-${RPM_V}-1.${RPM_ARCH}.rpm"; then
   if command -v dnf >/dev/null 2>&1; then dnf -y install /tmp/orion-belt-agent.rpm
+  elif command -v zypper >/dev/null 2>&1; then zypper -n install --allow-unsigned-rpm /tmp/orion-belt-agent.rpm
   elif command -v yum >/dev/null 2>&1; then yum -y localinstall /tmp/orion-belt-agent.rpm
   else rpm -Uvh /tmp/orion-belt-agent.rpm; fi
   rm -f /tmp/orion-belt-agent.rpm
-elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
-  chmod 0755 /usr/bin/orion-belt-agent
 else
-  echo "failed to download agent package from $PKG_BASE" >&2
-  exit 1
-fi
-`)
-	case "suse":
-		b.WriteString(`echo "==> Installing orion-belt-agent (rpm / zypper)"
-RPM=""
-for cand in \
-  "$PKG_BASE/orion-belt-agent-${VERSION}-1.x86_64.rpm" \
-  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.rpm"
-do
-  if curl -fsSL -o /tmp/orion-belt-agent.rpm "$cand"; then RPM=1; break; fi
-done
-if [ -n "$RPM" ]; then
-  zypper -n install /tmp/orion-belt-agent.rpm || rpm -Uvh /tmp/orion-belt-agent.rpm
-  rm -f /tmp/orion-belt-agent.rpm
-elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
-  chmod 0755 /usr/bin/orion-belt-agent
-else
-  echo "failed to download agent package from $PKG_BASE" >&2
-  exit 1
+  install_agent_archive
 fi
 `)
 	case "alpine":
-		b.WriteString(`echo "==> Installing orion-belt-agent (apk)"
-APK=""
-for cand in \
-  "$PKG_BASE/orion-belt-agent_${VERSION}_x86_64.apk" \
-  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_amd64.apk"
-do
-  if curl -fsSL -o /tmp/orion-belt-agent.apk "$cand"; then APK=1; break; fi
-done
-if [ -n "$APK" ]; then
+		b.WriteString(`echo "==> Installing orion-belt-agent (apk, $APK_ARCH)"
+if fetch_first /tmp/orion-belt-agent.apk \
+  "$PKG_BASE/apk/${APK_ARCH}/orion-belt-agent-${APK_V}.apk" \
+  "$PKG_BASE/orion-belt-agent_${APK_V}_${APK_ARCH}.apk" \
+  "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.apk" \
+  "$RELEASE/orion-belt-agent_${APK_V}_${APK_ARCH}.apk"; then
   apk add --allow-untrusted /tmp/orion-belt-agent.apk
   rm -f /tmp/orion-belt-agent.apk
-elif curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
-  chmod 0755 /usr/bin/orion-belt-agent
 else
-  echo "failed to download agent package from $PKG_BASE" >&2
-  exit 1
+  install_agent_archive
+fi
+`)
+	case "arch":
+		b.WriteString(`echo "==> Installing orion-belt-agent (pacman, $PAC_ARCH)"
+if fetch_first /tmp/orion-belt-agent.pkg.tar.zst \
+  "$PKG_BASE/archlinux/${PAC_ARCH}/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst" \
+  "$PKG_BASE/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst" \
+  "$RELEASE/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst"; then
+  pacman -U --noconfirm /tmp/orion-belt-agent.pkg.tar.zst
+  rm -f /tmp/orion-belt-agent.pkg.tar.zst
+else
+  install_agent_archive
 fi
 `)
 	default:
-		b.WriteString(`echo "==> Installing orion-belt-agent (binary)"
-if ! curl -fsSL -o /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
-  echo "failed to download $PKG_BASE/orion-belt-agent" >&2
-  exit 1
-fi
-chmod 0755 /usr/bin/orion-belt-agent
+		b.WriteString(`echo "==> Installing orion-belt-agent (binary, $GO_ARCH)"
+install_agent_archive
 `)
 	}
 
@@ -354,7 +329,12 @@ chmod 0755 /usr/bin/orion-belt-agent
 	b.WriteString("\n")
 
 	b.WriteString(`echo "==> Starting orion-belt-agent"
-if command -v systemctl >/dev/null 2>&1 && [ -f /lib/systemd/system/orion-belt-agent.service ]; then
+# orion-belt-agent-service sets the service up for systemd, OpenRC, runit or SysV.
+svc=/usr/lib/orion-belt/orion-belt-agent-service
+if [ -x "$svc" ] && [ "$("$svc" detect)" != none ]; then
+  "$svc" setup
+  "$svc" status || true
+elif command -v systemctl >/dev/null 2>&1 && [ -f /lib/systemd/system/orion-belt-agent.service ]; then
   systemctl daemon-reload || true
   systemctl enable --now orion-belt-agent
   systemctl --no-pager --full status orion-belt-agent || true
@@ -371,3 +351,66 @@ echo "It should appear under Agents in the Orion Belt console once the tunnel is
 
 	return b.String()
 }
+
+// agentInstallArch is the part of the agent install script that maps the
+// host's CPU to the architecture names each package format uses, and the
+// helpers the package steps share. Each file is tried from the package base
+// URL (the package site, or a mirror) first, then from the GitHub release,
+// which has every package. install_agent_archive is the fallback for hosts
+// without a matching package: the agent archive, then (amd64 only) the bare
+// binary earlier package sites served.
+const agentInstallArch = `RELEASE="https://github.com/orion-belt-dev/orion-belt/releases/download/v${VERSION}"
+# Each package format spells a pre-release differently (1.4.0-rc.1: deb
+# 1.4.0~rc.1, rpm 1.4.0~rc.1 with later dashes as _, apk 1.4.0_rc.1, pacman
+# 1.4.0rc.1); a plain version is the same everywhere.
+DEB_V=$(echo "$VERSION" | sed 's/-/~/')
+RPM_V=$(echo "$VERSION" | sed 's/-/~/; s/-/_/g')
+APK_V=$(echo "$VERSION" | sed 's/-/_/')
+PAC_V=$(echo "$VERSION" | sed 's/-//; s/-/_/g')
+case "$(uname -m)" in
+  x86_64|amd64) GO_ARCH=amd64 DEB_ARCH=amd64 RPM_ARCH=x86_64 APK_ARCH=x86_64 PAC_ARCH=x86_64 ;;
+  aarch64|arm64) GO_ARCH=arm64 DEB_ARCH=arm64 RPM_ARCH=aarch64 APK_ARCH=aarch64 PAC_ARCH=aarch64 ;;
+  armv7*|armv8l) GO_ARCH=armv7 DEB_ARCH=armhf RPM_ARCH=armv7hl APK_ARCH=armv7 PAC_ARCH=armv7h ;;
+  armv6*) GO_ARCH=armv6 DEB_ARCH=armhf RPM_ARCH=armv6hl APK_ARCH=armhf PAC_ARCH=armv6h ;;
+  armv5*) GO_ARCH=armv5 DEB_ARCH=armel RPM_ARCH=armv5tel APK_ARCH=armel PAC_ARCH=armv5 ;;
+  i386|i486|i586|i686) GO_ARCH=386 DEB_ARCH=i386 RPM_ARCH=i386 APK_ARCH=x86 PAC_ARCH=i686 ;;
+  ppc64le) GO_ARCH=ppc64le DEB_ARCH=ppc64el RPM_ARCH=ppc64le APK_ARCH=ppc64le PAC_ARCH=ppc64le ;;
+  s390x) GO_ARCH=s390x DEB_ARCH=s390x RPM_ARCH=s390x APK_ARCH=s390x PAC_ARCH=s390x ;;
+  riscv64) GO_ARCH=riscv64 DEB_ARCH=riscv64 RPM_ARCH=riscv64 APK_ARCH=riscv64 PAC_ARCH=riscv64 ;;
+  loongarch64) GO_ARCH=loong64 DEB_ARCH=loong64 RPM_ARCH=loongarch64 APK_ARCH=loongarch64 PAC_ARCH=loong64 ;;
+  *) echo "unsupported CPU: $(uname -m)" >&2; exit 1 ;;
+esac
+# A Debian armhf userland on an ARMv7 CPU still uses the armhf package.
+if [ "$GO_ARCH" = armv7 ] && command -v dpkg >/dev/null 2>&1; then DEB_ARCH=$(dpkg --print-architecture); fi
+
+fetch_first() { # fetch_first DEST URL...: the first URL that downloads
+  dest=$1; shift
+  for u in "$@"; do
+    if curl -fsSL -o "$dest" "$u"; then return 0; fi
+  done
+  return 1
+}
+
+install_agent_archive() {
+  tmp=$(mktemp -d)
+  if fetch_first "$tmp/agent.tar.gz" \
+    "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.tar.gz" \
+    "$RELEASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.tar.gz"; then
+    tar -xzf "$tmp/agent.tar.gz" -C "$tmp"
+    install -m 0755 "$tmp/orion-belt-agent" /usr/bin/orion-belt-agent
+    install -d /usr/lib/orion-belt /usr/share/orion-belt/init/runit/orion-belt-agent
+    install -m 0755 "$tmp/packaging/linux/orion-belt-service" /usr/lib/orion-belt/orion-belt-agent-service
+    install -m 0644 "$tmp/packaging/systemd/orion-belt-agent.service" /usr/share/orion-belt/init/orion-belt-agent.service
+    install -m 0755 "$tmp/packaging/openrc/orion-belt-agent.initd" /usr/share/orion-belt/init/orion-belt-agent.openrc
+    install -m 0755 "$tmp/packaging/sysv/orion-belt-agent" /usr/share/orion-belt/init/orion-belt-agent.sysv
+    install -m 0755 "$tmp/packaging/runit/orion-belt-agent/run" /usr/share/orion-belt/init/runit/orion-belt-agent/run
+  elif [ "$GO_ARCH" = amd64 ] && fetch_first /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
+    chmod 0755 /usr/bin/orion-belt-agent
+  else
+    echo "no orion-belt-agent package for $(uname -m) at $PKG_BASE" >&2
+    exit 1
+  fi
+  rm -rf "$tmp"
+}
+
+`

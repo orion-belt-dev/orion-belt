@@ -128,7 +128,7 @@ window on the network.
    generic Linux.
 4. Enter the agent name, the gateway host (SSH port 2222), and the package base
    URL. The console defaults to the public mirror at
-   [`https://orion-belt-dev.github.io/packages`](https://orion-belt-dev.github.io/packages)
+   [`https://pkgs.orion-belt.dev`](https://pkgs.orion-belt.dev)
    and reads the package version from that mirror's `VERSION` file. To use a
    local `dist/` build, run `make packages && make serve-packages` and set the
    base URL to `http://127.0.0.1:8765` or your host's address.

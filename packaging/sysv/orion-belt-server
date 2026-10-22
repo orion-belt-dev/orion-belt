@@ -1,0 +1,89 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          orion-belt-server
+# Required-Start:    $remote_fs $network $syslog
+# Required-Stop:     $remote_fs $network $syslog
+# Should-Start:      postgresql
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Orion Belt PAM gateway server
+### END INIT INFO
+# SysV init script (/etc/init.d/orion-belt-server) for systems without
+# systemd, OpenRC or runit, installed by orion-belt-server-service. Runs the
+# server as the orionbelt user, restarted 5s after it exits, as systemd's
+# Restart= does: the database may not be up yet at boot.
+
+NAME=orion-belt-server
+DAEMON=/usr/bin/orion-belt-server
+CONFIG=/etc/orion-belt/server.yaml
+PIDFILE=/run/$NAME.pid
+LOG=/var/log/orion-belt/server.log
+USER=orionbelt
+[ -x "$DAEMON" ] || exit 0
+
+# The pid file holds the restart loop, which leads its own process group.
+running() {
+	[ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+	if running; then
+		echo "$NAME is already running"
+		return 0
+	fi
+	printf 'Starting %s... ' "$NAME"
+	command -v setsid >/dev/null 2>&1 || { echo "failed: needs setsid"; return 1; }
+	# Drop to $USER for the server itself: setpriv (util-linux), else su.
+	if command -v setpriv >/dev/null 2>&1; then
+		run="setpriv --reuid=$USER --regid=$USER --init-groups $DAEMON -c $CONFIG"
+	else
+		run="su -s /bin/sh -c 'exec $DAEMON -c $CONFIG' $USER"
+	fi
+	mkdir -p /var/log/orion-belt
+	chown "$USER:$USER" /var/log/orion-belt
+	cd /var/lib/orion-belt || return 1
+	setsid sh -c "while :; do $run; sleep 5; done" >>"$LOG" 2>&1 </dev/null &
+	echo $! >"$PIDFILE"
+	sleep 1
+	if running; then echo "ok"; else echo "failed (see $LOG)"; return 1; fi
+}
+
+stop() {
+	if ! running; then
+		echo "$NAME is not running"
+		rm -f "$PIDFILE"
+		return 0
+	fi
+	printf 'Stopping %s... ' "$NAME"
+	pid=$(cat "$PIDFILE")
+	kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid"
+	i=0
+	while kill -0 -- "-$pid" 2>/dev/null && [ "$i" -lt 30 ]; do
+		sleep 1
+		i=$((i + 1))
+	done
+	kill -KILL -- "-$pid" 2>/dev/null || true
+	rm -f "$PIDFILE"
+	echo "ok"
+}
+
+case "$1" in
+start) start ;;
+stop) stop ;;
+restart | force-reload)
+	stop
+	start
+	;;
+status)
+	if running; then
+		echo "$NAME is running (pid $(cat "$PIDFILE"))"
+	else
+		echo "$NAME is not running"
+		exit 3
+	fi
+	;;
+*)
+	echo "Usage: $0 {start|stop|restart|status}" >&2
+	exit 2
+	;;
+esac

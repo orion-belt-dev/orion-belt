@@ -50,7 +50,7 @@
 #   -h, --help                Show this help
 set -euo pipefail
 
-PKG_BASE_DEFAULT="https://orion-belt-dev.github.io/packages"
+PKG_BASE_DEFAULT="https://pkgs.orion-belt.dev"
 GITHUB_REPO="orion-belt-dev/orion-belt"
 CONFIG_PATH="/etc/orion-belt/server.yaml"
 BIN_PATH="/usr/bin/orion-belt-server"
@@ -560,11 +560,21 @@ if [ -f /etc/os-release ]; then
 fi
 
 arch_raw=$(uname -m)
+# ARCH names the release archives; the others the package files.
 case "$arch_raw" in
-  x86_64|amd64) ARCH=amd64; RPM_ARCH=x86_64 ;;
-  aarch64|arm64) ARCH=arm64; RPM_ARCH=aarch64 ;;
+  x86_64|amd64) ARCH=amd64; DEB_ARCH=amd64; RPM_ARCH=x86_64; APK_ARCH=x86_64 ;;
+  aarch64|arm64) ARCH=arm64; DEB_ARCH=arm64; RPM_ARCH=aarch64; APK_ARCH=aarch64 ;;
+  armv7*|armv8l) ARCH=armv7; DEB_ARCH=armhf; RPM_ARCH=armv7hl; APK_ARCH=armv7 ;;
+  armv6*) ARCH=armv6; DEB_ARCH=armhf; RPM_ARCH=armv6hl; APK_ARCH=armhf ;;
+  i386|i486|i586|i686) ARCH=386; DEB_ARCH=i386; RPM_ARCH=i386; APK_ARCH=x86 ;;
+  ppc64le) ARCH=ppc64le; DEB_ARCH=ppc64el; RPM_ARCH=ppc64le; APK_ARCH=ppc64le ;;
+  s390x) ARCH=s390x; DEB_ARCH=s390x; RPM_ARCH=s390x; APK_ARCH=s390x ;;
+  riscv64) ARCH=riscv64; DEB_ARCH=riscv64; RPM_ARCH=riscv64; APK_ARCH=riscv64 ;;
+  loongarch64) ARCH=loong64; DEB_ARCH=loong64; RPM_ARCH=loongarch64; APK_ARCH=loongarch64 ;;
   *) die "unsupported architecture: $arch_raw" ;;
 esac
+# A Debian armhf userland on an ARMv7 CPU still uses the armhf package.
+if [ "$ARCH" = armv7 ] && have dpkg; then DEB_ARCH=$(dpkg --print-architecture); fi
 
 init_system=none
 if have systemctl && [ -d /run/systemd/system ]; then
@@ -1218,7 +1228,12 @@ fi
 
 # ---------------------------------------------------------------- install
 install_via_package() {
-  local ver="$1" tmp cand
+  local ver="$1" tmp cand dv rv av
+  # Package file names spell a pre-release per format (1.4.0-rc.1: deb
+  # 1.4.0~rc.1, rpm 1.4.0~rc.1 with later dashes as _, apk 1.4.0_rc.1).
+  dv=$(echo "$ver" | sed 's/-/~/')
+  rv=$(echo "$ver" | sed 's/-/~/; s/-/_/g')
+  av=$(echo "$ver" | sed 's/-/_/')
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' RETURN
   local gh="https://github.com/${GITHUB_REPO}/releases/download/v${ver}"
@@ -1265,6 +1280,8 @@ install_via_package() {
   case "$OS_ID" in
     debian|ubuntu|raspbian)
       try_deb \
+        "${gh}/orion-belt_${dv}_${DEB_ARCH}.deb" \
+        "${base}/orion-belt_${dv}_${DEB_ARCH}.deb" \
         "${gh}/orion-belt_${ver}_linux_${ARCH}.deb" \
         "${base}/orion-belt_${ver}_linux_${ARCH}.deb" \
         "${base}/orion-belt_${ver}_${ARCH}.deb"
@@ -1272,6 +1289,7 @@ install_via_package() {
       ;;
     rhel|centos|rocky|almalinux|fedora|ol|opensuse*|sles)
       try_rpm \
+        "${gh}/orion-belt-${rv}-1.${RPM_ARCH}.rpm" \
         "${gh}/orion-belt_${ver}_linux_${ARCH}.rpm" \
         "${gh}/orion-belt_${ver}_linux_${RPM_ARCH}.rpm" \
         "${base}/orion-belt_${ver}_linux_${ARCH}.rpm" \
@@ -1281,6 +1299,7 @@ install_via_package() {
       ;;
     alpine)
       try_apk \
+        "${gh}/orion-belt_${av}_${APK_ARCH}.apk" \
         "${gh}/orion-belt_${ver}_linux_${ARCH}.apk" \
         "${base}/orion-belt_${ver}_linux_${ARCH}.apk" \
         "${base}/orion-belt_${ver}_x86_64.apk"
@@ -1383,7 +1402,12 @@ fi
 
 # Best-effort CLI tools (osh / ocp / oadmin) so client.yaml is immediately usable.
 install_tools_package() {
-  local ver="$1" tmp cand
+  local ver="$1" tmp cand dv rv av
+  # Package file names spell a pre-release per format (1.4.0-rc.1: deb
+  # 1.4.0~rc.1, rpm 1.4.0~rc.1 with later dashes as _, apk 1.4.0_rc.1).
+  dv=$(echo "$ver" | sed 's/-/~/')
+  rv=$(echo "$ver" | sed 's/-/~/; s/-/_/g')
+  av=$(echo "$ver" | sed 's/-/_/')
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' RETURN
   local gh="https://github.com/${GITHUB_REPO}/releases/download/v${ver}"
@@ -1429,6 +1453,8 @@ install_tools_package() {
   case "$OS_ID" in
     debian|ubuntu|raspbian)
       try_tools_deb \
+        "${gh}/orion-belt-tools_${dv}_${DEB_ARCH}.deb" \
+        "${base}/orion-belt-tools_${dv}_${DEB_ARCH}.deb" \
         "${gh}/orion-belt-tools_${ver}_linux_${ARCH}.deb" \
         "${gh}/orion-belt-tools_${ver}_${ARCH}.deb" \
         "${gh}/orion-belt_tools_${ver}_linux_${ARCH}.deb" \
@@ -1438,6 +1464,7 @@ install_tools_package() {
       ;;
     rhel|centos|rocky|almalinux|fedora|ol|opensuse*|sles)
       try_tools_rpm \
+        "${gh}/orion-belt-tools-${rv}-1.${RPM_ARCH}.rpm" \
         "${gh}/orion-belt-tools_${ver}_linux_${ARCH}.rpm" \
         "${gh}/orion-belt-tools_${ver}_linux_${RPM_ARCH}.rpm" \
         "${gh}/orion-belt-tools_${ver}_${ARCH}.rpm" \
@@ -1447,6 +1474,7 @@ install_tools_package() {
       ;;
     alpine)
       try_tools_apk \
+        "${gh}/orion-belt-tools_${av}_${APK_ARCH}.apk" \
         "${gh}/orion-belt-tools_${ver}_linux_${ARCH}.apk" \
         "${base}/orion-belt-tools_${ver}_linux_${ARCH}.apk"
       return $?

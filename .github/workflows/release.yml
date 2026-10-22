@@ -58,6 +58,34 @@ jobs:
           gpg --armor --export "$FPR" > packaging/keys/orion-belt.asc
           gpg --export "$FPR" > packaging/keys/orion-belt.gpg
 
+      - name: Prepare package signing and release extras
+        env:
+          FPR: ${{ steps.import_gpg.outputs.fingerprint }}
+          APK_RSA_PRIVATE_KEY: ${{ secrets.APK_RSA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # Installers and the public key ship with every release.
+          mkdir -p dist-extra
+          cp scripts/install.sh packaging/windows/install.ps1 dist-extra/
+          umask 077
+          if [ -n "$FPR" ]; then
+            cp packaging/keys/orion-belt.asc dist-extra/orion-belt-release-key.asc
+            # nfpm signs .deb and .rpm files natively with the release key.
+            if printf '%s' "$GPG_PRIVATE_KEY" | grep -q -- '-----BEGIN PGP PRIVATE KEY BLOCK-----'; then
+              printf '%s\n' "$GPG_PRIVATE_KEY" >"$RUNNER_TEMP/nfpm-key.asc"
+            else
+              printf '%s' "$GPG_PRIVATE_KEY" | base64 -d >"$RUNNER_TEMP/nfpm-key.asc"
+            fi
+            echo "NFPM_KEY_FILE=$RUNNER_TEMP/nfpm-key.asc" >>"$GITHUB_ENV"
+          fi
+          # apk signatures are RSA: optional; without it the apk index is
+          # unsigned and install.sh installs verified release files instead.
+          if [ -n "$APK_RSA_PRIVATE_KEY" ]; then
+            printf '%s\n' "$APK_RSA_PRIVATE_KEY" >"$RUNNER_TEMP/apk.rsa"
+            echo "NFPM_APK_KEY_FILE=$RUNNER_TEMP/apk.rsa" >>"$GITHUB_ENV"
+            echo "ORION_APK_PRIVKEY=$RUNNER_TEMP/apk.rsa" >>"$GITHUB_ENV"
+          fi
+
       - name: Select GoReleaser args
         id: goreleaser_args
         run: |
@@ -78,47 +106,38 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
           GPG_PASSWORD: ${{ env.GPG_PASSPHRASE }}
+          NFPM_PASSPHRASE: ${{ env.GPG_PASSPHRASE }}
 
-      - name: Build signed package repositories
-        if: steps.import_gpg.outcome == 'success'
-        env:
-          ORION_GPG_KEY: ${{ steps.import_gpg.outputs.fingerprint }}
-          ORION_REQUIRE_SIGN: "1"
-          ORION_DIST: dist
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq dpkg-dev apt-utils createrepo-c rpm
-          bash scripts/publish-repos.sh
-
-      - name: Upload repos artifact
-        if: steps.import_gpg.outcome == 'success'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: orion-belt-repos
-          path: repos/
-          if-no-files-found: warn
-
-      - name: Publish packages Pages (orion-belt-dev/packages)
+      - name: Build the package site (pkgs.orion-belt.dev)
         env:
           ORION_PKG_TAG: ${{ github.ref_name }}
           ORION_DIST: dist
-          # Cross-repo push — GITHUB_TOKEN cannot write to another repo.
-          # Prefer a fine-grained PAT (contents:write on orion-belt-dev/packages):
+          ORION_GPG_KEY: ${{ steps.import_gpg.outputs.fingerprint }}
+          ORION_REQUIRE_SIGN: ${{ steps.import_gpg.outputs.fingerprint != '' && '1' || '0' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dpkg-dev apt-utils createrepo-c
+          bash scripts/publish-packages-pages.sh
+
+      - name: Publish the package site (orion-belt-dev/packages)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          ORION_PKG_TAG: ${{ github.ref_name }}
+          ORION_DIST: dist
+          ORION_GPG_KEY: ${{ steps.import_gpg.outputs.fingerprint }}
+          ORION_REQUIRE_SIGN: ${{ steps.import_gpg.outputs.fingerprint != '' && '1' || '0' }}
+          # Cross-repo push: GITHUB_TOKEN cannot write to another repository.
+          # A fine-grained token (contents:write on orion-belt-dev/packages),
+          # or an SSH deploy key with write access on it.
           ORION_PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          # Or an SSH deploy key with write access on that repo:
           PACKAGES_DEPLOY_KEY: ${{ secrets.PACKAGES_DEPLOY_KEY }}
         run: |
           set -euo pipefail
           if [[ -z "${ORION_PACKAGES_TOKEN:-}" && -z "${PACKAGES_DEPLOY_KEY:-}" ]]; then
-            echo "::error::Set repo secret PACKAGES_TOKEN (PAT) or PACKAGES_DEPLOY_KEY (SSH) so Release can push to orion-belt-dev/packages gh-pages."
-            echo "Without it, make publish-packages-pages PUSH=1 cannot run in CI (GITHUB_TOKEN is scoped to this repo only)."
+            echo "::error::Set the PACKAGES_TOKEN (or PACKAGES_DEPLOY_KEY) secret so the release can publish orion-belt-dev/packages."
             exit 1
           fi
-          if ls dist/orion-belt-agent*.deb >/dev/null 2>&1; then
-            make publish-packages-pages PUSH=1
-          else
-            make publish-packages-pages FROM_RELEASE=1 PUSH=1
-          fi
+          bash scripts/publish-packages-pages.sh --push
 
       - name: Upload packages-site artifact
         if: always()
@@ -127,6 +146,10 @@ jobs:
           name: orion-belt-packages-site
           path: packages-site/
           if-no-files-found: warn
+
+      - name: Remove signing key files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/nfpm-key.asc" "$RUNNER_TEMP/apk.rsa"
 
       - name: Set up QEMU (multi-arch images)
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -163,7 +186,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           target: server
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
           push: true
           tags: ${{ steps.meta.outputs.server_tags }}
           labels: |
@@ -177,7 +200,7 @@ jobs:
           context: .
           file: docker/Dockerfile.agent
           target: agent
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
           push: true
           tags: ${{ steps.meta.outputs.agent_tags }}
           labels: |
