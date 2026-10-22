@@ -20,10 +20,14 @@ func PromptLine(label string) (string, error) {
 	return strings.TrimSpace(s), nil
 }
 
+// readPassword reads stdin without echo. A variable so tests can answer the
+// prompt without a terminal.
+var readPassword = func() ([]byte, error) { return term.ReadPassword(int(syscall.Stdin)) }
+
 // PromptSecret reads a line without echo (passwords / TOTP).
 func PromptSecret(label string) (string, error) {
 	fmt.Fprint(os.Stderr, label)
-	b, err := term.ReadPassword(int(syscall.Stdin))
+	b, err := readPassword()
 	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return "", err

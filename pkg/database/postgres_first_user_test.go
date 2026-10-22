@@ -12,8 +12,9 @@ import (
 )
 
 // openTestPostgres connects to the database named by ORION_TEST_POSTGRES_DSN,
-// migrates it and empties the users table. The test is skipped when the
-// variable is unset, e.g.:
+// migrates it and empties every table. TestMain sets the variable to a
+// Postgres container it starts (main_test.go); set it yourself to use an
+// existing database instead, e.g.:
 //
 //	docker run -d --rm -p 55432:5432 -e POSTGRES_PASSWORD=test postgres:16-alpine
 //	ORION_TEST_POSTGRES_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?sslmode=disable' go test ./pkg/database/
@@ -34,8 +35,11 @@ func openTestPostgres(t *testing.T) *PostgresStore {
 	if err := pg.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := pg.db.ExecContext(ctx, `TRUNCATE users CASCADE`); err != nil {
-		t.Fatalf("truncate users: %v", err)
+	// Tables that do not reference users survive TRUNCATE users CASCADE, so
+	// they are listed explicitly to give every test an empty database.
+	if _, err := pg.db.ExecContext(ctx, `TRUNCATE users, machines, plugin_settings, notification_policy,
+		notification_templates, ssh_ca_keys, ssh_certificates CASCADE`); err != nil {
+		t.Fatalf("truncate tables: %v", err)
 	}
 	return pg
 }

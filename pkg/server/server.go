@@ -40,6 +40,7 @@ type Server struct {
 	hostPrivate   ssh.Signer
 	hostCert      *ssh.Certificate
 	listener      net.Listener
+	listenerMu    sync.Mutex // Start sets listener while Stop may run concurrently
 	apiServer     *api.APIServer
 	agents        map[string]*AgentConnection
 	agentsMu      sync.RWMutex
@@ -340,7 +341,9 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
+	s.listenerMu.Lock()
 	s.listener = listener
+	s.listenerMu.Unlock()
 
 	s.logger.Info("Starting Orion-Belt SSH server on %s", addr)
 
@@ -728,12 +731,14 @@ func (s *Server) handleClientSession(channel ssh.Channel, requests <-chan *ssh.R
 	var (
 		ptyReq    *ptyRequest
 		wantShell bool
-		target    string
 	)
 
+	// A username like alice+deploy%web-01 names the target for every request
+	// on the connection, not only for interactive shells. Without one, exec
+	// falls back to reading [remoteUser@]machine from the command's first word.
 	_, remoteUser, machineFromUser := common.ParseGatewaySSHUser(sshUser)
-	if machineFromUser != "" {
-		target = common.FormatTarget(remoteUser, machineFromUser)
+	if remoteUser == "" {
+		remoteUser = "root"
 	}
 
 	for req := range requests {
@@ -750,7 +755,11 @@ func (s *Server) handleClientSession(channel ssh.Channel, requests <-chan *ssh.R
 			req.Reply(true, nil)
 			// Hand over the request stream so window-change keeps reaching the
 			// agent (e.g. `ssh -tt alice@gw web-01`) and requests don't back up.
-			s.proxyToMachine(channel, payload.Command, userID, username, ptyReq, requests)
+			if machineFromUser != "" {
+				s.proxyToTarget(channel, remoteUser, machineFromUser, payload.Command, userID, username, ptyReq, requests)
+			} else {
+				s.proxyToMachine(channel, payload.Command, userID, username, ptyReq, requests)
+			}
 			return
 
 		case "shell":
@@ -783,18 +792,19 @@ func (s *Server) handleClientSession(channel ssh.Channel, requests <-chan *ssh.R
 		}
 
 		if wantShell {
-			if target == "" {
+			if machineFromUser == "" {
 				msg := "Orion-Belt Gateway (OpenSSH compatible)\n\n" +
 					"Usage:\n" +
 					"  ssh alice+web-01@gateway              # interactive shell as root@web-01\n" +
 					"  ssh alice+bob%web-01@gateway          # interactive shell as bob@web-01\n" +
+					"  ssh alice+bob%web-01@gateway uptime   # remote command as bob@web-01\n" +
 					"  ssh alice@gateway 'bob@web-01'        # exec form (also works)\n" +
 					"  ssh alice@gateway 'bob@web-01 uptime' # remote command\n\n" +
 					"See docs/openssh-clients.md for ssh_config snippets.\n"
 				channel.Write([]byte(msg))
 				return
 			}
-			s.proxyToMachine(channel, target, userID, username, ptyReq, requests)
+			s.proxyToTarget(channel, remoteUser, machineFromUser, "", userID, username, ptyReq, requests)
 			return
 		}
 	}
@@ -809,8 +819,26 @@ type ptyRequest struct {
 	Modelist string
 }
 
-// proxyToMachine proxies a client session to a target machine through an agent
+// proxyToMachine proxies a client session whose target is the first word of
+// commandLine, as [remoteUser@]machine; the rest is the remote command.
 func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, username string, ptyReq *ptyRequest, remainingReqs <-chan *ssh.Request) {
+	remoteUser, machineName, remoteCommand := parseExecTarget(commandLine)
+	s.proxyToTarget(clientChannel, remoteUser, machineName, remoteCommand, userID, username, ptyReq, remainingReqs)
+}
+
+// parseExecTarget splits "[remoteUser@]machine [command]". The remote user
+// defaults to root, as for shells.
+func parseExecTarget(commandLine string) (remoteUser, machineName, remoteCommand string) {
+	target, remoteCommand, _ := strings.Cut(commandLine, " ")
+	if user, machine, ok := strings.Cut(target, "@"); ok {
+		return user, machine, remoteCommand
+	}
+	return "root", target, remoteCommand
+}
+
+// proxyToTarget proxies a client session to remoteUser@machineName through
+// the machine's agent. An empty remoteCommand starts an interactive shell.
+func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineName, remoteCommand, userID, username string, ptyReq *ptyRequest, remainingReqs <-chan *ssh.Request) {
 	// Root span for the whole gateway -> agent -> target hop. Its context is
 	// what carries trace identity down to the agent, so it has to wrap every
 	// step below rather than just the proxy loop.
@@ -818,24 +846,6 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 		trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
 
-	s.logger.Info("proxyToMachine called: commandLine='%s', user='%s', userID='%s'", commandLine, username, userID)
-
-	var remoteUser, machineName, remoteCommand string
-	parts := strings.SplitN(commandLine, " ", 2)
-	target := parts[0]
-	if len(parts) > 1 {
-		remoteCommand = parts[1]
-	}
-
-	// Extract remoteUser@machine
-	if strings.Contains(target, "@") {
-		userMachine := strings.SplitN(target, "@", 2)
-		remoteUser = userMachine[0]
-		machineName = userMachine[1]
-	} else {
-		machineName = target
-		remoteUser = "root" // default
-	}
 	s.logger.Info("Gateway user '%s' connecting to '%s@%s'", username, remoteUser, machineName)
 
 	// Identity of the hop, attached before anything can fail so a rejected
@@ -956,8 +966,10 @@ func (s *Server) proxyToMachine(clientChannel ssh.Channel, commandLine, userID, 
 
 	s.logger.Info("Successfully opened session channel to agent")
 
-	// Forward PTY request to agent when present (OpenSSH interactive)
-	if ptyReq != nil && remoteCommand == "" {
+	// Forward the PTY request for exec as well as shells, so `ssh -t host cmd`
+	// and sudo with requiretty get a terminal. Agents that predate PTY exec
+	// accept the request and run the command without one.
+	if ptyReq != nil {
 		ok, err := agentChannel.SendRequest("pty-req", true, ssh.Marshal(ptyReq))
 		if err != nil || !ok {
 			s.logger.Warn("Failed to forward pty-req to agent: ok=%v err=%v", ok, err)
@@ -1121,16 +1133,18 @@ func (s *Server) startInteractiveShell(clientChannel, agentChannel ssh.Channel, 
 	clientChannel.Close()
 }
 
-// proxyConnection proxies data between client and agent with output-only recording.
-func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.SessionRecorder, waitBoth bool) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
+// proxyConnection proxies data between client and agent with output-only
+// recording. With untilOutputEnds (exec) it returns once the agent's output
+// has ended, as OpenSSH ends a session when the command exits: input the
+// client has not closed yet is moot by then, and clients such as Ansible or
+// ssh with ControlMaster never close it, so waiting for it hangs the session.
+// Otherwise (shell) it returns when either direction finishes.
+func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.SessionRecorder, untilOutputEnds bool) {
 	done := make(chan struct{}, 2)
+	outputDone := make(chan struct{})
 
 	// Client -> Agent (keystrokes are not recorded; PTY echo covers input in the cast)
 	go func() {
-		defer wg.Done()
 		io.Copy(agent, client)
 
 		if cw, ok := agent.(interface{ CloseWrite() error }); ok {
@@ -1142,7 +1156,7 @@ func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.
 
 	// Agent -> Client (PTY output → cast)
 	go func() {
-		defer wg.Done()
+		defer close(outputDone)
 		var out io.Writer = client
 		if recorder != nil {
 			out = recording.NewRecordingWriter(client, recorder)
@@ -1154,8 +1168,8 @@ func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.
 		done <- struct{}{}
 	}()
 
-	if waitBoth {
-		wg.Wait()
+	if untilOutputEnds {
+		<-outputDone
 	} else {
 		<-done
 		s.logger.Debug("First I/O direction finished, stopping proxy for shell")
@@ -1168,9 +1182,11 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	close(s.shutdown)
 
+	s.listenerMu.Lock()
 	if s.listener != nil {
 		s.listener.Close()
 	}
+	s.listenerMu.Unlock()
 
 	if err := s.pluginManager.ShutdownAll(ctx); err != nil {
 		s.logger.Error("Failed to shutdown plugins: %v", err)
@@ -1229,10 +1245,20 @@ func (s *Server) handleAgentCertRenewal(req *ssh.Request, machine *common.Machin
 	req.Reply(true, ssh.MarshalAuthorizedKey(cert))
 }
 
+// Intervals of the background loops and the agent command deadline.
+// Variables so tests can run the loops without real-time waits.
+var (
+	revocationRefreshInterval = 30 * time.Second
+	hostCertRenewalInterval   = time.Hour
+	sessionCleanupInterval    = time.Hour
+	retentionInterval         = 6 * time.Hour
+	agentCommandTimeout       = 15 * time.Second
+)
+
 // runCARevocationRefreshLoop reloads revoked serials so multi-instance or
 // out-of-band DB revocations take effect without restart.
 func (s *Server) runCARevocationRefreshLoop() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(revocationRefreshInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1249,7 +1275,7 @@ func (s *Server) runCARevocationRefreshLoop() {
 // runGatewayHostCertRenewalLoop re-issues the gateway's own Host cert before
 // expiry so clients using Host-CA trust keep verifying without downtime.
 func (s *Server) runGatewayHostCertRenewalLoop() {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(hostCertRenewalInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1291,7 +1317,7 @@ func (s *Server) renewGatewayHostCertIfNeeded() {
 // regardless of whether the row still exists), so this only reclaims storage —
 // without it, http_sessions grows unbounded.
 func (s *Server) runSessionCleanupLoop() {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(sessionCleanupInterval)
 	defer ticker.Stop()
 	cleanup := func() {
 		if err := s.authService.CleanupExpiredSessions(context.Background()); err != nil {
@@ -1311,7 +1337,7 @@ func (s *Server) runSessionCleanupLoop() {
 
 // runRetentionLoop periodically deletes expired recordings.
 func (s *Server) runRetentionLoop() {
-	ticker := time.NewTicker(6 * time.Hour)
+	ticker := time.NewTicker(retentionInterval)
 	defer ticker.Stop()
 	path := s.recorder.GetRecordingStoragePath()
 	days := s.config.Recording.RetentionDays
@@ -1448,7 +1474,7 @@ func (s *Server) SendAgentCommand(machineID, command string) ([]byte, error) {
 
 	select {
 	case <-done:
-	case <-time.After(15 * time.Second):
+	case <-time.After(agentCommandTimeout):
 		return nil, fmt.Errorf("agent command timed out")
 	}
 

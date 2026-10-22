@@ -227,7 +227,9 @@ func isYes(s string) bool {
 	return s == "y" || s == "yes"
 }
 
-func isInteractive() bool {
+// isInteractive gates the setup wizard on a real terminal. A variable so
+// tests can drive the wizard with in-memory input.
+var isInteractive = func() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 

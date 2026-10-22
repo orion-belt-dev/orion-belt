@@ -266,12 +266,19 @@ func (c *SSHClient) RequestAccess(target, reason string, duration int) error {
 	return c.pollForApproval(apiClient, accessReq.ID)
 }
 
+// How often and how long pollForApproval waits for a reviewer. Variables so
+// tests can run the loop without real-time waits.
+var (
+	approvalPollInterval = 5 * time.Second
+	approvalTimeout      = 5 * time.Minute
+)
+
 // pollForApproval polls the API for access request approval
 func (c *SSHClient) pollForApproval(apiClient *APIClient, requestID string) error {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(approvalPollInterval)
 	defer ticker.Stop()
 
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(approvalTimeout)
 
 	for {
 		select {

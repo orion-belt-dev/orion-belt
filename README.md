@@ -172,7 +172,7 @@ After installing packages, follow [SETUP.md](docs/SETUP.md). Set `server.public_
 ```bash
 git clone https://github.com/orion-belt-dev/orion-belt.git
 cd orion-belt
-make build   # Go 1.26.6+ (see go.mod)
+make build   # Go 1.27.3+ (see go.mod)
 ```
 
 ## Docs

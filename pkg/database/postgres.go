@@ -1198,7 +1198,7 @@ func (s *PostgresStore) CreatePermission(ctx context.Context, permission *common
 
 // GetPermission - scan remote_users array
 func (s *PostgresStore) GetPermission(ctx context.Context, id string) (*common.Permission, error) {
-	query := `SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at, expires_at
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
 			  FROM permissions WHERE id = $1`
 
 	permission := &common.Permission{}
@@ -1256,7 +1256,7 @@ func (s *PostgresStore) DeletePermission(ctx context.Context, id string) error {
 
 // ListUserPermissions lists permissions for a specific user
 func (s *PostgresStore) ListUserPermissions(ctx context.Context, userID string) ([]*common.Permission, error) {
-	query := `SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at, expires_at
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
 			  FROM permissions WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > NOW())
 			  ORDER BY granted_at DESC`
 
@@ -1284,7 +1284,7 @@ func (s *PostgresStore) ListUserPermissions(ctx context.Context, userID string) 
 
 // ListMachinePermissions lists permissions for a specific machine
 func (s *PostgresStore) ListMachinePermissions(ctx context.Context, machineID string) ([]*common.Permission, error) {
-	query := `SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at, expires_at
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
 			  FROM permissions WHERE machine_id = $1 AND (expires_at IS NULL OR expires_at > NOW())
 			  ORDER BY granted_at DESC`
 
@@ -1315,7 +1315,7 @@ func (s *PostgresStore) ListAllPermissions(ctx context.Context, limit, offset in
 	if limit <= 0 {
 		limit = 200
 	}
-	query := `SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at, expires_at
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
 			  FROM permissions WHERE (expires_at IS NULL OR expires_at > NOW())
 			  ORDER BY granted_at DESC LIMIT $1 OFFSET $2`
 	rows, err := s.db.QueryContext(ctx, query, limit, offset)
@@ -1353,7 +1353,7 @@ func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common
 
 // FindActivePermission returns an existing non-expired grant for the user/machine/access_type trio.
 func (s *PostgresStore) FindActivePermission(ctx context.Context, userID, machineID, accessType string) (*common.Permission, error) {
-	query := `SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at, expires_at
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
 			  FROM permissions
 			  WHERE user_id=$1 AND machine_id=$2 AND access_type=$3
 			    AND (expires_at IS NULL OR expires_at > NOW())
@@ -1410,7 +1410,7 @@ func (s *PostgresStore) CreateAuditLog(ctx context.Context, log *common.AuditLog
 // ListAuditLogs lists audit logs with pagination and filters. Supported
 // filter keys: "user_id", "action", "resource".
 func (s *PostgresStore) ListAuditLogs(ctx context.Context, limit, offset int, filters map[string]interface{}) ([]*common.AuditLog, error) {
-	query := `SELECT id, user_id, action, resource, metadata, ip_address, timestamp FROM audit_logs`
+	query := `SELECT id, COALESCE(user_id, ''), action, resource, metadata, ip_address, timestamp FROM audit_logs`
 
 	var (
 		conditions []string

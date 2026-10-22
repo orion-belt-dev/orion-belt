@@ -28,7 +28,13 @@ function trimBaseUrl(baseUrl: string): string {
   if (!trimmed) {
     throw new Error('baseUrl is required');
   }
-  return trimmed.replace(/\/+$/, '');
+  // A loop rather than /\/+$/: that regex backtracks quadratically on a
+  // long run of slashes that is not at the end.
+  let end = trimmed.length;
+  while (end > 0 && trimmed[end - 1] === '/') {
+    end--;
+  }
+  return trimmed.slice(0, end);
 }
 
 function buildUrl(baseUrl: string, path: string): string {

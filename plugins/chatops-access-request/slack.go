@@ -238,7 +238,18 @@ func (p *ChatOpsPlugin) handleSlackInteraction(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 }
 
+// slackResponseOrigin is where Slack's response_url always points. Requests
+// are already signature-checked; posting only to this origin also keeps a
+// leaked signing secret from turning the gateway into a request proxy. A
+// variable so tests can point it at a local server.
+var slackResponseOrigin = "https://hooks.slack.com"
+
 func (p *ChatOpsPlugin) postSlackResponseURL(responseURL, text string) {
+	u, err := url.Parse(responseURL)
+	if err != nil || u.Scheme+"://"+u.Host != slackResponseOrigin {
+		log.Printf("[ChatOpsPlugin] ignoring response_url outside %s", slackResponseOrigin)
+		return
+	}
 	body, err := json.Marshal(map[string]interface{}{
 		"replace_original": true,
 		"text":             text,
