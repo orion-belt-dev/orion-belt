@@ -1,17 +1,26 @@
 # Orion Belt
 
-[![Website](https://img.shields.io/badge/website-orion--belt.dev-0B3D5C?style=flat-square)](https://orion-belt.dev)
-[![Discord](https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/w62S8jxTHJ)
-[![License](https://img.shields.io/badge/license-Apache%202.0%20%2B%20Commons%20Clause-blue?style=flat-square)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/orion-belt-dev/orion-belt?style=flat-square)](go.mod)
-[![Release](https://img.shields.io/github/v/release/orion-belt-dev/orion-belt?include_prereleases&style=flat-square)](https://github.com/orion-belt-dev/orion-belt/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/orion-belt-dev/orion-belt/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/orion-belt-dev/orion-belt/actions)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/orion-belt-header-dark.svg">
+    <img alt="Orion Belt — self-hosted, auditable, and boring to operate" src="assets/readme/orion-belt-header-light.svg" width="100%">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://orion-belt.dev"><img src="https://img.shields.io/badge/website-orion--belt.dev-1f5fe0?style=flat-square" alt="Website"></a>
+  <a href="https://discord.gg/w62S8jxTHJ"><img src="https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0%20%2B%20Commons%20Clause-1f5fe0?style=flat-square" alt="License"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/orion-belt-dev/orion-belt?style=flat-square&color=1f5fe0" alt="Go"></a>
+  <a href="https://github.com/orion-belt-dev/orion-belt/releases"><img src="https://img.shields.io/github/v/release/orion-belt-dev/orion-belt?include_prereleases&style=flat-square&color=1f5fe0" alt="Release"></a>
+  <a href="https://github.com/orion-belt-dev/orion-belt/actions"><img src="https://img.shields.io/github/actions/workflow/status/orion-belt-dev/orion-belt/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
+</p>
+
+Agents dial out. Sessions are recorded. Access expires on its own.
 
 Orion Belt is a self-hosted SSH access gateway with privileged access management (PAM) workflows. Agents on your servers connect out to the gateway over reverse SSH, so targets need no inbound ports. The gateway adds session recording and live watch, just-in-time access with approvals, MFA and WebAuthn, relationship-based access control (ReBAC), and an optional SSH certificate authority.
 
 > Version 1.0.0 is stable. Orion Belt is free to self-host and use internally under [Apache 2.0 with the Commons Clause](LICENSE); it may not be sold as a product or hosted service. See [orion-belt.dev](https://orion-belt.dev) for details.
-
-![Orion Belt](assets/banner-2.png)
 
 ## Why Orion Belt
 
@@ -75,7 +84,7 @@ Orion Belt fits teams that want to run their own SSH access management without e
 - **Web console:** terminal, file browser, session playback and live watch, and management of users, machines and permissions.
 - **Usage dashboard:** access volume, approval latency and most-used targets over a rolling window.
 - **Plugins:** audit logging, email, webhook and Slack notifications, and ChatOps approvals, configured from the console.
-- **Operations:** Prometheus metrics, JSON logs, an OpenAPI specification, and GPG-signed deb, rpm and apk repositories.
+- **Operations:** Prometheus metrics, JSON logs, an OpenAPI specification, and GPG-signed deb/rpm plus RSA-signed apk repositories.
 
 ## Architecture
 
@@ -102,7 +111,9 @@ Details: [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Install
 
-### Docker (fastest)
+Signed packages live at **[pkgs.orion-belt.dev](https://pkgs.orion-belt.dev)**. The installer adds the apt / dnf / zypper / apk / pacman repo for your OS (or falls back to a verified release package). Docker remains the fastest lab path.
+
+### Docker (lab)
 
 ```bash
 git clone https://github.com/orion-belt-dev/orion-belt.git
@@ -110,62 +121,186 @@ cd orion-belt
 ./scripts/docker-quickstart.sh
 ```
 
-The script asks whether to build from this checkout or pull the published images from GHCR. To choose up front:
+`--images` pulls GHCR; `--from-source` builds here. Full walkthrough: [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md). Production Compose: `cp .env.prod.example .env.prod && make docker-prod-up` (TLS: [REVERSE_PROXY.md](docs/REVERSE_PROXY.md)).
+
+### One-liner (`install.sh`)
 
 ```bash
-./scripts/docker-quickstart.sh --images        # ghcr.io/orion-belt-dev/...:latest
-./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- server   # gateway (Linux)
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- agent    # agent (Linux)
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh                # clients: osh, ocp, oadmin
 ```
 
-See [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) to add an agent and open a first session.
+```powershell
+irm https://pkgs.orion-belt.dev/install.ps1 | iex                     # clients on Windows
+scoop install https://pkgs.orion-belt.dev/scoop/orion-belt.json
+```
 
-Make targets: `docker-up`, `docker-down` and `docker-agent-up`. For production:
+`install.sh --help` covers `--version`, `--method`, `--prefix`, and `--uninstall`.
+
+### Gateway — per OS (pkgs.orion-belt.dev)
+
+Add the signed repo with the system package manager, install `orion-belt`, then configure and start. You need PostgreSQL reachable (or install it yourself). Set at least `database.connection_string`, `auth.jwt_secret`, and `server.public_url` in `/etc/orion-belt/server.yaml`.
+
+<details>
+<summary><b>Debian / Ubuntu</b> (apt)</summary>
 
 ```bash
-cp .env.prod.example .env.prod   # set the secrets and ORION_PUBLIC_URL
-make docker-prod-up
+curl -fsSLo /usr/share/keyrings/orion-belt.gpg https://pkgs.orion-belt.dev/orion-belt.gpg
+echo 'deb [signed-by=/usr/share/keyrings/orion-belt.gpg] https://pkgs.orion-belt.dev stable main' \
+  | sudo tee /etc/apt/sources.list.d/orion-belt.list
+sudo apt update
+sudo apt install orion-belt
+
+sudoedit /etc/orion-belt/server.yaml
+# database.connection_string, auth.jwt_secret, server.public_url
+# (optional) server.public_ssh_host / public_ssh_port if agents dial a different host:port
+
+sudo systemctl enable --now orion-belt-server
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-To serve the console over HTTPS, add the Caddy overlay described in
-[REVERSE_PROXY.md](docs/REVERSE_PROXY.md).
+</details>
 
-### curl | bash (Linux server)
+<details>
+<summary><b>RHEL / Rocky / AlmaLinux / CentOS</b> (dnf)</summary>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/scripts/install-server.sh | sudo bash
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo dnf install orion-belt
+
+sudoedit /etc/orion-belt/server.yaml
+sudo systemctl enable --now orion-belt-server
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-The installer uses the distribution's deb, rpm or apk package when one is available and the release binary otherwise. It writes `/etc/orion-belt/server.yaml` with your public URL, enables the systemd or OpenRC service, and runs the setup wizard, which takes the admin's SSH public key from a file, from a paste, or generates one. It can also install a local PostgreSQL (`--install-postgres`, or when prompted).
+</details>
 
-Unattended:
+<details>
+<summary><b>Fedora</b> (dnf)</summary>
 
 ```bash
-curl -fsSL .../install-server.sh | sudo bash -s -- --unattended \
-  --public-url https://orion.example.com \
-  --install-postgres \
-  --jwt-secret "$(openssl rand -hex 32)" \
-  --admin-email admin@example.com \
-  --admin-key-file /root/admin.pub
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo dnf install orion-belt
+
+sudoedit /etc/orion-belt/server.yaml
+sudo systemctl enable --now orion-belt-server
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-`--install-postgres` installs and starts a local PostgreSQL and creates the `orionbelt` database. To use an existing database, pass `--db-url` instead.
+</details>
 
-Uninstall (asks separately whether to keep the DB, logs, and recordings):
+<details>
+<summary><b>openSUSE</b> (zypper)</summary>
 
 ```bash
-sudo bash scripts/install-server.sh --uninstall
-# unattended:
-sudo bash scripts/install-server.sh --uninstall --unattended --drop-db --drop-logs --drop-data
+sudo zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo zypper install orion-belt
+
+sudoedit /etc/orion-belt/server.yaml
+sudo systemctl enable --now orion-belt-server
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-### Packages (deb / rpm / apk)
+</details>
+
+<details>
+<summary><b>Alpine</b> (apk, OpenRC)</summary>
 
 ```bash
-make packages
-# then install from dist/; see docs/PACKAGING.md
+sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub
+echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
+sudo apk update
+sudo apk add orion-belt
+
+sudoedit /etc/orion-belt/server.yaml
+sudo rc-update add orion-belt-server default
+sudo rc-service orion-belt-server start
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-After installing packages, follow [SETUP.md](docs/SETUP.md). Set `server.public_url`, and `public_ssh_host` and `public_ssh_port` if they differ, so the console and agents advertise a reachable address instead of localhost.
+Without a signed APKINDEX (no `APK_RSA_PRIVATE_KEY` on the release), `install.sh` falls back to verified release files instead of an unsigned index.
+
+</details>
+
+<details>
+<summary><b>Arch Linux</b> (pacman)</summary>
+
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/orion-belt.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key F1E47F7B036D5202262E174F613B2217A8958DA9
+# add [orion-belt] with Server = https://pkgs.orion-belt.dev/archlinux/$arch to pacman.conf
+sudo pacman -Sy orion-belt
+
+sudoedit /etc/orion-belt/server.yaml
+sudo systemctl enable --now orion-belt-server
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
+```
+
+</details>
+
+Console: `<public_url>/ui`. Confirm: `curl -s http://127.0.0.1:8080/api/v1/version`. More: [SETUP.md](docs/SETUP.md), [PACKAGING.md](docs/PACKAGING.md).
+
+### Agent — enroll target hosts
+
+Agents dial **out** to the gateway on SSH port **2222** (no inbound hole on the target).
+
+**Recommended:** sign in as admin/operator → **Add agent** → pick OS → package base `https://pkgs.orion-belt.dev` → **Generate install script** → run as root on the target. Treat the script as a secret.
+
+**Or** install with the package manager (same repo setup as the gateway), then configure:
+
+```bash
+# after the distro repo block above:
+sudo apt install orion-belt-agent          # Debian / Ubuntu
+# sudo dnf install orion-belt-agent        # RHEL / Rocky / Alma / CentOS / Fedora
+# sudo zypper install orion-belt-agent     # openSUSE
+# sudo apk add orion-belt-agent            # Alpine
+# sudo pacman -S orion-belt-agent          # Arch
+# or: curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- agent
+
+sudoedit /etc/orion-belt/agent.yaml
+# server.host: orion.example.com
+# server.port: 2222
+# agent.name: web-01
+# auth.key_file: /etc/orion-belt/agent_key
+
+sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
+# Register the .pub with the gateway (UI, oadmin, or POST /api/v1/public/register/agent)
+
+sudo systemctl enable --now orion-belt-agent
+# Alpine: sudo rc-update add orion-belt-agent default && sudo rc-service orion-belt-agent start
+```
+
+Details: [SETUP.md — Add agents](docs/SETUP.md#3-add-agents).
+
+### Clients — `osh` / `ocp` / `oadmin`
+
+Plain OpenSSH works (`ssh -p 2222 user+machine@gateway`). The tools package adds console login, file copy, JIT requests and admin commands.
+
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh    # Linux / macOS / BSD / …
+# or, after adding the distro repo:
+# sudo apt install orion-belt-tools
+# sudo dnf install orion-belt-tools
+# sudo apk add orion-belt-tools
+```
+
+Windows: `irm https://pkgs.orion-belt.dev/install.ps1 | iex`, or Scoop as above.
+
+First run writes `~/.orion-belt/client.yaml` (or pass `-c`). Examples (gateway `orion.example.com`, machine `web-01`, user `alice`):
+
+```bash
+osh login                          # browser sign-in via SSH key
+osh --list
+osh alice@web-01                   # recorded shell through the gateway
+ocp ./file web-01:/tmp/file
+oadmin requests list
+
+# Plain OpenSSH (no tools package):
+ssh -p 2222 'alice+web-01@orion.example.com'
+```
+
+More: [CLIENT-CLI.md](docs/CLIENT-CLI.md), [openssh-clients.md](docs/openssh-clients.md).
 
 ### From source
 
@@ -174,6 +309,8 @@ git clone https://github.com/orion-belt-dev/orion-belt.git
 cd orion-belt
 make build   # Go 1.27.3+ (see go.mod)
 ```
+
+Local packages: `make packages` → install from `dist/` ([PACKAGING.md](docs/PACKAGING.md)).
 
 ## Docs
 
