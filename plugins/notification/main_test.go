@@ -96,3 +96,12 @@ func TestSlackSendFailures(t *testing.T) {
 		t.Fatal("granted hook with unlimited ttl should still attempt delivery")
 	}
 }
+
+func TestSlackInitializeRejectsNonHTTPWebhook(t *testing.T) {
+	for _, raw := range []string{"file:///etc/passwd", "gopher://127.0.0.1:70", "127.0.0.1:8080/hook", "https://", "://bad"} {
+		p := NewPlugin().(*SlackPlugin)
+		if err := p.Initialize(context.Background(), map[string]interface{}{"webhook_url": raw}); err == nil {
+			t.Errorf("webhook_url %q was accepted", raw)
+		}
+	}
+}

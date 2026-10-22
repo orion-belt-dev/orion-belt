@@ -250,6 +250,12 @@ func (p *ChatOpsPlugin) postSlackResponseURL(responseURL, text string) {
 		log.Printf("[ChatOpsPlugin] ignoring response_url outside %s", slackResponseOrigin)
 		return
 	}
+	// Rebuild the URL from the fixed origin so only the path and query come
+	// from the request.
+	target := slackResponseOrigin + "/" + strings.TrimPrefix(u.EscapedPath(), "/")
+	if u.RawQuery != "" {
+		target += "?" + u.RawQuery
+	}
 	body, err := json.Marshal(map[string]interface{}{
 		"replace_original": true,
 		"text":             text,
@@ -257,7 +263,7 @@ func (p *ChatOpsPlugin) postSlackResponseURL(responseURL, text string) {
 	if err != nil {
 		return
 	}
-	req, err := http.NewRequest(http.MethodPost, responseURL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, target, bytes.NewReader(body))
 	if err != nil {
 		return
 	}

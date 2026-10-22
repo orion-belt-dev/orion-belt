@@ -56,6 +56,10 @@ func (p *AuditPlugin) Initialize(ctx context.Context, config map[string]interfac
 	if path, ok := config["log_path"].(string); ok {
 		logPath = path
 	}
+	if !filepath.IsAbs(logPath) {
+		return fmt.Errorf("log_path must be an absolute path")
+	}
+	logPath = filepath.Clean(logPath)
 
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {

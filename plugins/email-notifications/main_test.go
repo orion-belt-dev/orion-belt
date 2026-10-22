@@ -75,3 +75,15 @@ func TestEmailHooksSkipWhenDisabledAndFailWithoutSMTP(t *testing.T) {
 		}
 	}
 }
+
+func TestEmailInitializeRejectsLineBreaksInAddresses(t *testing.T) {
+	for _, cfg := range []map[string]interface{}{
+		{"smtp_host": "smtp.example", "from": "a@example\r\nBcc: x@example", "to": "b@example"},
+		{"smtp_host": "smtp.example", "to": []interface{}{"b@example\nBcc: x@example"}},
+	} {
+		p := NewPlugin().(*EmailPlugin)
+		if err := p.Initialize(context.Background(), cfg); err == nil {
+			t.Errorf("config %v was accepted", cfg)
+		}
+	}
+}
