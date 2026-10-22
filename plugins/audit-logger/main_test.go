@@ -72,3 +72,10 @@ func TestAuditDisabledAndMissingFile(t *testing.T) {
 	p.enabled = true
 	p.writeLog("ORPHAN", "no file yet", &plugin.HookContext{Data: map[string]interface{}{"x": 1}})
 }
+
+func TestAuditInitializeRejectsRelativePath(t *testing.T) {
+	p := NewPlugin().(*AuditPlugin)
+	if err := p.Initialize(context.Background(), map[string]interface{}{"log_path": "audit.log"}); err == nil {
+		t.Fatal("Initialize accepted a relative log_path")
+	}
+}

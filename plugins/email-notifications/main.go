@@ -99,6 +99,12 @@ func (p *EmailPlugin) Initialize(ctx context.Context, config map[string]interfac
 	if len(p.to) == 0 {
 		return fmt.Errorf("at least one recipient (to) is required")
 	}
+	// from and to are written into the message headers.
+	for _, addr := range append([]string{p.from}, p.to...) {
+		if strings.ContainsAny(addr, "\r\n") {
+			return fmt.Errorf("from and to must not contain line breaks")
+		}
+	}
 	log.Printf("[EmailPlugin] Initialized SMTP %s:%d enabled=%v", p.host, p.port, p.enabled)
 	return nil
 }

@@ -400,10 +400,13 @@ func TestPostSlackResponseURL(t *testing.T) {
 	w := newWorld(t)
 	p, _ := newConfiguredPlugin(t, w)
 
-	p.postSlackResponseURL(w.srv.URL+"/slack-response", "Approved by alice")
+	p.postSlackResponseURL(w.srv.URL+"/slack-response?t=abc", "Approved by alice")
 	reqs := w.byPath("/slack-response")
 	if len(reqs) != 1 || !strings.Contains(reqs[0].body, `"replace_original":true`) || !strings.Contains(reqs[0].body, "Approved by alice") {
 		t.Errorf("response_url requests = %+v", reqs)
+	}
+	if len(reqs) == 1 && reqs[0].query.Get("t") != "abc" {
+		t.Errorf("response_url query = %v, want t=abc", reqs[0].query)
 	}
 
 	p.postSlackResponseURL("://bad", "x") // invalid URL: returns quietly

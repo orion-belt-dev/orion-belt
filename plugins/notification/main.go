@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
@@ -56,11 +57,15 @@ func (p *SlackPlugin) ConfigSchema() []plugin.ConfigField {
 
 func (p *SlackPlugin) Initialize(ctx context.Context, config map[string]interface{}) error {
 	// Get webhook URL
-	if url, ok := config["webhook_url"].(string); ok {
-		p.webhookURL = url
-	} else {
+	raw, ok := config["webhook_url"].(string)
+	if !ok {
 		return fmt.Errorf("webhook_url is required")
 	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return fmt.Errorf("webhook_url must be an http or https URL")
+	}
+	p.webhookURL = u.String()
 
 	// Get channel
 	if channel, ok := config["channel"].(string); ok {
