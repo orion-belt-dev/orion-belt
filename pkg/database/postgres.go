@@ -477,7 +477,7 @@ const insertUserQuery = `INSERT INTO users (id, username, email, public_key, is_
 
 // firstUserLockKey is the pg_advisory_xact_lock key that serializes
 // first-run bootstrap. Arbitrary, but must stay stable across releases.
-const firstUserLockKey = 0x6f72696f6e0001
+const firstUserLockKey int64 = 0x6f72696f6e0001
 
 func userInsertArgs(user *common.User) []interface{} {
 	role := user.Role
