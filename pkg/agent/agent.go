@@ -418,12 +418,13 @@ func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, requests 
 
 	var wg sync.WaitGroup
 	wg.Add(2)
+	outputDone := make(chan struct{})
 
 	go func() {
 		defer wg.Done()
+		defer close(outputDone)
 		io.Copy(channel, ptmx)
 		a.logger.Debug("PTY->Channel copy finished")
-		channel.CloseWrite()
 	}()
 
 	go func() {
@@ -432,8 +433,17 @@ func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, requests 
 		a.logger.Debug("Channel->PTY copy finished")
 	}()
 
-	// Wait for PTY->Channel to finish
 	err = cmd.Wait()
+
+	// The shell has exited but its last output may still be unread; closing
+	// the PTY now would drop it. The read ends once every process holding the
+	// terminal has exited, so the wait is bounded for a background job that
+	// keeps it open.
+	select {
+	case <-outputDone:
+	case <-time.After(ptyOutputDrain):
+		a.logger.Debug("PTY still held open after the shell exited")
+	}
 
 	// Send exit status to client
 	exitStatus := 0
@@ -456,6 +466,10 @@ func (a *Agent) startShell(ctx context.Context, channel gossh.Channel, requests 
 	a.logger.Debug("Closing channel after shell completion")
 	channel.Close()
 }
+
+// ptyOutputDrain bounds how long a finished shell's session waits for the
+// rest of its PTY output.
+const ptyOutputDrain = time.Second
 
 // unixIdentity is the subset of a local user-database entry needed to spawn a
 // process as that user: uid/gid/supplementary groups, home directory, and shell.
