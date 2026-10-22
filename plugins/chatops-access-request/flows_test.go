@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -75,6 +76,9 @@ func newWorld(t *testing.T) *world {
 	}
 	w.srv = httptest.NewServer(http.HandlerFunc(w.serve))
 	t.Cleanup(w.srv.Close)
+	prevOrigin := slackResponseOrigin
+	slackResponseOrigin = w.srv.URL
+	t.Cleanup(func() { slackResponseOrigin = prevOrigin })
 	return w
 }
 
@@ -403,6 +407,14 @@ func TestPostSlackResponseURL(t *testing.T) {
 	}
 
 	p.postSlackResponseURL("://bad", "x") // invalid URL: returns quietly
+	// Anything but Slack's origin is refused before a request is made.
+	var hits atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits.Add(1) }))
+	defer other.Close()
+	p.postSlackResponseURL(other.URL+"/slack-response", "x")
+	if n := hits.Load(); n != 0 {
+		t.Errorf("response_url outside the Slack origin was called %d times", n)
+	}
 	p.httpClient = &http.Client{Transport: failTransport{}}
 	p.postSlackResponseURL(w.srv.URL+"/slack-response", "x") // network error: logged only
 	if n := len(w.byPath("/slack-response")); n != 1 {
