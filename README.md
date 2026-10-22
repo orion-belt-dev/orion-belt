@@ -245,18 +245,17 @@ Console: `<public_url>/ui`. Confirm: `curl -s http://127.0.0.1:8080/api/v1/versi
 
 Agents dial **out** to the gateway on SSH port **2222** (no inbound hole on the target).
 
-**Recommended:** sign in as admin/operator → **Add agent** → pick OS → package base `https://pkgs.orion-belt.dev` → **Generate install script** → run as root on the target. Treat the script as a secret.
+**Recommended:** sign in as admin/operator → **Add agent** → pick OS → package base `https://pkgs.orion-belt.dev` → **Generate install script** → run as root on the target. The script installs the package, writes config + key, and starts the service. Treat it as a secret.
 
-**Or** install with the package manager (same repo setup as the gateway), then configure:
+**Manual** — add the same pkgs.orion-belt.dev repo as for the gateway (see above), then install and configure:
+
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
 
 ```bash
-# after the distro repo block above:
-sudo apt install orion-belt-agent          # Debian / Ubuntu
-# sudo dnf install orion-belt-agent        # RHEL / Rocky / Alma / CentOS / Fedora
-# sudo zypper install orion-belt-agent     # openSUSE
-# sudo apk add orion-belt-agent            # Alpine
-# sudo pacman -S orion-belt-agent          # Arch
-# or: curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- agent
+# repo already added (orion-belt.list) — otherwise use the Gateway block above
+sudo apt update
+sudo apt install orion-belt-agent
 
 sudoedit /etc/orion-belt/agent.yaml
 # server.host: orion.example.com
@@ -265,27 +264,198 @@ sudoedit /etc/orion-belt/agent.yaml
 # auth.key_file: /etc/orion-belt/agent_key
 
 sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
-# Register the .pub with the gateway (UI, oadmin, or POST /api/v1/public/register/agent)
+# Register agent_key.pub with the gateway (UI, oadmin, or POST /api/v1/public/register/agent)
 
 sudo systemctl enable --now orion-belt-agent
-# Alpine: sudo rc-update add orion-belt-agent default && sudo rc-service orion-belt-agent start
 ```
 
-Details: [SETUP.md — Add agents](docs/SETUP.md#3-add-agents).
+</details>
+
+<details>
+<summary><b>RHEL / Rocky / AlmaLinux / CentOS</b></summary>
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo dnf install orion-belt-agent
+
+sudoedit /etc/orion-belt/agent.yaml
+# server.host / port 2222 / agent.name / auth.key_file as above
+
+sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
+# Register agent_key.pub with the gateway
+
+sudo systemctl enable --now orion-belt-agent
+```
+
+</details>
+
+<details>
+<summary><b>Fedora</b></summary>
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo dnf install orion-belt-agent
+
+sudoedit /etc/orion-belt/agent.yaml
+sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
+# Register agent_key.pub with the gateway
+
+sudo systemctl enable --now orion-belt-agent
+```
+
+</details>
+
+<details>
+<summary><b>openSUSE</b></summary>
+
+```bash
+sudo zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo zypper install orion-belt-agent
+
+sudoedit /etc/orion-belt/agent.yaml
+sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
+# Register agent_key.pub with the gateway
+
+sudo systemctl enable --now orion-belt-agent
+```
+
+</details>
+
+<details>
+<summary><b>Alpine</b></summary>
+
+```bash
+sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub
+echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
+sudo apk update
+sudo apk add orion-belt-agent
+
+sudoedit /etc/orion-belt/agent.yaml
+sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
+# Register agent_key.pub with the gateway
+
+sudo rc-update add orion-belt-agent default
+sudo rc-service orion-belt-agent start
+```
+
+</details>
+
+<details>
+<summary><b>Arch Linux</b></summary>
+
+```bash
+# repo already configured (see Gateway Arch block), then:
+sudo pacman -Sy orion-belt-agent
+
+sudoedit /etc/orion-belt/agent.yaml
+sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
+# Register agent_key.pub with the gateway
+
+sudo systemctl enable --now orion-belt-agent
+```
+
+</details>
+
+<details>
+<summary><b>install.sh</b> (any supported Linux)</summary>
+
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- agent
+# then edit /etc/orion-belt/agent.yaml, register the key, and start the service
+```
+
+</details>
+
+Connected agents appear under **Agents** / **Machines** in the console. Details: [SETUP.md — Add agents](docs/SETUP.md#3-add-agents).
 
 ### Clients — `osh` / `ocp` / `oadmin`
 
 Plain OpenSSH works (`ssh -p 2222 user+machine@gateway`). The tools package adds console login, file copy, JIT requests and admin commands.
 
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
+
 ```bash
-curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh    # Linux / macOS / BSD / …
-# or, after adding the distro repo:
-# sudo apt install orion-belt-tools
-# sudo dnf install orion-belt-tools
-# sudo apk add orion-belt-tools
+curl -fsSLo /usr/share/keyrings/orion-belt.gpg https://pkgs.orion-belt.dev/orion-belt.gpg
+echo 'deb [signed-by=/usr/share/keyrings/orion-belt.gpg] https://pkgs.orion-belt.dev stable main' \
+  | sudo tee /etc/apt/sources.list.d/orion-belt.list
+sudo apt update
+sudo apt install orion-belt-tools
 ```
 
-Windows: `irm https://pkgs.orion-belt.dev/install.ps1 | iex`, or Scoop as above.
+</details>
+
+<details>
+<summary><b>RHEL / Rocky / AlmaLinux / CentOS</b></summary>
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo dnf install orion-belt-tools
+```
+
+</details>
+
+<details>
+<summary><b>Fedora</b></summary>
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo dnf install orion-belt-tools
+```
+
+</details>
+
+<details>
+<summary><b>openSUSE</b></summary>
+
+```bash
+sudo zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo zypper install orion-belt-tools
+```
+
+</details>
+
+<details>
+<summary><b>Alpine</b></summary>
+
+```bash
+sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub
+echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
+sudo apk update
+sudo apk add orion-belt-tools
+```
+
+</details>
+
+<details>
+<summary><b>Arch Linux</b></summary>
+
+```bash
+# after the Gateway Arch repo setup:
+sudo pacman -Sy orion-belt-tools
+```
+
+</details>
+
+<details>
+<summary><b>macOS / BSD / other</b> (`install.sh`)</summary>
+
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh
+# installs osh, ocp, oadmin under /usr/local by default (--prefix to change)
+```
+
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+irm https://pkgs.orion-belt.dev/install.ps1 | iex
+# or: scoop install https://pkgs.orion-belt.dev/scoop/orion-belt.json
+```
+
+</details>
 
 First run writes `~/.orion-belt/client.yaml` (or pass `-c`). Examples (gateway `orion.example.com`, machine `web-01`, user `alice`):
 
