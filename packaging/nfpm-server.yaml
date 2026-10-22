@@ -34,11 +34,23 @@ contents:
     type: dir
     file_info:
       mode: 0750
+  # orion-belt-service and the init templates it installs (OpenRC, runit, SysV).
+  - src: packaging/linux/orion-belt-service
+    dst: /usr/lib/orion-belt/orion-belt-server-service
+    file_info:
+      mode: 0755
+  - src: packaging/openrc/orion-belt-server.initd
+    dst: /usr/share/orion-belt/init/orion-belt-server.openrc
+    file_info:
+      mode: 0755
+  - src: packaging/sysv/orion-belt-server
+    dst: /usr/share/orion-belt/init/orion-belt-server.sysv
+    file_info:
+      mode: 0755
+  - src: packaging/runit/orion-belt-server/run
+    dst: /usr/share/orion-belt/init/runit/orion-belt-server/run
+    file_info:
+      mode: 0755
 scripts:
   postinstall: packaging/scripts/server-postinstall.sh
   preremove: packaging/scripts/server-preremove.sh
-overrides:
-  deb:
-    depends: [systemd]
-  rpm:
-    depends: [systemd]

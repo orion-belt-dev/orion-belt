@@ -98,3 +98,17 @@ jobs:
           cache: true
       - name: Build
         run: make build
+      # The release (.goreleaser.yaml) builds the server and agent for nine
+      # Linux CPUs and the clients for every OS. One target per way those
+      # break: 32-bit int, ARMv5, big-endian, newer CPUs, each OS's syscalls.
+      - name: Cross-compile release platforms
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          set -eu
+          for t in 386 arm/5 s390x loong64; do
+            GOOS=linux GOARCH=${t%/*} GOARM=$(case $t in arm/*) echo "${t#arm/}" ;; esac) go build -o /dev/null ./cmd/...
+          done
+          for t in windows/386 darwin/arm64 freebsd/amd64 openbsd/amd64 netbsd/amd64 dragonfly/amd64 illumos/amd64 solaris/amd64; do
+            GOOS=${t%/*} GOARCH=${t#*/} go build -o /dev/null ./cmd/osh ./cmd/ocp ./cmd/oadmin
+          done

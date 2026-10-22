@@ -14,7 +14,7 @@ import logoAlpine from "../assets/distros/alpine.png";
 import logoLinux from "../assets/distros/linux.png";
 
 /** Public GitHub Pages mirror (orion-belt-dev/packages). Local: make serve-packages → :8765 */
-const DEFAULT_PACKAGE_BASE_URL = "https://orion-belt-dev.github.io/packages";
+const DEFAULT_PACKAGE_BASE_URL = "https://pkgs.orion-belt.dev";
 /** Fallback only until VERSION is fetched from the package base URL. */
 const DEFAULT_PACKAGE_VERSION = "1.1.0";
 

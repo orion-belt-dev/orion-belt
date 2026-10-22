@@ -1,0 +1,79 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          orion-belt-agent
+# Required-Start:    $remote_fs $network $syslog
+# Required-Stop:     $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Orion Belt reverse-SSH agent
+### END INIT INFO
+# SysV init script (/etc/init.d/orion-belt-agent) for systems without
+# systemd, OpenRC or runit, installed by orion-belt-agent-service. The agent
+# runs as root (it starts sessions as the requested local user), restarted
+# 5s after it exits, as systemd's Restart= does: the gateway may be
+# unreachable at boot.
+
+NAME=orion-belt-agent
+DAEMON=/usr/bin/orion-belt-agent
+CONFIG=/etc/orion-belt/agent.yaml
+PIDFILE=/run/$NAME.pid
+LOG=/var/log/orion-belt-agent.log
+[ -x "$DAEMON" ] || exit 0
+
+# The pid file holds the restart loop, which leads its own process group.
+running() {
+	[ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+	if running; then
+		echo "$NAME is already running"
+		return 0
+	fi
+	printf 'Starting %s... ' "$NAME"
+	command -v setsid >/dev/null 2>&1 || { echo "failed: needs setsid"; return 1; }
+	setsid sh -c 'while :; do "$0" -c "$1"; sleep 5; done' "$DAEMON" "$CONFIG" >>"$LOG" 2>&1 </dev/null &
+	echo $! >"$PIDFILE"
+	sleep 1
+	if running; then echo "ok"; else echo "failed (see $LOG)"; return 1; fi
+}
+
+stop() {
+	if ! running; then
+		echo "$NAME is not running"
+		rm -f "$PIDFILE"
+		return 0
+	fi
+	printf 'Stopping %s... ' "$NAME"
+	pid=$(cat "$PIDFILE")
+	kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid"
+	i=0
+	while kill -0 -- "-$pid" 2>/dev/null && [ "$i" -lt 30 ]; do
+		sleep 1
+		i=$((i + 1))
+	done
+	kill -KILL -- "-$pid" 2>/dev/null || true
+	rm -f "$PIDFILE"
+	echo "ok"
+}
+
+case "$1" in
+start) start ;;
+stop) stop ;;
+restart | force-reload)
+	stop
+	start
+	;;
+status)
+	if running; then
+		echo "$NAME is running (pid $(cat "$PIDFILE"))"
+	else
+		echo "$NAME is not running"
+		exit 3
+	fi
+	;;
+*)
+	echo "Usage: $0 {start|stop|restart|status}" >&2
+	exit 2
+	;;
+esac

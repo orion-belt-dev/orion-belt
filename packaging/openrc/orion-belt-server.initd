@@ -6,8 +6,13 @@ description="Orion Belt PAM gateway server"
 command="/usr/bin/orion-belt-server"
 command_args="-c /etc/orion-belt/server.yaml"
 command_user="orionbelt:orionbelt"
-command_background=true
-pidfile="/run/${RC_SVCNAME}.pid"
+# supervise-daemon restarts it if it exits (e.g. the gateway or database is
+# unreachable at boot), as systemd's Restart= does.
+supervisor="supervise-daemon"
+respawn_delay=5
+respawn_max=0
+output_log="${output_log:-/var/log/orion-belt/server.log}"
+error_log="${error_log:-/var/log/orion-belt/server.log}"
 directory="/var/lib/orion-belt"
 
 depend() {

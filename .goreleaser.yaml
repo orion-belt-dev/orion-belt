@@ -12,76 +12,181 @@ before:
     - make build-ui
 
 builds:
+  # Server and agent run on Linux only, on every architecture Debian, Fedora,
+  # openSUSE, Alpine or Arch (and their ports) ship packages for. 32-bit ARM
+  # comes in three builds because the distributions disagree about it:
+  #   ARMv6: deb armhf (Raspberry Pi OS; Debian armhf runs it too), rpm
+  #          armv6hl, apk armhf, Arch armv6h
+  #   ARMv7: rpm armv7hl, apk armv7, Arch armv7h (deb uses the ARMv6 build)
+  #   ARMv5: deb armel only
   - id: server
     main: ./cmd/server
     binary: orion-belt-server
-    env:
-      - CGO_ENABLED=0
-    goos: [linux]
-    goarch: [amd64, arm64]
-    ldflags:
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: &linux_targets
+      - linux_amd64_v1
+      - linux_arm64
+      - linux_arm_6
+      - linux_386
+      - linux_ppc64le
+      - linux_s390x
+      - linux_riscv64
+      - linux_loong64
+    ldflags: &ldflags
       - -s -w
       - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
       - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
       - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
-
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: server-armv7
+    main: ./cmd/server
+    binary: orion-belt-server
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: &armv7 [linux_arm_7]
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: server-armv5
+    main: ./cmd/server
+    binary: orion-belt-server
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: &armv5 [linux_arm_5]
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
   - id: agent
     main: ./cmd/agent
     binary: orion-belt-agent
-    env:
-      - CGO_ENABLED=0
-    goos: [linux]
-    goarch: [amd64, arm64]
-    ldflags:
-      - -s -w
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *linux_targets
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: agent-armv7
+    main: ./cmd/agent
+    binary: orion-belt-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv7
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: agent-armv5
+    main: ./cmd/agent
+    binary: orion-belt-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv5
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
+  # Clients: the Linux architectures above plus macOS, Windows, the BSDs,
+  # illumos and Solaris.
   - id: osh
     main: ./cmd/osh
     binary: osh
-    env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin]
-    goarch: [amd64, arm64]
-    ldflags:
-      - -s -w
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
-
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: &client_targets
+      - linux_amd64_v1
+      - linux_arm64
+      - linux_arm_6
+      - linux_386
+      - linux_ppc64le
+      - linux_s390x
+      - linux_riscv64
+      - linux_loong64
+      - darwin_amd64_v1
+      - darwin_arm64
+      - windows_amd64_v1
+      - windows_arm64
+      - windows_386
+      - freebsd_amd64_v1
+      - freebsd_arm64
+      - freebsd_386
+      - freebsd_arm_7
+      - freebsd_riscv64
+      - openbsd_amd64_v1
+      - openbsd_arm64
+      - openbsd_386
+      - netbsd_amd64_v1
+      - netbsd_arm64
+      - netbsd_386
+      - dragonfly_amd64_v1
+      - illumos_amd64_v1
+      - solaris_amd64_v1
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
   - id: ocp
     main: ./cmd/ocp
     binary: ocp
-    env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin]
-    goarch: [amd64, arm64]
-    ldflags:
-      - -s -w
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
-
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *client_targets
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
   - id: oadmin
     main: ./cmd/oadmin
     binary: oadmin
-    env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin]
-    goarch: [amd64, arm64]
-    ldflags:
-      - -s -w
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Version={{.Version}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Commit={{.Commit}}
-      - -X github.com/orion-belt-dev/orion-belt/pkg/version.Date={{.Date}}
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *client_targets
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: osh-armv7
+    main: ./cmd/osh
+    binary: osh
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv7
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: osh-armv5
+    main: ./cmd/osh
+    binary: osh
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv5
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: ocp-armv7
+    main: ./cmd/ocp
+    binary: ocp
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv7
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: ocp-armv5
+    main: ./cmd/ocp
+    binary: ocp
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv5
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: oadmin-armv7
+    main: ./cmd/oadmin
+    binary: oadmin
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv7
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: oadmin-armv5
+    main: ./cmd/oadmin
+    binary: oadmin
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    targets: *armv5
+    ldflags: *ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  # Gateway binaries — Linux only (uniform binary count)
+  # Server and agent with config examples and every service file.
   - id: gateway
-    ids: [server, agent]
-    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    ids: [server, server-armv7, server-armv5, agent, agent-armv7, agent-armv5]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}'
     formats: [tar.gz]
     files:
       - LICENSE
@@ -89,124 +194,495 @@ archives:
       - config/server.example.yaml
       - config/agent.example.yaml
       - packaging/systemd/*
+      - packaging/openrc/*
+      - packaging/sysv/*
+      - packaging/runit/**/*
+      - packaging/linux/*
 
-  # CLI tools — Linux + Darwin (same 3 binaries on every platform)
-  - id: tools
-    ids: [osh, ocp, oadmin]
-    name_template: '{{ .ProjectName }}_tools_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+  # The agent alone, for hosts that only run the agent.
+  - id: agent
+    ids: [agent, agent-armv7, agent-armv5]
+    name_template: 'orion-belt-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}'
     formats: [tar.gz]
+    files:
+      - LICENSE
+      - config/agent.example.yaml
+      - packaging/systemd/orion-belt-agent.service
+      - packaging/openrc/orion-belt-agent.initd
+      - packaging/sysv/orion-belt-agent
+      - packaging/runit/orion-belt-agent/run
+      - packaging/linux/*
+
+  # Clients: tar.gz, zip on Windows.
+  - id: tools
+    ids: [osh, ocp, oadmin, osh-armv7, ocp-armv7, oadmin-armv7, osh-armv5, ocp-armv5, oadmin-armv5]
+    name_template: '{{ .ProjectName }}_tools_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}'
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     files:
       - LICENSE
       - README.md
       - config/client.example.yaml
 
 nfpms:
+  # Each package twice: deb from the ARMv6 and ARMv5 builds, the other formats
+  # from the ARMv6 and ARMv7 builds (see builds above). Same contents.
   - id: orion-belt
     package_name: orion-belt
-    homepage: https://github.com/orion-belt-dev/orion-belt
+    ids: [server, server-armv5]
+    formats: [deb]
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orion Belt
+    homepage: https://orion-belt.dev
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
-    description: Orion Belt PAM gateway server (SSH bastion + API)
+    description: |-
+      Orion Belt PAM gateway server (SSH bastion + API).
+      Session recording, just-in-time access and audit for SSH.
     license: Apache-2.0 WITH Commons-Clause
-    formats: [deb, rpm, apk]
     bindir: /usr/bin
     section: net
     priority: optional
-    ids: [server]
     contents:
+      # Under /lib as in earlier releases: moving it to /usr/lib would lose
+      # the unit on upgrade on merged-/usr Debian systems. pacman refuses
+      # files under /lib (a symlink on Arch).
       - src: packaging/systemd/orion-belt-server.service
         dst: /lib/systemd/system/orion-belt-server.service
-        type: config
+        packager: deb
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /lib/systemd/system/orion-belt-server.service
+        packager: rpm
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /lib/systemd/system/orion-belt-server.service
+        packager: apk
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /usr/lib/systemd/system/orion-belt-server.service
+        packager: archlinux
+        file_info: {mode: 0644}
+      # orion-belt-service and the templates it installs for OpenRC, runit
+      # and SysV.
+      - src: packaging/linux/orion-belt-service
+        dst: /usr/lib/orion-belt/orion-belt-server-service
+        file_info: {mode: 0755}
       - src: packaging/openrc/orion-belt-server.initd
-        dst: /etc/init.d/orion-belt-server
-        type: config
-        file_info:
-          mode: 0755
+        dst: /usr/share/orion-belt/init/orion-belt-server.openrc
+        file_info: {mode: 0755}
+      - src: packaging/sysv/orion-belt-server
+        dst: /usr/share/orion-belt/init/orion-belt-server.sysv
+        file_info: {mode: 0755}
+      - src: packaging/runit/orion-belt-server/run
+        dst: /usr/share/orion-belt/init/runit/orion-belt-server/run
+        file_info: {mode: 0755}
       - src: config/server.example.yaml
         dst: /etc/orion-belt/server.yaml
         type: config|noreplace
+        file_info: {mode: 0640}
       - dst: /var/lib/orion-belt/recordings
         type: dir
-        file_info:
-          mode: 0750
+        file_info: {mode: 0750}
       - dst: /var/log/orion-belt
         type: dir
-        file_info:
-          mode: 0750
+        file_info: {mode: 0750}
       - dst: /etc/orion-belt
         type: dir
-        file_info:
-          mode: 0750
+        file_info: {mode: 0750}
+      - src: LICENSE
+        dst: /usr/share/licenses/orion-belt/LICENSE
+        file_info: {mode: 0644}
     scripts:
       postinstall: packaging/scripts/server-postinstall.sh
       preremove: packaging/scripts/server-preremove.sh
+    # ssh-keygen creates the gateway's host key on install.
+    recommends: [openssh-client]
     overrides:
-      deb:
-        dependencies:
-          - systemd
-        # OpenRC unit is harmless on systemd hosts; leave packaged for Alpine.
       rpm:
-        dependencies:
-          - systemd
+        recommends: [openssh-clients]
       apk:
-        dependencies:
-          - openrc
-        # Prefer OpenRC path on Alpine; systemd unit unused.
+        recommends: []
+        dependencies: [openssh-keygen]
+      archlinux:
+        recommends: []
+        dependencies: [openssh]
+    rpm:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    deb:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    apk:
+      scripts:
+        postupgrade: packaging/scripts/server-postinstall.sh
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: orion-belt
+    archlinux:
+      packager: Orion Belt Maintainers <maintainers@orion-belt.dev>
+      scripts:
+        postupgrade: packaging/scripts/server-postinstall.sh
+
+  - id: orion-belt-rpm-apk-arch
+    package_name: orion-belt
+    ids: [server, server-armv7]
+    formats: [rpm, apk, archlinux]
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orion Belt
+    homepage: https://orion-belt.dev
+    maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
+    description: |-
+      Orion Belt PAM gateway server (SSH bastion + API).
+      Session recording, just-in-time access and audit for SSH.
+    license: Apache-2.0 WITH Commons-Clause
+    bindir: /usr/bin
+    section: net
+    priority: optional
+    contents:
+      # Under /lib as in earlier releases: moving it to /usr/lib would lose
+      # the unit on upgrade on merged-/usr Debian systems. pacman refuses
+      # files under /lib (a symlink on Arch).
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /lib/systemd/system/orion-belt-server.service
+        packager: deb
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /lib/systemd/system/orion-belt-server.service
+        packager: rpm
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /lib/systemd/system/orion-belt-server.service
+        packager: apk
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-server.service
+        dst: /usr/lib/systemd/system/orion-belt-server.service
+        packager: archlinux
+        file_info: {mode: 0644}
+      # orion-belt-service and the templates it installs for OpenRC, runit
+      # and SysV.
+      - src: packaging/linux/orion-belt-service
+        dst: /usr/lib/orion-belt/orion-belt-server-service
+        file_info: {mode: 0755}
+      - src: packaging/openrc/orion-belt-server.initd
+        dst: /usr/share/orion-belt/init/orion-belt-server.openrc
+        file_info: {mode: 0755}
+      - src: packaging/sysv/orion-belt-server
+        dst: /usr/share/orion-belt/init/orion-belt-server.sysv
+        file_info: {mode: 0755}
+      - src: packaging/runit/orion-belt-server/run
+        dst: /usr/share/orion-belt/init/runit/orion-belt-server/run
+        file_info: {mode: 0755}
+      - src: config/server.example.yaml
+        dst: /etc/orion-belt/server.yaml
+        type: config|noreplace
+        file_info: {mode: 0640}
+      - dst: /var/lib/orion-belt/recordings
+        type: dir
+        file_info: {mode: 0750}
+      - dst: /var/log/orion-belt
+        type: dir
+        file_info: {mode: 0750}
+      - dst: /etc/orion-belt
+        type: dir
+        file_info: {mode: 0750}
+      - src: LICENSE
+        dst: /usr/share/licenses/orion-belt/LICENSE
+        file_info: {mode: 0644}
+    scripts:
+      postinstall: packaging/scripts/server-postinstall.sh
+      preremove: packaging/scripts/server-preremove.sh
+    # ssh-keygen creates the gateway's host key on install.
+    recommends: [openssh-client]
+    overrides:
+      rpm:
+        recommends: [openssh-clients]
+      apk:
+        recommends: []
+        dependencies: [openssh-keygen]
+      archlinux:
+        recommends: []
+        dependencies: [openssh]
+    rpm:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    deb:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    apk:
+      scripts:
+        postupgrade: packaging/scripts/server-postinstall.sh
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: orion-belt
+    archlinux:
+      packager: Orion Belt Maintainers <maintainers@orion-belt.dev>
+      scripts:
+        postupgrade: packaging/scripts/server-postinstall.sh
 
   - id: orion-belt-agent
     package_name: orion-belt-agent
-    homepage: https://github.com/orion-belt-dev/orion-belt
+    ids: [agent, agent-armv5]
+    formats: [deb]
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orion Belt
+    homepage: https://orion-belt.dev
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
-    description: Orion Belt reverse-SSH agent
+    description: |-
+      Orion Belt reverse-SSH agent.
+      Connects this host to an Orion Belt gateway without opening inbound ports.
     license: Apache-2.0 WITH Commons-Clause
-    formats: [deb, rpm, apk]
     bindir: /usr/bin
-    ids: [agent]
+    section: net
+    priority: optional
     contents:
+      # Under /lib as in earlier releases: moving it to /usr/lib would lose
+      # the unit on upgrade on merged-/usr Debian systems. pacman refuses
+      # files under /lib (a symlink on Arch).
       - src: packaging/systemd/orion-belt-agent.service
         dst: /lib/systemd/system/orion-belt-agent.service
-        type: config
+        packager: deb
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /lib/systemd/system/orion-belt-agent.service
+        packager: rpm
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /lib/systemd/system/orion-belt-agent.service
+        packager: apk
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /usr/lib/systemd/system/orion-belt-agent.service
+        packager: archlinux
+        file_info: {mode: 0644}
+      # orion-belt-service and the templates it installs for OpenRC, runit
+      # and SysV.
+      - src: packaging/linux/orion-belt-service
+        dst: /usr/lib/orion-belt/orion-belt-agent-service
+        file_info: {mode: 0755}
       - src: packaging/openrc/orion-belt-agent.initd
-        dst: /etc/init.d/orion-belt-agent
-        type: config
-        file_info:
-          mode: 0755
+        dst: /usr/share/orion-belt/init/orion-belt-agent.openrc
+        file_info: {mode: 0755}
+      - src: packaging/sysv/orion-belt-agent
+        dst: /usr/share/orion-belt/init/orion-belt-agent.sysv
+        file_info: {mode: 0755}
+      - src: packaging/runit/orion-belt-agent/run
+        dst: /usr/share/orion-belt/init/runit/orion-belt-agent/run
+        file_info: {mode: 0755}
       - src: config/agent.example.yaml
         dst: /etc/orion-belt/agent.yaml
         type: config|noreplace
+        file_info: {mode: 0640}
       - dst: /etc/orion-belt
         type: dir
-        file_info:
-          mode: 0750
+        file_info: {mode: 0750}
+      - src: LICENSE
+        dst: /usr/share/licenses/orion-belt-agent/LICENSE
+        file_info: {mode: 0644}
     scripts:
       postinstall: packaging/scripts/agent-postinstall.sh
-    overrides:
-      apk:
-        dependencies:
-          - openrc
+      preremove: packaging/scripts/agent-preremove.sh
+    rpm:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    deb:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    apk:
+      scripts:
+        postupgrade: packaging/scripts/agent-postinstall.sh
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: orion-belt
+    archlinux:
+      packager: Orion Belt Maintainers <maintainers@orion-belt.dev>
+      scripts:
+        postupgrade: packaging/scripts/agent-postinstall.sh
+
+  - id: orion-belt-agent-rpm-apk-arch
+    package_name: orion-belt-agent
+    ids: [agent, agent-armv7]
+    formats: [rpm, apk, archlinux]
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orion Belt
+    homepage: https://orion-belt.dev
+    maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
+    description: |-
+      Orion Belt reverse-SSH agent.
+      Connects this host to an Orion Belt gateway without opening inbound ports.
+    license: Apache-2.0 WITH Commons-Clause
+    bindir: /usr/bin
+    section: net
+    priority: optional
+    contents:
+      # Under /lib as in earlier releases: moving it to /usr/lib would lose
+      # the unit on upgrade on merged-/usr Debian systems. pacman refuses
+      # files under /lib (a symlink on Arch).
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /lib/systemd/system/orion-belt-agent.service
+        packager: deb
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /lib/systemd/system/orion-belt-agent.service
+        packager: rpm
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /lib/systemd/system/orion-belt-agent.service
+        packager: apk
+        file_info: {mode: 0644}
+      - src: packaging/systemd/orion-belt-agent.service
+        dst: /usr/lib/systemd/system/orion-belt-agent.service
+        packager: archlinux
+        file_info: {mode: 0644}
+      # orion-belt-service and the templates it installs for OpenRC, runit
+      # and SysV.
+      - src: packaging/linux/orion-belt-service
+        dst: /usr/lib/orion-belt/orion-belt-agent-service
+        file_info: {mode: 0755}
+      - src: packaging/openrc/orion-belt-agent.initd
+        dst: /usr/share/orion-belt/init/orion-belt-agent.openrc
+        file_info: {mode: 0755}
+      - src: packaging/sysv/orion-belt-agent
+        dst: /usr/share/orion-belt/init/orion-belt-agent.sysv
+        file_info: {mode: 0755}
+      - src: packaging/runit/orion-belt-agent/run
+        dst: /usr/share/orion-belt/init/runit/orion-belt-agent/run
+        file_info: {mode: 0755}
+      - src: config/agent.example.yaml
+        dst: /etc/orion-belt/agent.yaml
+        type: config|noreplace
+        file_info: {mode: 0640}
+      - dst: /etc/orion-belt
+        type: dir
+        file_info: {mode: 0750}
+      - src: LICENSE
+        dst: /usr/share/licenses/orion-belt-agent/LICENSE
+        file_info: {mode: 0644}
+    scripts:
+      postinstall: packaging/scripts/agent-postinstall.sh
+      preremove: packaging/scripts/agent-preremove.sh
+    rpm:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    deb:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    apk:
+      scripts:
+        postupgrade: packaging/scripts/agent-postinstall.sh
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: orion-belt
+    archlinux:
+      packager: Orion Belt Maintainers <maintainers@orion-belt.dev>
+      scripts:
+        postupgrade: packaging/scripts/agent-postinstall.sh
 
   - id: orion-belt-tools
     package_name: orion-belt-tools
-    homepage: https://github.com/orion-belt-dev/orion-belt
+    ids: [osh, ocp, oadmin, osh-armv5, ocp-armv5, oadmin-armv5]
+    formats: [deb]
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orion Belt
+    homepage: https://orion-belt.dev
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
-    description: Orion Belt CLI tools (osh, ocp, oadmin)
+    description: |-
+      Orion Belt clients: osh (SSH), ocp (file copy) and oadmin (administration).
     license: Apache-2.0 WITH Commons-Clause
-    formats: [deb, rpm, apk]
     bindir: /usr/bin
-    ids: [osh, ocp, oadmin]
+    section: net
+    priority: optional
     contents:
       - src: config/client.example.yaml
         dst: /etc/orion-belt/client.yaml
         type: config|noreplace
+        file_info: {mode: 0644}
+      - src: LICENSE
+        dst: /usr/share/licenses/orion-belt-tools/LICENSE
+        file_info: {mode: 0644}
+    rpm:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    deb:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    apk:
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: orion-belt
+    archlinux:
+      packager: Orion Belt Maintainers <maintainers@orion-belt.dev>
+
+  - id: orion-belt-tools-rpm-apk-arch
+    package_name: orion-belt-tools
+    ids: [osh, ocp, oadmin, osh-armv7, ocp-armv7, oadmin-armv7]
+    formats: [rpm, apk, archlinux]
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orion Belt
+    homepage: https://orion-belt.dev
+    maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
+    description: |-
+      Orion Belt clients: osh (SSH), ocp (file copy) and oadmin (administration).
+    license: Apache-2.0 WITH Commons-Clause
+    bindir: /usr/bin
+    section: net
+    priority: optional
+    contents:
+      - src: config/client.example.yaml
+        dst: /etc/orion-belt/client.yaml
+        type: config|noreplace
+        file_info: {mode: 0644}
+      - src: LICENSE
+        dst: /usr/share/licenses/orion-belt-tools/LICENSE
+        file_info: {mode: 0644}
+    rpm:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+    deb:
+      compression: xz
+      signature:
+        key_file: '{{ envOrDefault "NFPM_KEY_FILE" "" }}'
+        type: origin
+    apk:
+      signature:
+        key_file: '{{ envOrDefault "NFPM_APK_KEY_FILE" "" }}'
+        key_name: orion-belt
+    archlinux:
+      packager: Orion Belt Maintainers <maintainers@orion-belt.dev>
 
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  extra_files:
+    - glob: ./dist-extra/*
 
 signs:
-  - id: checksums
+  # A detached binary GPG signature (<file>.sig) for checksums.txt and every
+  # archive and package. pacman checks package .sig files of exactly this form.
+  - &gpg
+    id: checksums
     artifacts: checksum
+    signature: "${artifact}.sig"
     args:
       - --batch
+      - --yes
       - --pinentry-mode
       - loopback
       - -u
@@ -216,21 +692,12 @@ signs:
       - --detach-sign
       - "${artifact}"
     stdin: "{{ .Env.GPG_PASSWORD }}"
-
-  - id: packages
+  - <<: *gpg
+    id: packages
     artifacts: package
-    args:
-      - --batch
-      - --pinentry-mode
-      - loopback
-      - -u
-      - "{{ .Env.GPG_FINGERPRINT }}"
-      - --armor
-      - --output
-      - "${signature}"
-      - --detach-sign
-      - "${artifact}"
-    stdin: "{{ .Env.GPG_PASSWORD }}"
+  - <<: *gpg
+    id: archives
+    artifacts: archive
 
 changelog:
   sort: asc
@@ -246,3 +713,7 @@ release:
     name: orion-belt
   draft: false
   prerelease: auto
+  # Installers (install.sh, install.ps1) and the public key that verifies
+  # every signature.
+  extra_files:
+    - glob: ./dist-extra/*
