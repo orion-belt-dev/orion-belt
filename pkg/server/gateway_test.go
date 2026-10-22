@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -59,6 +60,138 @@ func TestGateway_InteractiveShellViaOpenSSHUsername(t *testing.T) {
 	agent.mu.Unlock()
 	if ptys != 1 {
 		t.Errorf("pty requests forwarded = %d, want 1", ptys)
+	}
+}
+
+func TestGateway_ExecOnMachineNamedInUsername(t *testing.T) {
+	h := startHarness(t, nil)
+	agent := h.connectAgent(t)
+	h.grant(t, "deploy")
+	h.grant(t, "root")
+
+	cases := []struct {
+		name, user, command, want string
+	}{
+		{"remote user and machine", "alice+deploy%web-01", "uptime", `ran "uptime" as deploy`},
+		{"remote user defaults to root", "alice+web-01", "uptime", `ran "uptime" as root`},
+		// The whole command reaches the agent: no word is taken as a target.
+		{"shell metacharacters", "alice+web-01", `/bin/sh -c 'echo "$HOME" | wc -c'`, `as root`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := h.runClient(t, tc.user, tc.command, "")
+			if !strings.Contains(res.out, tc.want) || res.status != 5 {
+				t.Fatalf("exec = %+v, want %q", res, tc.want)
+			}
+			agent.mu.Lock()
+			last := agent.execs[len(agent.execs)-1]
+			agent.mu.Unlock()
+			if last != tc.command {
+				t.Errorf("agent ran %q, want %q", last, tc.command)
+			}
+		})
+	}
+
+	sessions, err := h.srv.store.ListUserSessions(context.Background(), h.alice.ID, 10, 0)
+	if err != nil || len(sessions) != len(cases) {
+		t.Fatalf("session records = %+v, %v", sessions, err)
+	}
+	remoteUsers := map[string]bool{}
+	for _, sess := range sessions {
+		remoteUsers[sess.RemoteUser] = true
+		if _, err := os.Stat(filepath.Join(h.cfg.Recording.StoragePath, sess.ID+".cast")); err != nil {
+			t.Errorf("session %s has no recording: %v", sess.ID, err)
+		}
+	}
+	if !remoteUsers["deploy"] || !remoteUsers["root"] {
+		t.Errorf("sessions recorded remote users %v, want deploy and root", remoteUsers)
+	}
+}
+
+func TestGateway_ExecOnMachineNamedInUsernameNeedsAGrant(t *testing.T) {
+	h := startHarness(t, nil)
+	agent := h.connectAgent(t)
+	h.grant(t, "deploy")
+
+	res := h.runClient(t, "alice+root%web-01", "id", "")
+	if !strings.Contains(res.out, "Permission denied") || !strings.Contains(res.out, "root@web-01") || res.status != 1 {
+		t.Errorf("exec without a grant = %+v", res)
+	}
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if len(agent.execs) != 0 {
+		t.Errorf("agent ran %v for a denied user", agent.execs)
+	}
+}
+
+func TestGateway_ExecForwardsPTYRequest(t *testing.T) {
+	h := startHarness(t, nil)
+	agent := h.connectAgent(t)
+	h.grant(t, "deploy")
+
+	c, err := h.dial(t, "alice+deploy%web-01", h.aliceKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := c.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	if err := sess.RequestPty("xterm", 24, 80, ssh.TerminalModes{}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := sess.Output("sudo -n true")
+	if !strings.Contains(string(out), `ran "sudo -n true" as deploy`) {
+		t.Fatalf("exec with a PTY = %q, %v", out, err)
+	}
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.ptys != 1 {
+		t.Errorf("pty requests forwarded = %d, want 1", agent.ptys)
+	}
+}
+
+// OpenSSH ends an exec session when the command exits. Clients that keep
+// stdin open (Ansible, ssh with ControlMaster) hung until the gateway waited
+// for client EOF as well.
+func TestGateway_ExecEndsWhenCommandExitsWithStdinOpen(t *testing.T) {
+	h := startHarness(t, nil)
+	h.connectAgent(t)
+	h.grant(t, "deploy")
+
+	c, err := h.dial(t, "alice", h.aliceKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := c.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	stdin, err := sess.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdin.Close()
+	var out bytes.Buffer
+	sess.Stdout = &out
+	if err := sess.Start("deploy@web-01 uptime"); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- sess.Wait() }()
+	select {
+	case err := <-done:
+		if exitErr, ok := err.(*ssh.ExitError); !ok || exitErr.ExitStatus() != 5 {
+			t.Errorf("exit = %v, want status 5", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("exec session did not end after the command exited")
+	}
+	if !strings.Contains(out.String(), `ran "uptime" as deploy`) {
+		t.Errorf("output = %q", out.String())
 	}
 }
 

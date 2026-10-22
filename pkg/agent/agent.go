@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -227,11 +228,14 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 
 		switch req.Type {
 		case "pty-req":
-			ptyReq = &ptyRequestMsg{}
-			if err := gossh.Unmarshal(req.Payload, ptyReq); err != nil {
+			// A rejected request must leave no PTY behind: exec runs on one
+			// whenever ptyReq is set.
+			msg := &ptyRequestMsg{}
+			if err := gossh.Unmarshal(req.Payload, msg); err != nil {
 				a.logger.Error("Failed to parse pty-req: %v", err)
 				req.Reply(false, nil)
 			} else {
+				ptyReq = msg
 				a.logger.Info("PTY requested: %s %dx%d", ptyReq.Term, ptyReq.Columns, ptyReq.Rows)
 				req.Reply(true, nil)
 			}
@@ -269,16 +273,22 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 			a.logger.Info("Exec requested: %s", execCommand)
 			req.Reply(true, nil)
 
-			// Exec has no PTY to resize, but the gateway still forwards
-			// window-change; unread requests would stall the agent connection.
-			go gossh.DiscardRequests(requests)
-
 			// Server control commands (orion:*) — do not execute as shell
 			if strings.HasPrefix(execCommand, "orion:") {
+				go gossh.DiscardRequests(requests)
 				a.handleControlCommand(ctx, channel, execCommand)
 				return
 			}
 
+			if ptyReq != nil {
+				a.executeCommandWithPTY(ctx, channel, requests, execCommand, payload.User, ptyReq)
+				return
+			}
+
+			// Without a PTY there is nothing to resize, but the gateway still
+			// forwards window-change; unread requests would stall the agent
+			// connection.
+			go gossh.DiscardRequests(requests)
 			a.executeCommand(ctx, channel, execCommand, payload.User)
 			return
 
@@ -600,37 +610,11 @@ func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, comma
 
 	a.logger.Info("Executing command as %q: %s", username, command)
 
-	cmd := exec.Command("/bin/sh", "-c", command)
-
-	if username == "" {
-		cmd.Env = os.Environ()
-	} else {
-		id, err := resolveUnixIdentity(username)
-		if err != nil {
-			a.logger.Error("Failed to resolve user %s for exec: %v", username, err)
-			a.failExec(channel, fmt.Sprintf("Failed to execute command as %s: %v\n", username, err))
-			return
-		}
-		cred, err := credentialForIdentity(id)
-		if err != nil {
-			a.logger.Error("Failed to prepare credential for %s: %v", username, err)
-			a.failExec(channel, fmt.Sprintf("Failed to execute command as %s: %v\n", username, err))
-			return
-		}
-		if cred != nil {
-			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: cred}
-		}
-		cmd.Dir = id.Home
-		if _, statErr := os.Stat(cmd.Dir); statErr != nil {
-			cmd.Dir = "/"
-		}
-		cmd.Env = []string{
-			"HOME=" + id.Home,
-			"USER=" + username,
-			"LOGNAME=" + username,
-			"SHELL=" + id.Shell,
-			"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-		}
+	cmd, err := buildExecCommand(command, username)
+	if err != nil {
+		a.logger.Error("Failed to prepare exec as %s: %v", username, err)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command as %s: %v\n", username, err))
+		return
 	}
 
 	stdin, err := cmd.StdinPipe()
@@ -702,6 +686,110 @@ func (a *Agent) executeCommand(ctx context.Context, channel gossh.Channel, comma
 
 	a.sendExitStatus(channel, exitStatus)
 	a.logger.Debug("Closing write side of channel after command completion")
+	channel.CloseWrite()
+}
+
+// buildExecCommand prepares command for /bin/sh -c. With a username it runs
+// under that user's identity, home and a clean environment, as for shells;
+// without one it inherits the agent's identity and environment.
+func buildExecCommand(command, username string) (*exec.Cmd, error) {
+	cmd := exec.Command("/bin/sh", "-c", command)
+	if username == "" {
+		cmd.Env = os.Environ()
+		return cmd, nil
+	}
+	id, err := resolveUnixIdentity(username)
+	if err != nil {
+		return nil, err
+	}
+	cred, err := credentialForIdentity(id)
+	if err != nil {
+		return nil, err
+	}
+	if cred != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: cred}
+	}
+	cmd.Dir = id.Home
+	if _, statErr := os.Stat(cmd.Dir); statErr != nil {
+		cmd.Dir = "/"
+	}
+	cmd.Env = []string{
+		"HOME=" + id.Home,
+		"USER=" + username,
+		"LOGNAME=" + username,
+		"SHELL=" + id.Shell,
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+	}
+	return cmd, nil
+}
+
+// executeCommandWithPTY runs a one-shot command on a PTY, for clients that
+// asked for one before exec (`ssh -t host cmd`, sudo with requiretty). Output
+// is read until the PTY reports EOF, which happens once every process holding
+// the terminal has exited, so nothing written before exit is dropped.
+func (a *Agent) executeCommandWithPTY(ctx context.Context, channel gossh.Channel, requests <-chan *gossh.Request, command, username string, ptyReq *ptyRequestMsg) {
+	_, span := tracing.Start(ctx, "agent.target.exec")
+	defer span.End()
+	tracing.SetAttributes(span,
+		attribute.String("orion.target.remote_user", username),
+		attribute.String("orion.command", tracing.CommandName(command)),
+		attribute.Bool("orion.target.pty", true),
+	)
+
+	a.logger.Info("Executing command on a PTY as %q: %s", username, command)
+
+	cmd, err := buildExecCommand(command, username)
+	if err != nil {
+		go gossh.DiscardRequests(requests)
+		a.logger.Error("Failed to prepare exec as %s: %v", username, err)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command as %s: %v\r\n", username, err))
+		return
+	}
+	term := ptyReq.Term
+	if term == "" {
+		term = "xterm-256color"
+	}
+	// Replace rather than append: an inherited TERM would otherwise win, since
+	// getenv returns the first match.
+	cmd.Env = slices.DeleteFunc(cmd.Env, func(kv string) bool { return strings.HasPrefix(kv, "TERM=") })
+	cmd.Env = append(cmd.Env, "TERM="+term)
+
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
+		Rows: clampUint16(ptyReq.Rows),
+		Cols: clampUint16(ptyReq.Columns),
+		X:    clampUint16(ptyReq.Width),
+		Y:    clampUint16(ptyReq.Height),
+	})
+	if err != nil {
+		go gossh.DiscardRequests(requests)
+		a.logger.Error("Failed to start command with PTY: %v", err)
+		a.failExec(channel, fmt.Sprintf("Failed to execute command: %v\r\n", err))
+		return
+	}
+	defer ptmx.Close()
+
+	go a.serveShellRequests(requests, ptmx)
+	go func() {
+		io.Copy(ptmx, channel)
+		a.logger.Debug("Channel->PTY copy finished")
+	}()
+
+	// Linux returns EIO rather than EOF once the slave side is closed; either
+	// way the copy ends after the last byte has been read.
+	io.Copy(channel, ptmx)
+	a.logger.Debug("PTY->Channel copy finished")
+
+	exitStatus := 0
+	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitStatus = exitErr.ExitCode()
+		} else {
+			exitStatus = 1
+		}
+		a.logger.Info("Command exited with error: %v (status: %d)", err, exitStatus)
+	}
+
+	a.sendExitStatus(channel, exitStatus)
 	channel.CloseWrite()
 }
 

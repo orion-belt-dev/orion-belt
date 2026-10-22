@@ -18,10 +18,28 @@ Username format: `gatewayUser+machine` or `gatewayUser+remoteUser%machine`.
 
 ## Exec / one-shot commands
 
+When the username names a machine, the whole command runs on that machine:
+
+```bash
+ssh alice+web-01@orion-gateway.example.com uptime          # as root on web-01
+ssh 'alice+bob%web-01@orion-gateway.example.com' uptime    # as bob on web-01
+ssh -t alice+web-01@orion-gateway.example.com sudo -i      # with a terminal
+```
+
+Quotes, pipes and other shell syntax reach the target unchanged, for example
+`ssh alice+web-01@gw "/bin/sh -c 'echo \"\$HOME\" | wc -c'"`.
+
+Without a machine in the username, the first word of the command is the
+target, as `[remoteUser@]machine`:
+
 ```bash
 ssh alice@orion-gateway.example.com 'bob@web-01'
 ssh alice@orion-gateway.example.com 'bob@web-01 uptime'
 ```
+
+Both forms check the same grant, write the same audit entry and record the
+session. A user without a grant for that remote account gets
+"Permission denied" and exit status 1.
 
 ## FIDO / YubiKey SSH keys
 
@@ -57,6 +75,71 @@ Host web-01.orion
 ```
 
 Then: `ssh web-01.orion`
+
+## Using Ansible and AWX
+
+Ansible runs every task as a non-interactive SSH command, so it works through
+the gateway once the machine and remote user are in the username. No wrapper
+script is needed, and the managed servers need no inbound SSH.
+
+### Service account and grants
+
+Create a gateway account for automation and grant it the remote users it may
+become on each machine:
+
+```bash
+orion-belt-server user create --name svc-ansible --email ansible@example.com \
+  --key "$(cat ansible_ed25519.pub)"
+orion-belt-server permission grant --user svc-ansible --machine web-01 --type ssh
+```
+
+Scope grants to the remote accounts the playbooks need (see
+[SERVER-CLI.md](SERVER-CLI.md)). Every task is recorded and attributed to
+`svc-ansible`.
+
+### Inventory
+
+```yaml
+all:
+  vars:
+    ansible_host: orion-gateway.example.com
+    ansible_port: 2222
+    ansible_user: "svc-ansible+root%{{ inventory_hostname }}"
+    ansible_ssh_private_key_file: ~/.ssh/ansible_ed25519
+    # The gateway has no SFTP subsystem; send modules over stdin.
+    ansible_ssh_transfer_method: piped
+  hosts:
+    web-01:
+    db-01:
+      ansible_user: "svc-ansible+postgres%db-01"
+```
+
+`ansible all -m ping` and playbooks then run as usual. Pin the gateway's host
+key (or its Host CA, below) in `known_hosts` rather than turning off host key
+checking.
+
+### Recording volume
+
+Each task opens at least one session per host, and without pipelining a task
+uses several (create a temporary directory, run the module, clean up).
+Enable pipelining to keep it to one where the targets allow it
+(`pipelining = True` under `[ssh_connection]`, which needs `requiretty` off in
+sudoers). Expect one recording per task per host; size recording storage and
+retention for that.
+
+### AWX / Ansible Automation Platform
+
+- Credential: a **Machine** credential holding the service account's private
+  key. Leave its username empty: `ansible_user` from the inventory, which
+  names the machine, takes precedence.
+- Inventory: set `ansible_host`, `ansible_port`, `ansible_user` and
+  `ansible_ssh_transfer_method: piped` as above, as inventory or group
+  variables.
+- Execution environment: the default images already include the OpenSSH
+  client. The only network access they need is to the gateway's SSH port.
+
+SFTP transfer, per-job access requests instead of standing grants, and
+grouping one playbook run into a single session view are not supported yet.
 
 ## Host CA trust (optional)
 

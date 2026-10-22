@@ -87,3 +87,51 @@ func TestExec_FailureEndsTheChannel(t *testing.T) {
 		t.Fatal("agent never sent EOF after failing to start the command")
 	}
 }
+
+func TestExec_WithPTYRunsOnATerminal(t *testing.T) {
+	_, conn, _ := connected(t)
+
+	res := session(t, conn, "",
+		ptyReq("vt100", 90, 33),
+		execReq(`[ -t 0 ] && [ -t 1 ] && echo "tty term=$TERM size=$(stty size)"; exit 6`, ""),
+	)
+	if !strings.Contains(res.stdout, "tty term=vt100 size=33 90") || res.status != 6 {
+		t.Errorf("exec on a PTY = %+v", res)
+	}
+}
+
+func TestExec_WithPTYAppliesWindowChange(t *testing.T) {
+	_, conn, _ := connected(t)
+
+	// The resize is acknowledged before stdin is written, so it has been
+	// applied by the time read returns.
+	res := session(t, conn, "go\n",
+		ptyReq("xterm", 80, 24),
+		execReq(`read line; stty size`, ""),
+		request{"window-change", gossh.Marshal(&windowChangeMsg{Columns: 100, Rows: 40}), true, true},
+	)
+	if !strings.Contains(res.stdout, "40 100") || res.status != 0 {
+		t.Errorf("resized exec = %+v", res)
+	}
+}
+
+// Output written just before exit must reach the client: the PTY is read to
+// EOF before the exit status is sent.
+func TestExec_WithPTYKeepsTrailingOutput(t *testing.T) {
+	_, conn, _ := connected(t)
+	for i := 0; i < 20; i++ {
+		res := session(t, conn, "", ptyReq("xterm", 80, 24), execReq("printf last", ""))
+		if res.stdout != "last" || res.status != 0 {
+			t.Fatalf("run %d: %+v, want the final output intact", i, res)
+		}
+	}
+}
+
+func TestExec_WithPTYFailureEndsTheChannel(t *testing.T) {
+	_, conn, _ := connected(t)
+
+	res := session(t, conn, "", ptyReq("xterm", 80, 24), execReq("true", "no-such-user-xyz"))
+	if !strings.Contains(res.stdout, `unknown user "no-such-user-xyz"`) || res.status != 1 {
+		t.Errorf("PTY exec as unknown user = %+v", res)
+	}
+}

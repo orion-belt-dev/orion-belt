@@ -55,6 +55,24 @@ jobs:
       - name: Check coverage against baseline
         run: make coverage-check
 
+  ansible:
+    name: Ansible e2e
+    # GitHub-hosted for the same reason as coverage: the test starts Postgres
+    # through testcontainers. The hosted image also ships Ansible.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The test skips without Ansible or Docker; here a skip is a failure.
+      - name: Ansible through the gateway
+        run: |
+          ansible --version | head -1
+          go test -count=1 -v ./e2e/ansible/ | tee ansible-e2e.log
+          grep -q -- '--- PASS: TestAnsibleThroughGateway' ansible-e2e.log
+
   cve:
     name: Zero CVE gate
     runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
