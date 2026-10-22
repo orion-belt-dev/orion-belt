@@ -13,7 +13,7 @@ Orion Belt ships native packages for major Linux distributions via **GoReleaser 
 ## Build locally
 
 ```bash
-# Requires Go 1.27.2+ (see go.mod). Optional: nfpm or goreleaser.
+# Requires Go 1.27.3+ (see go.mod). Optional: nfpm or goreleaser.
 make packages
 # → dist/*.deb  dist/*.rpm  dist/*.apk  + raw binaries
 ```

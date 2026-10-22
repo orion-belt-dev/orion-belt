@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.27.2-alpine AS builder
+FROM golang:1.27.3-alpine@sha256:d530cf60723abf1ffae0cd16bb546b379ec0550d2f3815e5b16ed69dbc00fba4 AS builder
 
 # Go tools + Node (React console → web/static, embedded via go:embed)
 RUN apk add --no-cache git make nodejs npm
@@ -22,7 +22,7 @@ COPY . .
 RUN make build
 
 # Server image
-FROM alpine:latest AS server
+FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS server
 
 RUN apk add --no-cache ca-certificates openssh-keygen
 

@@ -58,7 +58,7 @@ Well-thought-out proposals have a much higher chance of being accepted.
 
 ### Requirements
 
-* Go **1.27.2+** (pinned in `go.mod`)
+* Go **1.27.3+** (pinned in `go.mod`)
 * PostgreSQL (or another supported database)
 * Make
 * SSH client (for testing)
