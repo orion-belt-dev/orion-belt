@@ -104,15 +104,19 @@ all:
   vars:
     ansible_host: orion-gateway.example.com
     ansible_port: 2222
-    ansible_user: "svc-ansible+root%{{ inventory_hostname }}"
+    ansible_user: "svc-ansible+root@{{ inventory_hostname }}"
     ansible_ssh_private_key_file: ~/.ssh/ansible_ed25519
     # The gateway has no SFTP subsystem; send modules over stdin.
     ansible_ssh_transfer_method: piped
   hosts:
     web-01:
     db-01:
-      ansible_user: "svc-ansible+postgres%db-01"
+      ansible_user: "svc-ansible+postgres@db-01"
 ```
+
+Separate the remote user and machine with `@` here, not `%`: Ansible passes
+the user as `-o User=...`, and recent OpenSSH releases expand `%` tokens in
+that value (`unknown key %w`). The same applies to `User` in `ssh_config`.
 
 `ansible all -m ping` and playbooks then run as usual. Pin the gateway's host
 key (or its Host CA, below) in `known_hosts` rather than turning off host key

@@ -119,8 +119,8 @@ func ptyReq(term string, cols, rows uint32) request {
 }
 
 func TestShell_RunsLoginShellOnPTY(t *testing.T) {
-	// The shell's input is checked through a file rather than its last line of
-	// output: startShell can drop trailing PTY output (see FINDINGS).
+	// The shell's input is checked through a file: its echo on the PTY would
+	// not tell what the shell itself read.
 	got := filepath.Join(t.TempDir(), "got")
 	username := fakeLoginShell(t, fmt.Sprintf(`echo "term=$TERM size=$(stty size)"; read line; printf %%s "$line" > %q; exit 4`, got))
 	_, conn, _ := connected(t)
@@ -140,6 +140,21 @@ func TestShell_RunsLoginShellOnPTY(t *testing.T) {
 	}
 	if !res.gotStatus || res.status != 4 {
 		t.Errorf("shell exit = %+v, want 4", res)
+	}
+}
+
+// Output written just before the shell exits must reach the client. The
+// shell used to be closed as soon as it exited, dropping output still
+// unread on the PTY; repeating the session makes that race show up.
+func TestShell_KeepsOutputWrittenBeforeExit(t *testing.T) {
+	const size = 64 << 10
+	username := fakeLoginShell(t, fmt.Sprintf(`head -c %d /dev/zero | tr '\0' x; printf END; exit 3`, size))
+	_, conn, _ := connected(t)
+	for i := 0; i < 20; i++ {
+		res := session(t, conn, "", ptyReq("xterm", 80, 24), shellReq(username))
+		if got := strings.Count(res.stdout, "x"); got != size || !strings.HasSuffix(res.stdout, "END") || res.status != 3 {
+			t.Fatalf("run %d: got %d of %d bytes, suffix %q, status %d", i, got, size, res.stdout[max(0, len(res.stdout)-8):], res.status)
+		}
 	}
 }
 

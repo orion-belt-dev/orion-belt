@@ -1138,9 +1138,11 @@ func (s *Server) startInteractiveShell(clientChannel, agentChannel ssh.Channel, 
 // has ended, as OpenSSH ends a session when the command exits: input the
 // client has not closed yet is moot by then, and clients such as Ansible or
 // ssh with ControlMaster never close it, so waiting for it hangs the session.
-// Otherwise (shell) it returns when either direction finishes.
+// Otherwise (shell) it also returns when the client's input ends, after
+// giving output already on its way shellOutputDrain to arrive; returning at
+// once dropped the shell's last output whenever the client closed stdin first.
 func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.SessionRecorder, untilOutputEnds bool) {
-	done := make(chan struct{}, 2)
+	inputDone := make(chan struct{})
 	outputDone := make(chan struct{})
 
 	// Client -> Agent (keystrokes are not recorded; PTY echo covers input in the cast)
@@ -1151,7 +1153,7 @@ func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.
 			cw.CloseWrite()
 		}
 		s.logger.Debug("Client -> Agent I/O closed")
-		done <- struct{}{}
+		close(inputDone)
 	}()
 
 	// Agent -> Client (PTY output → cast)
@@ -1165,16 +1167,29 @@ func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.
 
 		client.CloseWrite()
 		s.logger.Debug("Agent -> Client I/O closed")
-		done <- struct{}{}
 	}()
 
 	if untilOutputEnds {
 		<-outputDone
-	} else {
-		<-done
-		s.logger.Debug("First I/O direction finished, stopping proxy for shell")
+		return
 	}
+	select {
+	case <-outputDone:
+	case <-inputDone:
+		// The client may have only half-closed, or gone away; a shell can
+		// outlive either, so the wait for its output is bounded.
+		select {
+		case <-outputDone:
+		case <-time.After(shellOutputDrain):
+		}
+	}
+	s.logger.Debug("Shell I/O finished, stopping proxy")
 }
+
+// shellOutputDrain bounds how long a shell session waits for output after the
+// client's input has ended. Long enough for output already in flight, short
+// enough that a client that left does not hold the agent session open.
+const shellOutputDrain = time.Second
 
 // Stop stops the SSH server
 func (s *Server) Stop(ctx context.Context) error {
