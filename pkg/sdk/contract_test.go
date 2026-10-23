@@ -166,6 +166,9 @@ func endpoints() []endpoint {
 		{"ListAuditLogs", func(ctx context.Context, c *Client) error { return ignore(c.ListAuditLogs(ctx, 3)) }, "GET", "/api/v1/audit-logs?limit=3", false, "", `null`},
 		{"ListAuditLogsAll", func(ctx context.Context, c *Client) error { return ignore(c.ListAuditLogs(ctx, 0)) }, "GET", "/api/v1/audit-logs", false, "", `[]`},
 		{"ExportReportDefault", func(ctx context.Context, c *Client) error { return ignore(c.ExportReport(ctx, "access", "")) }, "GET", "/api/v1/reports/access/export", false, "", `csv`},
+		{"ExplainAccess", func(ctx context.Context, c *Client) error {
+			return ignore(c.ExplainAccess(ctx, "web-01", "root", "", "bob"))
+		}, "GET", "/api/v1/access/explain?machine=web-01&remote_user=root&user=bob", false, "", `{}`},
 		{"ExportReportWithParams", func(ctx context.Context, c *Client) error {
 			return ignore(c.ExportReportWithParams(ctx, "soc2-access", "csv", url.Values{"from": {"2026-07-01"}}))
 		}, "GET", "/api/v1/reports/soc2-access/export?format=csv&from=2026-07-01", false, "", `csv`},

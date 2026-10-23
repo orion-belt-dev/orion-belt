@@ -224,6 +224,24 @@ func (c *Client) ExportReportWithParams(ctx context.Context, reportName, format 
 	return c.doRequestBytes(ctx, http.MethodGet, path, nil, true)
 }
 
+// ExplainAccess says whether a user may reach machine (name or ID) as
+// remoteUser, and which grants, requests or role decide it. accessType
+// defaults to ssh; user (name or ID) defaults to the caller.
+func (c *Client) ExplainAccess(ctx context.Context, machine, remoteUser, accessType, user string) (*AccessExplanation, error) {
+	q := url.Values{"machine": {machine}, "remote_user": {remoteUser}}
+	if t := strings.TrimSpace(accessType); t != "" {
+		q.Set("access_type", t)
+	}
+	if u := strings.TrimSpace(user); u != "" {
+		q.Set("user", u)
+	}
+	var out AccessExplanation
+	if err := c.Do(ctx, http.MethodGet, "/access/explain?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetUsageDashboard returns windowed operational usage analytics.
 func (c *Client) GetUsageDashboard(ctx context.Context, windowHours, top int) (*UsageDashboard, error) {
 	values := url.Values{}

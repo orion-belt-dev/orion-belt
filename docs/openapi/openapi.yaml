@@ -1048,6 +1048,62 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/access/explain:
+    get:
+      tags: [Permissions]
+      summary: Explain an access decision
+      description: |
+        Says whether a user may reach a machine as a remote account and lists
+        the relationships behind the answer: privileged role, each grant on
+        the machine (with the access request it came from), and pending or
+        rejected requests. The decision comes from the same check the gateway
+        enforces. Denied SSH sessions and console terminals show the summary
+        inline.
+
+        A plain user may only explain their own access; admins, operators and
+        auditors may pass `user`.
+      parameters:
+        - name: machine
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Machine name or ID.
+        - name: remote_user
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Account on the target, e.g. `root`.
+        - name: access_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ssh, scp]
+            default: ssh
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Username or ID to explain (defaults to the caller).
+      responses:
+        "200":
+          description: Decision and relationship chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessExplanation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/access-requests:
     get:
       tags: [Access Requests]
@@ -2233,6 +2289,61 @@ components:
               hint: { type: string }
 
   schemas:
+    AccessExplanation:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        summary:
+          type: string
+          description: One sentence naming the deciding relationship.
+        user_id:
+          type: string
+        username:
+          type: string
+        machine_id:
+          type: string
+        machine:
+          type: string
+        access_type:
+          type: string
+        remote_user:
+          type: string
+        chain:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccessLink"
+      required: [allowed, summary, user_id, machine_id, access_type, remote_user, chain]
+
+    AccessLink:
+      type: object
+      properties:
+        relation:
+          type: string
+          enum: [role, grant, access_request, openfga, none]
+        ref:
+          type: string
+          description: "`permission:<id>`, `access_request:<id>` or `role:<role>`."
+        holds:
+          type: boolean
+          description: True for the link that authorizes the access.
+        detail:
+          type: string
+        via:
+          type: string
+          description: The access request a grant was created from.
+        reason:
+          type: string
+        granted_by:
+          type: string
+        at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+      required: [relation, holds, detail]
+
     ReportExportEnvelope:
       type: object
       properties:

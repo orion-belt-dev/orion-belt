@@ -106,7 +106,11 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 		return
 	}
 	if err := s.authService.CheckPermissionWithRemoteUser(c.Request.Context(), uid, m.ID, "ssh", remoteUser); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "permission denied"})
+		body := gin.H{"error": "permission denied"}
+		if reason := s.denialReason(c, uid, m.ID, remoteUser); reason != "" {
+			body["reason"] = reason
+		}
+		c.JSON(http.StatusForbidden, body)
 		return
 	}
 

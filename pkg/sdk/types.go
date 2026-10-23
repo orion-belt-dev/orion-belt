@@ -98,6 +98,12 @@ type APIKey = common.APIKey
 // Permission is a machine access permission record.
 type Permission = common.Permission
 
+// AccessExplanation is an access decision and the relationships behind it.
+type AccessExplanation = common.AccessExplanation
+
+// AccessLink is one relationship considered for an access decision.
+type AccessLink = common.AccessLink
+
 // SSHKey is a user SSH key record.
 type SSHKey = common.SSHKey
 

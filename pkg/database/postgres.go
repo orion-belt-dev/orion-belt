@@ -1389,6 +1389,33 @@ func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common
 	return nil
 }
 
+// ListPairPermissions returns every grant userID holds on machineID, expired
+// ones included, newest first.
+func (s *PostgresStore) ListPairPermissions(ctx context.Context, userID, machineID string) ([]*common.Permission, error) {
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
+			  FROM permissions WHERE user_id = $1 AND machine_id = $2
+			  ORDER BY granted_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, userID, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list permissions for user %s on machine %s: %w", userID, machineID, err)
+	}
+	defer rows.Close()
+
+	var permissions []*common.Permission
+	for rows.Next() {
+		permission := &common.Permission{}
+		var remoteUsers pq.StringArray
+		if err := rows.Scan(&permission.ID, &permission.UserID, &permission.MachineID,
+			&permission.AccessType, &remoteUsers, &permission.GrantedBy, &permission.GrantedAt,
+			&permission.ExpiresAt); err != nil {
+			return nil, fmt.Errorf("failed to scan permission: %w", err)
+		}
+		permission.RemoteUsers = []string(remoteUsers)
+		permissions = append(permissions, permission)
+	}
+	return permissions, rows.Err()
+}
+
 // ListPermissionVersions returns grant versions newest first: every current
 // permission row (expired ones included) and every archived version that was
 // later changed or revoked. Archived versions carry SupersededAt.

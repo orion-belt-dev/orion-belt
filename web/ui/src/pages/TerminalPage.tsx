@@ -5,7 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { api, getJwt, getSessionToken } from "../lib/api";
-import type { Machine } from "../lib/types";
+import type { AccessExplanation, Machine } from "../lib/types";
 import { useToast } from "../components/Toast";
 
 const REMOTE_USERS = ["root", "ubuntu", "ec2-user", "admin", "deploy", "alpine", "opensuse", "debian"];
@@ -153,7 +153,17 @@ export function TerminalPage() {
     };
     ws.onerror = () => {
       setStatus("error");
-      toast("WebSocket error — check Vite proxy (ws) and gateway auth", "err");
+      // A refused handshake hides the server's reason from the browser, so
+      // ask the gateway to explain the decision directly.
+      const params = new URLSearchParams({ machine, remote_user: user });
+      void api<AccessExplanation>(`/access/explain?${params}`)
+        .then((ex) => {
+          if (ex.allowed) throw new Error("allowed");
+          setStatus("denied");
+          term.write(`\r\n${ex.summary}\r\n`);
+          toast(ex.summary, "err");
+        })
+        .catch(() => toast("WebSocket error — check Vite proxy (ws) and gateway auth", "err"));
     };
     ws.onclose = (ev) => {
       setConnected(false);

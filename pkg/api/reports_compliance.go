@@ -268,13 +268,7 @@ func (n *complianceNames) machine(id string) string {
 	return id
 }
 
-// dbInstant turns a timestamp read from a TIMESTAMP (without time zone)
-// column back into the instant that was written. Writers store the server's
-// local wall clock and lib/pq returns it labelled UTC; on a UTC host this is
-// a no-op.
-func dbInstant(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.Local).UTC()
-}
+func dbInstant(t time.Time) time.Time { return common.FromDBTimestamp(t) }
 
 func dbInstantPtr(t *time.Time) *time.Time {
 	if t == nil {

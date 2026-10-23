@@ -117,6 +117,10 @@ func TestGateway_ExecOnMachineNamedInUsernameNeedsAGrant(t *testing.T) {
 	if !strings.Contains(res.out, "Permission denied") || !strings.Contains(res.out, "root@web-01") || res.status != 1 {
 		t.Errorf("exec without a grant = %+v", res)
 	}
+	// The denial says why: the grant covers deploy, not root.
+	if !strings.Contains(res.out, "grant allows deploy, not root") {
+		t.Errorf("denial does not explain itself: %q", res.out)
+	}
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	if len(agent.execs) != 0 {

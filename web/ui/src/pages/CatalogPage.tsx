@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { Capability, CapabilityCatalog, CapabilityStatus } from "../lib/types";
 import { Badge } from "../components/Badge";
+import { AccessExplanationPanel } from "../components/AccessExplanationPanel";
 import { fmtTime } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { Pagination, SortTh, TableToolbar, useTableState } from "../components/DataTable";
@@ -56,6 +57,7 @@ export function CatalogPage() {
   const [scope, setScope] = useState<Scope>("related");
   const [statusFilter, setStatusFilter] = useState("");
   const [openId, setOpenId] = useState("");
+  const [explainId, setExplainId] = useState("");
   const [draft, setDraft] = useState<Draft>({ remoteUser: "", accessType: "both", reason: "", duration: DEFAULT_TTL_SECONDS });
 
   const catalog = useQuery({
@@ -254,8 +256,25 @@ export function CatalogPage() {
                             Request
                           </button>
                         )}
+                        {cap.remote_user ? (
+                          <button
+                            type="button"
+                            className="btn secondary sm"
+                            aria-expanded={explainId === cap.id}
+                            onClick={() => setExplainId(explainId === cap.id ? "" : cap.id)}
+                          >
+                            Why?
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
+                    {explainId === cap.id ? (
+                      <tr>
+                        <td colSpan={6}>
+                          <AccessExplanationPanel machine={cap.machine_id} remoteUser={cap.remote_user} />
+                        </td>
+                      </tr>
+                    ) : null}
                     {openId === cap.id ? (
                       <tr>
                         <td colSpan={6}>

@@ -883,6 +883,11 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 		errorMsg += fmt.Sprintf("   Gateway user: %s\n", username)
 		errorMsg += fmt.Sprintf("   Target: %s@%s\n\n", remoteUser, machineName)
 		errorMsg += fmt.Sprintf("You don't have permission to access '%s' on %s\n", remoteUser, machineName)
+		// Say why, from the same relationships the check used. Best effort:
+		// the generic hint still applies when the explanation fails.
+		if ex, exErr := s.authService.ExplainAccess(ctx, userID, machine.ID, "ssh", remoteUser); exErr == nil {
+			errorMsg += ex.Summary + "\n"
+		}
 		errorMsg += "Contact your administrator or request access\n\n"
 
 		clientChannel.Write([]byte(errorMsg))

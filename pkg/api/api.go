@@ -238,6 +238,9 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		// What the caller could ask for, given their current relationships
 		protected.GET("/capabilities", s.listCapabilities)
 
+		// Why a user can or cannot reach a machine as a given account
+		protected.GET("/access/explain", s.explainAccess)
+
 		// Access request management
 		protected.GET("/access-requests", s.listAccessRequests)
 		protected.POST("/access-requests", s.createAccessRequest)

@@ -82,6 +82,30 @@ export type CapabilityCatalog = {
   capabilities: Capability[];
 };
 
+export type AccessLink = {
+  relation: "role" | "grant" | "access_request" | "openfga" | "none";
+  ref?: string;
+  holds: boolean;
+  detail: string;
+  via?: string;
+  reason?: string;
+  granted_by?: string;
+  at?: string;
+  expires_at?: string;
+};
+
+export type AccessExplanation = {
+  allowed: boolean;
+  summary: string;
+  user_id: string;
+  username: string;
+  machine_id: string;
+  machine: string;
+  access_type: string;
+  remote_user: string;
+  chain: AccessLink[];
+};
+
 export type UsageDashboard = {
   window_hours: number;
   from: string;

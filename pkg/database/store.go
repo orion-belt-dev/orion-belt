@@ -65,6 +65,9 @@ type Store interface {
 	// ListPermissionVersions returns current grants (expired included) and
 	// archived versions that were later changed or revoked, newest first.
 	ListPermissionVersions(ctx context.Context, limit int) ([]*common.PermissionVersion, error)
+	// ListPairPermissions returns every grant a user holds on a machine,
+	// expired ones included, newest first.
+	ListPairPermissions(ctx context.Context, userID, machineID string) ([]*common.Permission, error)
 
 	// Audit log operations
 	CreateAuditLog(ctx context.Context, log *common.AuditLog) error
