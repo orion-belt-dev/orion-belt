@@ -58,14 +58,19 @@ func (s *APIServer) exportReport(c *gin.Context) {
 	if reportName == "audit-logs" {
 		reportName = reportTypeAudit
 	}
-	if reportName != reportTypeSessions && reportName != reportTypeAudit {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "report must be one of: sessions, audit"})
+	if reportName != reportTypeSessions && reportName != reportTypeAudit && !isComplianceReport(reportName) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "report must be one of: sessions, audit, " +
+			reportTypeSOC2Access + ", " + reportTypeISOReview + ", " + reportTypePCIAdmin})
 		return
 	}
 
 	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "json")))
 	if format != "csv" && format != "pdf" && format != "json" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "format must be one of: csv, pdf, json"})
+		return
+	}
+	if isComplianceReport(reportName) {
+		s.exportComplianceReport(c, reportName, format)
 		return
 	}
 

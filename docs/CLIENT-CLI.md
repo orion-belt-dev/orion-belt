@@ -105,7 +105,7 @@ prints backup codes once, for the same reason.
 | `oadmin notifications policy` / `set-policy` | Set the org-wide notification bounds |
 | `oadmin notifications templates [--body]` / `set-template` / `reset-template` | Edit the copy recipients see per event |
 | `oadmin ca export` / `list-certs` / `revoke <serial>` | Manage the SSH CA |
-| `oadmin reports export <name>` | Export a compliance report |
+| `oadmin reports export <name> [--from/--to/--as-of]` | Export a report: `sessions`, `audit`, or a compliance report (see [COMPLIANCE_REPORTS.md](COMPLIANCE_REPORTS.md)) |
 | `oadmin usage [--window H]` | Access volume and approval latency |
 | `oadmin setup status` | First-run checklist |
 | `oadmin gateway-info` | Addresses the gateway advertises to clients and agents |

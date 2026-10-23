@@ -5,6 +5,9 @@ import type { AuditLog } from "../lib/types";
 import { fmtTime, shortId } from "../lib/format";
 import { Pagination, SortTh, useTableState } from "../components/DataTable";
 import { useUserDirectory } from "../lib/useUserDirectory";
+import { ComplianceReportsCard } from "../components/ComplianceReportsCard";
+import { useAuth } from "../auth/AuthContext";
+import { roleOf } from "../lib/nav";
 
 export function AuditPage() {
   const [actionFilter, setActionFilter] = useState("");
@@ -16,6 +19,8 @@ export function AuditPage() {
     queryFn: () => api<AuditLog[]>(`/audit-logs?limit=${limit}`),
   });
   const users = useUserDirectory();
+  const role = roleOf(useAuth().user);
+  const canExportCompliance = role === "admin" || role === "operator" || role === "auditor";
   const table = useTableState<AuditLog>({ pageSize: 25 });
 
   const userName = (id?: string) => {
@@ -92,6 +97,7 @@ export function AuditPage() {
           </button>
         </div>
       </div>
+      {canExportCompliance ? <ComplianceReportsCard /> : null}
       <div className="card">
         {exportErr ? <div className="err">{exportErr}</div> : null}
         <div className="table-toolbar">

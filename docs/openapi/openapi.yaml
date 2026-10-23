@@ -1283,11 +1283,28 @@ paths:
       tags: [Reports]
       summary: Export a report as CSV, PDF, or structured JSON
       description: |
-        Exports report data for either `sessions` or `audit`.
+        Exports report data for `sessions`, `audit`, or one of the
+        compliance reports.
 
         Authorization and scope follow existing report/list rules:
         - privileged roles can export organization-wide data
         - non-privileged users are limited to their own records
+
+        Compliance reports are organization-wide and require role admin,
+        operator, or auditor (403 otherwise):
+        - `soc2-access`: every session started and access request made
+          between `from` and `to`, with actor, target, timestamp, stated
+          reason, and approver. Each session names what authorized it
+          (`access_request:<id>`, `permission:<id>`, or `role:<role>`).
+        - `iso27001-access-review`: every grant in force at `as_of`, marked
+          `standing` or `time-boxed` with its expiry. Grants changed or
+          revoked since are included from the grant history.
+        - `pci-admin-activity`: sessions between `from` and `to` on machines
+          tagged `pci: in-scope`.
+
+        Each compliance source is read up to 5000 rows; `truncated: true` in
+        the JSON envelope (and a note in the PDF) means a narrower range is
+        needed for a complete report.
 
         Supported formats:
         - `csv` (spreadsheet-friendly)
@@ -1299,7 +1316,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [sessions, audit, audit-logs]
+            enum: [sessions, audit, audit-logs, soc2-access, iso27001-access-review, pci-admin-activity]
           description: Report name (`audit-logs` is accepted as an alias of `audit`).
         - name: format
           in: query
@@ -1341,6 +1358,31 @@ paths:
             minimum: 1
             maximum: 5000
           description: Optional maximum number of rows to export.
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Start of the range for `soc2-access` and `pci-admin-activity`
+            (RFC3339 or YYYY-MM-DD). Defaults to 30 days before `to`.
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            End of the range (RFC3339 or YYYY-MM-DD; a bare date covers the
+            whole day). Defaults to now.
+        - name: as_of
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Point in time for `iso27001-access-review` (RFC3339 or
+            YYYY-MM-DD; a bare date means the end of that day). Defaults to
+            now.
       responses:
         "200":
           description: File attachment in the requested format.
@@ -2196,7 +2238,7 @@ components:
       properties:
         report_type:
           type: string
-          description: Report type (`sessions` or `audit`).
+          description: Report type (`sessions`, `audit`, or a compliance report name).
         format:
           type: string
           enum: [csv, pdf, json]
@@ -2209,6 +2251,9 @@ components:
             type: string
         record_count:
           type: integer
+        truncated:
+          type: boolean
+          description: Compliance reports only; true when a source hit the 5000-row read limit.
         records:
           type: array
           items:

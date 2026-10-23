@@ -203,9 +203,23 @@ func (c *Client) ListAuditLogs(ctx context.Context, limit int) ([]AuditLog, erro
 // ExportReport downloads report bytes by report name and optional format.
 // Format examples: csv, pdf, siem.
 func (c *Client) ExportReport(ctx context.Context, reportName, format string) ([]byte, error) {
-	path := "/reports/" + url.PathEscape(reportName) + "/export"
+	return c.ExportReportWithParams(ctx, reportName, format, nil)
+}
+
+// ExportReportWithParams is ExportReport with extra query parameters, such as
+// from/to for the soc2-access and pci-admin-activity reports or as_of for
+// iso27001-access-review.
+func (c *Client) ExportReportWithParams(ctx context.Context, reportName, format string, params url.Values) ([]byte, error) {
+	values := url.Values{}
+	for k, v := range params {
+		values[k] = v
+	}
 	if strings.TrimSpace(format) != "" {
-		path += "?format=" + url.QueryEscape(format)
+		values.Set("format", format)
+	}
+	path := "/reports/" + url.PathEscape(reportName) + "/export"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 	return c.doRequestBytes(ctx, http.MethodGet, path, nil, true)
 }

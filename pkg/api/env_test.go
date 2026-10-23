@@ -85,7 +85,7 @@ func resetTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := db.Exec(`TRUNCATE users, machines, plugin_settings, notification_policy,
+	if _, err := db.Exec(`TRUNCATE users, machines, permission_history, plugin_settings, notification_policy,
 		notification_templates, ssh_ca_keys, ssh_certificates CASCADE`); err != nil {
 		t.Fatal(err)
 	}

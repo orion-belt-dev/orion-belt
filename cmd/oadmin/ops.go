@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -22,17 +23,37 @@ func newReportsCmd() *cobra.Command {
 	var (
 		format string
 		output string
+		from   string
+		to     string
+		asOf   string
 	)
 	export := &cobra.Command{
 		Use:   "export [report-name]",
 		Short: "Export a report",
-		Long: `Exports a named report (for example "sessions", "access-requests", or "audit").
+		Long: `Exports a named report: "sessions", "audit", or one of the compliance reports
+(admin, operator, or auditor only):
 
-The server decides which reports exist; an unknown name comes back as an error
+  soc2-access              sessions and access requests in --from/--to, with
+                           reason and approver
+  iso27001-access-review   grants in force --as-of a point in time, standing
+                           vs time-boxed
+  pci-admin-activity       sessions in --from/--to on machines tagged
+                           pci: in-scope
+
+Dates are RFC3339 or YYYY-MM-DD; the range defaults to the last 30 days. The
+server decides which reports exist; an unknown name comes back as an error
 listing what is available.`,
+		Example: `  oadmin reports export soc2-access --from 2026-07-01 --to 2026-09-30 -o q3.csv
+  oadmin reports export iso27001-access-review --as-of 2026-09-30 --format pdf -o review.pdf`,
 		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			data, err := api().ExportReport(ctx(), args[0], format)
+			params := url.Values{}
+			for key, v := range map[string]string{"from": from, "to": to, "as_of": asOf} {
+				if v != "" {
+					params.Set(key, v)
+				}
+			}
+			data, err := api().ExportReportWithParams(ctx(), args[0], format, params)
 			if err != nil {
 				cliflags.Fatalf("exporting report: %v", err)
 			}
@@ -48,7 +69,10 @@ listing what is available.`,
 			cliflags.Print("✓ Wrote %d bytes to %s", len(data), output)
 		},
 	}
-	export.Flags().StringVar(&format, "format", "csv", "export format (csv | json)")
+	export.Flags().StringVar(&format, "format", "csv", "export format (csv | pdf | json)")
+	export.Flags().StringVar(&from, "from", "", "start of the range (RFC3339 or YYYY-MM-DD)")
+	export.Flags().StringVar(&to, "to", "", "end of the range (RFC3339 or YYYY-MM-DD, a bare date covers the whole day)")
+	export.Flags().StringVar(&asOf, "as-of", "", "point in time for iso27001-access-review (RFC3339 or YYYY-MM-DD)")
 	export.Flags().StringVarP(&output, "output", "o", "", "write to this file instead of stdout")
 	reports.AddCommand(export)
 
