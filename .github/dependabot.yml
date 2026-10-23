@@ -27,3 +27,36 @@ updates:
     directory: /docker
     schedule:
       interval: weekly
+
+  # The docs site lives on the orion-belt-docs branch. Dependabot reads this
+  # file only from master, so the branch is targeted from here. Updates are
+  # sorted into one PR per group and labelled so they are easy to filter.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: orion-belt-docs
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+    labels: [dependencies, documentation, javascript]
+    groups:
+      # Docusaurus packages must share one version, so they move together.
+      docusaurus:
+        patterns: ["@docusaurus/*"]
+      react:
+        patterns: [react, react-dom]
+      docs-npm:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: orion-belt-docs
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(ci)
+    labels: [dependencies, documentation, github_actions]
+    groups:
+      docs-actions:
+        patterns: ["*"]
