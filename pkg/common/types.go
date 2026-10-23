@@ -189,6 +189,32 @@ type Permission struct {
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
+// Why a grant version stopped applying (PermissionVersion.EndReason).
+const (
+	PermissionEndUpdated = "updated"
+	PermissionEndRevoked = "revoked"
+)
+
+// PermissionVersion is one version of a grant. SupersededAt is nil while the
+// version is the current row; otherwise it records when the grant was changed
+// (EndReason "updated") or removed (EndReason "revoked").
+type PermissionVersion struct {
+	Permission
+	SupersededAt *time.Time `json:"superseded_at,omitempty"`
+	EndReason    string     `json:"end_reason,omitempty"`
+}
+
+// ActiveAt reports whether this version authorised access at t.
+func (v *PermissionVersion) ActiveAt(t time.Time) bool {
+	if v.GrantedAt.After(t) {
+		return false
+	}
+	if v.ExpiresAt != nil && !v.ExpiresAt.After(t) {
+		return false
+	}
+	return v.SupersededAt == nil || v.SupersededAt.After(t)
+}
+
 // AuditLog represents an audit log entry
 type AuditLog struct {
 	ID        string                 `json:"id"`

@@ -599,6 +599,65 @@ func TestPermissions_ChecksAndExpiry(t *testing.T) {
 	}
 }
 
+// Every grant version that stops applying is kept: updates, revokes, and the
+// grants removed with a deleted user or machine.
+func TestPermissionVersions_ArchiveUpdatesAndRemovals(t *testing.T) {
+	f := newFixture(t)
+	db := f.machineNamed(t, "db-01")
+	bob := f.user(t, "bob", false)
+
+	updated := common.NewPermission(f.alice.ID, f.machine.ID, "ssh", []string{"deploy"}, f.admin.ID, nil)
+	revoked := common.NewPermission(f.alice.ID, db.ID, "ssh", []string{"root"}, f.admin.ID, nil)
+	byUser := common.NewPermission(bob.ID, f.machine.ID, "ssh", []string{"root"}, f.admin.ID, nil)
+	byMachine := common.NewPermission(f.alice.ID, db.ID, "scp", []string{"root"}, f.admin.ID, nil)
+	for _, p := range []*common.Permission{updated, revoked, byUser, byMachine} {
+		if err := f.pg.CreatePermission(f.ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	updated.RemoteUsers = []string{"deploy", "app"}
+	if err := f.pg.UpdatePermission(f.ctx, updated); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.pg.DeletePermission(f.ctx, revoked.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.pg.DeleteUser(f.ctx, bob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.pg.DeleteMachine(f.ctx, db.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	versions, err := f.pg.ListPermissionVersions(f.ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, v := range versions {
+		state := "current"
+		if v.SupersededAt != nil {
+			state = v.EndReason
+		}
+		got[v.ID] = append(got[v.ID], state+":"+strings.Join(v.RemoteUsers, ","))
+	}
+	for _, s := range got {
+		sort.Strings(s)
+	}
+	want := map[string]string{
+		updated.ID:   "current:deploy,app updated:deploy",
+		revoked.ID:   "revoked:root",
+		byUser.ID:    "revoked:root",
+		byMachine.ID: "revoked:root",
+	}
+	for id, w := range want {
+		if g := strings.Join(got[id], " "); g != w {
+			t.Errorf("versions of %s = %q, want %q", id, g, w)
+		}
+	}
+}
+
 // --- audit logs ---------------------------------------------------------------------------------
 
 func TestAuditLogs_Filters(t *testing.T) {

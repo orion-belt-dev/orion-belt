@@ -89,6 +89,7 @@ func TestEveryMethodReportsDriverFailure(t *testing.T) {
 		"ListUserPermissions":    func() error { _, err := pg.ListUserPermissions(ctx, "x"); return err },
 		"ListMachinePermissions": func() error { _, err := pg.ListMachinePermissions(ctx, "x"); return err },
 		"ListAllPermissions":     func() error { _, err := pg.ListAllPermissions(ctx, 1, 0); return err },
+		"ListPermissionVersions": func() error { _, err := pg.ListPermissionVersions(ctx, 1); return err },
 		"FindActivePermission":   func() error { _, err := pg.FindActivePermission(ctx, "u", "m", "ssh"); return err },
 		"HasPermission":          func() error { _, err := pg.HasPermission(ctx, "u", "m", "ssh"); return err },
 		"HasPermissionWithRemoteUser": func() error {

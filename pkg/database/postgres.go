@@ -266,6 +266,24 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_subject ON ssh_certificates(subject_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_expires_at ON ssh_certificates(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_revoked_at ON ssh_certificates(revoked_at)`,
+		// permission_history keeps every grant version that stopped applying
+		// because it was changed or removed, so access reviews can be run as of
+		// a past date. No foreign keys: the record must outlive the user or
+		// machine it names. Rows are written by archivePermissionsSQL.
+		`CREATE TABLE IF NOT EXISTS permission_history (
+			history_id BIGSERIAL PRIMARY KEY,
+			permission_id VARCHAR(36) NOT NULL,
+			user_id VARCHAR(36) NOT NULL,
+			machine_id VARCHAR(36) NOT NULL,
+			access_type VARCHAR(50) NOT NULL,
+			remote_users TEXT[] NOT NULL,
+			granted_by VARCHAR(36),
+			granted_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP,
+			superseded_at TIMESTAMP NOT NULL,
+			end_reason VARCHAR(20) NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_permission_history_granted_at ON permission_history(granted_at)`,
 	}
 
 	for _, migration := range migrations {
@@ -632,7 +650,7 @@ func (s *PostgresStore) DeleteUser(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to clear certificate revoker: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE user_id = $1`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, archivePermissionsSQL(`DELETE FROM permissions WHERE user_id = $2`, common.PermissionEndRevoked), time.Now(), id); err != nil {
 		return fmt.Errorf("failed to delete user permissions: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM access_requests WHERE user_id = $1`, id); err != nil {
@@ -782,7 +800,7 @@ func (s *PostgresStore) DeleteMachine(ctx context.Context, id string) error {
 
 	// Explicit deletes keep behaviour correct even before the CASCADE migration
 	// has run on an upgraded database.
-	if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE machine_id = $1`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, archivePermissionsSQL(`DELETE FROM permissions WHERE machine_id = $2`, common.PermissionEndRevoked), time.Now(), id); err != nil {
 		return fmt.Errorf("failed to delete machine permissions: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM access_requests WHERE machine_id = $1`, id); err != nil {
@@ -1238,10 +1256,21 @@ func (s *PostgresStore) HasPermissionWithRemoteUser(ctx context.Context, userID,
 	return count > 0, nil
 }
 
+// archivePermissionsSQL wraps a DELETE ... RETURNING * on permissions so the
+// removed rows land in permission_history in the same statement. $1 is the
+// time the versions ended; the delete's own parameters start at $2.
+func archivePermissionsSQL(deleteStmt, reason string) string {
+	return `WITH gone AS (` + deleteStmt + ` RETURNING *)
+		INSERT INTO permission_history (permission_id, user_id, machine_id, access_type,
+			remote_users, granted_by, granted_at, expires_at, superseded_at, end_reason)
+		SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at,
+			expires_at, $1, '` + reason + `' FROM gone`
+}
+
 // DeletePermission deletes a permission
 func (s *PostgresStore) DeletePermission(ctx context.Context, id string) error {
-	query := `DELETE FROM permissions WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
+	query := archivePermissionsSQL(`DELETE FROM permissions WHERE id = $2`, common.PermissionEndRevoked)
+	result, err := s.db.ExecContext(ctx, query, time.Now(), id)
 
 	if err != nil {
 		return fmt.Errorf("failed to delete permission: %w", err)
@@ -1340,15 +1369,62 @@ func (s *PostgresStore) ListAllPermissions(ctx context.Context, limit, offset in
 
 // UpdatePermission updates mutable grant fields.
 func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common.Permission) error {
+	// The CTE reads the row as it was before this statement, so the version
+	// being replaced is archived atomically with the update.
 	_, err := s.db.ExecContext(ctx, `
+		WITH previous AS (
+			INSERT INTO permission_history (permission_id, user_id, machine_id, access_type,
+				remote_users, granted_by, granted_at, expires_at, superseded_at, end_reason)
+			SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at,
+				expires_at, $7, $8
+			FROM permissions WHERE id=$6
+		)
 		UPDATE permissions SET access_type=$1, remote_users=$2, expires_at=$3, granted_by=$4, granted_at=$5
 		WHERE id=$6`,
 		permission.AccessType, pq.Array(permission.RemoteUsers), permission.ExpiresAt,
-		permission.GrantedBy, permission.GrantedAt, permission.ID)
+		permission.GrantedBy, permission.GrantedAt, permission.ID, time.Now(), common.PermissionEndUpdated)
 	if err != nil {
 		return fmt.Errorf("failed to update permission: %w", err)
 	}
 	return nil
+}
+
+// ListPermissionVersions returns grant versions newest first: every current
+// permission row (expired ones included) and every archived version that was
+// later changed or revoked. Archived versions carry SupersededAt.
+func (s *PostgresStore) ListPermissionVersions(ctx context.Context, limit int) ([]*common.PermissionVersion, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''),
+			         granted_at, expires_at, NULL::timestamp, ''
+			  FROM permissions
+			  UNION ALL
+			  SELECT permission_id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''),
+			         granted_at, expires_at, superseded_at, end_reason
+			  FROM permission_history
+			  ORDER BY 7 DESC LIMIT $1`
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list permission versions: %w", err)
+	}
+	defer rows.Close()
+
+	var versions []*common.PermissionVersion
+	for rows.Next() {
+		v := &common.PermissionVersion{}
+		var remoteUsers pq.StringArray
+		if err := rows.Scan(&v.ID, &v.UserID, &v.MachineID, &v.AccessType, &remoteUsers,
+			&v.GrantedBy, &v.GrantedAt, &v.ExpiresAt, &v.SupersededAt, &v.EndReason); err != nil {
+			return nil, fmt.Errorf("failed to scan permission version: %w", err)
+		}
+		v.RemoteUsers = []string(remoteUsers)
+		versions = append(versions, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list permission versions: %w", err)
+	}
+	return versions, nil
 }
 
 // FindActivePermission returns an existing non-expired grant for the user/machine/access_type trio.

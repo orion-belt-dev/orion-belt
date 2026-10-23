@@ -37,7 +37,7 @@ func openTestPostgres(t *testing.T) *PostgresStore {
 	}
 	// Tables that do not reference users survive TRUNCATE users CASCADE, so
 	// they are listed explicitly to give every test an empty database.
-	if _, err := pg.db.ExecContext(ctx, `TRUNCATE users, machines, plugin_settings, notification_policy,
+	if _, err := pg.db.ExecContext(ctx, `TRUNCATE users, machines, permission_history, plugin_settings, notification_policy,
 		notification_templates, ssh_ca_keys, ssh_certificates CASCADE`); err != nil {
 		t.Fatalf("truncate tables: %v", err)
 	}
