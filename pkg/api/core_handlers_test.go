@@ -546,6 +546,11 @@ func TestLoginWithKey(t *testing.T) {
 	if me := e.do("GET", "/api/v1/auth/me", key, nil); me.code != 200 || !strings.Contains(string(me.body), "carol") {
 		t.Errorf("issued key does not authenticate: %d %s", me.code, me.body)
 	}
+	// osh login is the usual admin route, and the break-glass one: it must
+	// leave an audit trail.
+	if !e.audited("auth.login.key") {
+		t.Error("key login not audited")
+	}
 
 	// A stored key that is not a valid authorized_keys line cannot be verified.
 	broken := common.NewUser("broken", "b@x", "ssh-ed25519 notbase64", false)

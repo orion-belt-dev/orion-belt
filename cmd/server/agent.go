@@ -125,6 +125,7 @@ func runAgentRegister(cmd *cobra.Command, args []string) {
 		}
 		_, hostCALine := authority.ExportPublicKeys()
 
+		auditLocal(ctx, store, "", "machine.create", "machine:"+machine.ID, map[string]interface{}{"name": machine.Name, "identity": "host-cert"})
 		logger.Info("Agent registered with Host CA certificate:")
 		fmt.Printf("  Name:       %s\n", agentName)
 		fmt.Printf("  Machine ID: %s\n", machine.ID)
@@ -149,6 +150,7 @@ func runAgentRegister(cmd *cobra.Command, args []string) {
 		logger.Fatal("Failed to create machine: %v", err)
 	}
 
+	auditLocal(ctx, store, "", "machine.create", "machine:"+machine.ID, map[string]interface{}{"name": machine.Name, "identity": "agent-user"})
 	logger.Info("Agent registered successfully:")
 	fmt.Printf("  Name:       %s\n", agentName)
 	fmt.Printf("  User ID:    %s\n", agentUser.ID)
@@ -239,6 +241,7 @@ func runAgentDelete(cmd *cobra.Command, args []string) {
 	if err := store.DeleteMachine(ctx, machine.ID); err != nil {
 		logger.Fatal("Failed to delete machine: %v", err)
 	}
+	auditLocal(ctx, store, "", "machine.delete", "machine:"+machine.ID, map[string]interface{}{"name": machine.Name})
 
 	if machine.AgentID != "" {
 		if err := store.DeleteUser(ctx, machine.AgentID); err != nil {

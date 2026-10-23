@@ -146,6 +146,9 @@ func TestLogin_SessionAndJWT(t *testing.T) {
 		t.Errorf("token response = %v", tok)
 	}
 	e.expect(e.do("GET", "/api/v1/auth/me", "", nil, "Authorization", "Bearer "+tok["access_token"].(string)), 200)
+	if !e.audited("auth.login.token") {
+		t.Error("token login not audited")
+	}
 }
 
 func TestLogin_WithoutJWTSecret(t *testing.T) {

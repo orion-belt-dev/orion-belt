@@ -155,6 +155,7 @@ func (s *APIServer) loginJWT(c *gin.Context) {
 		return
 	}
 
+	s.auditLogin(c, user, "token")
 	c.JSON(http.StatusOK, gin.H{
 		"access_token": token,
 		"token_type":   "Bearer",

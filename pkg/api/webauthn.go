@@ -336,5 +336,6 @@ func (s *APIServer) webauthnLoginFinish(c *gin.Context) {
 			resp["expires_at"] = exp
 		}
 	}
+	s.auditLogin(c, user, "webauthn")
 	c.JSON(http.StatusOK, resp)
 }

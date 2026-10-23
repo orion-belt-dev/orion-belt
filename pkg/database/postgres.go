@@ -1524,8 +1524,9 @@ func (s *PostgresStore) CreateAuditLog(ctx context.Context, log *common.AuditLog
 	query := `INSERT INTO audit_logs (id, user_id, action, resource, metadata, ip_address, timestamp)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
+	// An empty actor (a server-CLI change, a system event) is stored as NULL.
 	_, err := s.db.ExecContext(ctx, query,
-		log.ID, log.UserID, log.Action, log.Resource,
+		log.ID, nullableString(log.UserID), log.Action, log.Resource,
 		metadata, log.IPAddress, log.Timestamp)
 
 	if err != nil {

@@ -449,6 +449,7 @@ func (s *APIServer) loginWithKey(c *gin.Context) {
 	response.User.Email = user.Email
 	response.User.IsAdmin = user.IsAdmin
 
+	s.auditLogin(c, user, "key")
 	c.JSON(http.StatusOK, response)
 }
 

@@ -667,6 +667,8 @@ func TestAuditLogs_Filters(t *testing.T) {
 		common.NewAuditLog(f.alice.ID, "logout", "session", "10.0.0.1", nil),
 		common.NewAuditLog(f.admin.ID, "login", "session", "10.0.0.2", nil),
 		common.NewAuditLog(f.admin.ID, "user.create", "user", "10.0.0.2", nil),
+		// No actor: a change made with the server CLI.
+		common.NewAuditLog("", "login.cli", "user", "", nil),
 	}
 	for i, e := range entries {
 		e.Timestamp = time.Now().Add(time.Duration(i) * time.Second)
@@ -680,13 +682,13 @@ func TestAuditLogs_Filters(t *testing.T) {
 		filters map[string]interface{}
 		want    int
 	}{
-		{"no filter", nil, 4},
+		{"no filter", nil, 5},
 		{"by user", map[string]interface{}{"user_id": f.alice.ID}, 2},
 		{"by action", map[string]interface{}{"action": "login"}, 2},
 		{"by user and action", map[string]interface{}{"user_id": f.admin.ID, "action": "login"}, 1},
-		{"by resource", map[string]interface{}{"resource": "user"}, 1},
-		{"blank and non-string values ignored", map[string]interface{}{"action": "", "resource": 5, "unknown": "x"}, 4},
-		{"by action prefix", map[string]interface{}{"action_prefix": "log"}, 3},
+		{"by resource", map[string]interface{}{"resource": "user"}, 2},
+		{"blank and non-string values ignored", map[string]interface{}{"action": "", "resource": 5, "unknown": "x"}, 5},
+		{"by action prefix", map[string]interface{}{"action_prefix": "log"}, 4},
 		{"prefix wildcards are literal", map[string]interface{}{"action_prefix": "log_"}, 0},
 		{"prefix with a dot", map[string]interface{}{"action_prefix": "user."}, 1},
 	}
@@ -700,10 +702,10 @@ func TestAuditLogs_Filters(t *testing.T) {
 	}
 
 	logs, _ := f.pg.ListAuditLogs(f.ctx, 1, 0, nil)
-	if len(logs) != 1 || logs[0].Action != "user.create" {
-		t.Errorf("newest entry = %+v, want user.create", logs)
+	if len(logs) != 1 || logs[0].Action != "login.cli" || logs[0].UserID != "" {
+		t.Errorf("newest entry = %+v, want login.cli with no actor", logs)
 	}
-	first, _ := f.pg.ListAuditLogs(f.ctx, 1, 3, nil)
+	first, _ := f.pg.ListAuditLogs(f.ctx, 1, 4, nil)
 	if len(first) != 1 || first[0].Metadata["method"] != "key" {
 		t.Errorf("oldest entry = %+v, want metadata round-tripped", first)
 	}

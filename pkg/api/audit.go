@@ -26,3 +26,14 @@ func (s *APIServer) recordAuditAs(c *gin.Context, uid, action, resource string, 
 		s.logger.Warn("audit log write failed: %v", err)
 	}
 }
+
+// auditLogin records a successful sign-in as auth.login.<method>. Every
+// login route records one, so an admin who signs in by any route, including
+// a break-glass account, leaves the same trail.
+func (s *APIServer) auditLogin(c *gin.Context, user *common.User, method string) {
+	s.recordAuditAs(c, user.ID, "auth.login."+method, "user:"+user.ID, map[string]interface{}{
+		"username": user.Username,
+		"role":     user.EffectiveRole(),
+		"method":   method,
+	})
+}

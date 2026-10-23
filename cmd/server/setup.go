@@ -196,6 +196,10 @@ func runSetup(cmd *cobra.Command, args []string) {
 		if err := store.CreateUser(cmd.Context(), user); err != nil {
 			logger.Fatal("Create admin: %v", err)
 		}
+		auditLocal(cmd.Context(), store, "", "user.create", "user:"+user.ID, map[string]interface{}{
+			"username": user.Username,
+			"role":     user.Role,
+		})
 		fmt.Printf("✓ Admin %q created (id %s)\n", name, user.ID)
 		fmt.Println("  Sign in at the UI with that username + matching private key (via osh login).")
 	}
