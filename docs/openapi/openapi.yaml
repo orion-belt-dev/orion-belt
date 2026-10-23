@@ -2922,6 +2922,39 @@ components:
           type: string
           format: date-time
           nullable: true
+        risk_signals:
+          $ref: "#/components/schemas/RiskSignals"
+    RiskSignals:
+      type: object
+      description: |
+        Captured when the request is made, as input for risk-based approval.
+        Absent on requests made before signal collection existed.
+      properties:
+        source_ip:
+          type: string
+        device:
+          type: string
+          description: The client's User-Agent, e.g. `osh/1.3.1` (empty when not sent).
+        auth_method:
+          type: string
+        mfa_enrolled:
+          type: boolean
+          description: The requester has TOTP or WebAuthn enrolled.
+        hour_utc:
+          type: integer
+          minimum: 0
+          maximum: 23
+        weekday:
+          type: string
+        target_sensitivity:
+          type: string
+          enum: [low, medium, high, unset]
+          description: |
+            From the machine's `sensitivity` tag; a machine tagged
+            `pci: in-scope` without one counts as `high`.
+        collected_at:
+          type: string
+          format: date-time
     CreateAccessRequest:
       type: object
       required: [machine_id, remote_users, reason]

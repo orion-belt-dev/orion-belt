@@ -49,6 +49,19 @@ export type AccessRequest = {
   reviewed_at?: string | null;
   created_at?: string;
   expires_at?: string | null;
+  risk_signals?: RiskSignals;
+};
+
+// Captured when an access request is made, as input for risk-based approval.
+export type RiskSignals = {
+  source_ip?: string;
+  device?: string;
+  auth_method?: string;
+  mfa_enrolled: boolean;
+  hour_utc: number;
+  weekday: string;
+  target_sensitivity: "low" | "medium" | "high" | "unset";
+  collected_at: string;
 };
 
 // What the logged-in user could ask for, and why it is being offered.

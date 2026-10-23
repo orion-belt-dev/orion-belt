@@ -175,6 +175,9 @@ type AccessRequest struct {
 	ReviewedAt  *time.Time `json:"reviewed_at,omitempty"`
 	ReviewedBy  *string    `json:"reviewed_by,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// RiskSignals are captured when the request is made; nil for requests
+	// that predate signal collection.
+	RiskSignals *RiskSignals `json:"risk_signals,omitempty"`
 }
 
 // Permission represents a ReBAC permission

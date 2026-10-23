@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -167,6 +168,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`UPDATE users SET role = 'admin' WHERE is_admin = true AND (role IS NULL OR role = '' OR role = 'user')`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source VARCHAR(32) NOT NULL DEFAULT 'ssh'`,
 		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS access_type VARCHAR(50) NOT NULL DEFAULT 'both'`,
+		// Identity, source, time and target signals captured with each
+		// request, for risk-based approval (NULL for older requests).
+		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS risk_signals JSONB`,
 		`CREATE TABLE IF NOT EXISTS user_ssh_keys (
 			id VARCHAR(36) PRIMARY KEY,
 			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1056,16 +1060,23 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	if request.AccessType == "" {
 		request.AccessType = "both"
 	}
-	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at)
-			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at, risk_signals)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 
 	remoteUsers := pq.Array(request.RemoteUsers)
+	var signals []byte
+	if request.RiskSignals != nil {
+		var err error
+		if signals, err = json.Marshal(request.RiskSignals); err != nil {
+			return fmt.Errorf("failed to encode risk signals: %w", err)
+		}
+	}
 
 	_, err := s.db.ExecContext(ctx, query,
 		request.ID, request.UserID, request.MachineID,
 		remoteUsers, request.AccessType,
 		request.Reason, request.Duration, request.Status, request.RequestedAt,
-		request.ReviewedAt, request.ReviewedBy, request.ExpiresAt)
+		request.ReviewedAt, request.ReviewedBy, request.ExpiresAt, signals)
 
 	if err != nil {
 		return fmt.Errorf("failed to create access request: %w", err)
@@ -1073,24 +1084,49 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	return nil
 }
 
+// accessRequestColumns is the column list scanAccessRequest reads.
+const accessRequestColumns = `id, user_id, machine_id, remote_users, access_type, reason, duration, status,
+	requested_at, reviewed_at, reviewed_by, expires_at, risk_signals`
+
+// rowScanner is satisfied by *sql.Row and *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanAccessRequest reads one row selected with accessRequestColumns.
+func scanAccessRequest(row rowScanner) (*common.AccessRequest, error) {
+	request := &common.AccessRequest{}
+	var remoteUsers pq.StringArray
+	var signals []byte
+	if err := row.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
+		&request.Duration, &request.Status, &request.RequestedAt,
+		&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt, &signals); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("failed to scan access request: %w", err)
+	}
+	request.RemoteUsers = []string(remoteUsers)
+	if len(signals) > 0 {
+		request.RiskSignals = &common.RiskSignals{}
+		if err := json.Unmarshal(signals, request.RiskSignals); err != nil {
+			return nil, fmt.Errorf("failed to decode risk signals of access request %s: %w", request.ID, err)
+		}
+	}
+	return request, nil
+}
+
 // GetAccessRequest retrieves an access request by ID
 func (s *PostgresStore) GetAccessRequest(ctx context.Context, id string) (*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests WHERE id = $1`
-	var remoteUsers pq.StringArray
-	request := &common.AccessRequest{}
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-		&request.Duration, &request.Status, &request.RequestedAt,
-		&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt)
-
-	if err == sql.ErrNoRows {
+	request, err := scanAccessRequest(s.db.QueryRowContext(ctx, query, id))
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get access request: %w", err)
 	}
-	request.RemoteUsers = []string(remoteUsers)
 	return request, nil
 }
 
@@ -1116,7 +1152,7 @@ func (s *PostgresStore) UpdateAccessRequest(ctx context.Context, request *common
 
 // ListPendingAccessRequests lists all pending access requests
 func (s *PostgresStore) ListPendingAccessRequests(ctx context.Context) ([]*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests WHERE status = 'pending' ORDER BY requested_at DESC`
 
 	rows, err := s.db.QueryContext(ctx, query)
@@ -1126,15 +1162,11 @@ func (s *PostgresStore) ListPendingAccessRequests(ctx context.Context) ([]*commo
 	defer rows.Close()
 
 	var requests []*common.AccessRequest
-	var remoteUsers pq.StringArray
 	for rows.Next() {
-		request := &common.AccessRequest{}
-		if err := rows.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-			&request.Duration, &request.Status, &request.RequestedAt,
-			&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("failed to scan access request: %w", err)
+		request, err := scanAccessRequest(rows)
+		if err != nil {
+			return nil, err
 		}
-		request.RemoteUsers = []string(remoteUsers)
 		requests = append(requests, request)
 	}
 
@@ -1143,7 +1175,7 @@ func (s *PostgresStore) ListPendingAccessRequests(ctx context.Context) ([]*commo
 
 // ListAllAccessRequests lists access requests of any status, paginated.
 func (s *PostgresStore) ListAllAccessRequests(ctx context.Context, limit, offset int) ([]*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests ORDER BY requested_at DESC LIMIT $1 OFFSET $2`
 
 	rows, err := s.db.QueryContext(ctx, query, limit, offset)
@@ -1154,14 +1186,10 @@ func (s *PostgresStore) ListAllAccessRequests(ctx context.Context, limit, offset
 
 	var requests []*common.AccessRequest
 	for rows.Next() {
-		request := &common.AccessRequest{}
-		var remoteUsers pq.StringArray
-		if err := rows.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-			&request.Duration, &request.Status, &request.RequestedAt,
-			&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("failed to scan access request: %w", err)
+		request, err := scanAccessRequest(rows)
+		if err != nil {
+			return nil, err
 		}
-		request.RemoteUsers = []string(remoteUsers)
 		requests = append(requests, request)
 	}
 
@@ -1170,7 +1198,7 @@ func (s *PostgresStore) ListAllAccessRequests(ctx context.Context, limit, offset
 
 // ListUserAccessRequests lists access requests for a specific user
 func (s *PostgresStore) ListUserAccessRequests(ctx context.Context, userID string, limit, offset int) ([]*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT $2 OFFSET $3`
 
 	rows, err := s.db.QueryContext(ctx, query, userID, limit, offset)
@@ -1181,14 +1209,10 @@ func (s *PostgresStore) ListUserAccessRequests(ctx context.Context, userID strin
 
 	var requests []*common.AccessRequest
 	for rows.Next() {
-		request := &common.AccessRequest{}
-		var remoteUsers pq.StringArray
-		if err := rows.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-			&request.Duration, &request.Status, &request.RequestedAt,
-			&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("failed to scan access request: %w", err)
+		request, err := scanAccessRequest(rows)
+		if err != nil {
+			return nil, err
 		}
-		request.RemoteUsers = []string(remoteUsers)
 		requests = append(requests, request)
 	}
 

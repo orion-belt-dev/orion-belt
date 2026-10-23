@@ -670,6 +670,7 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 	if req.AccessType != "" {
 		accessReq.AccessType = req.AccessType
 	}
+	accessReq.RiskSignals = s.collectRiskSignals(c, userID.(string), req.MachineID)
 
 	if err := s.store.CreateAccessRequest(ctx, accessReq); err != nil {
 		s.logger.Error("Failed to create access request: %v", err)

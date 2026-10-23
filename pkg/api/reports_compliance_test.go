@@ -142,18 +142,6 @@ func TestBuildPCIRowsOnlyTaggedTargets(t *testing.T) {
 	}
 }
 
-func TestIsPCIInScope(t *testing.T) {
-	for tags, want := range map[string]bool{"in-scope": true, " In-Scope ": true, "no": false, "": false} {
-		m := &common.Machine{Tags: map[string]string{PCITagKey: tags}}
-		if got := IsPCIInScope(m); got != want {
-			t.Errorf("pci=%q: got %v want %v", tags, got, want)
-		}
-	}
-	if IsPCIInScope(&common.Machine{}) || IsPCIInScope(nil) {
-		t.Error("untagged machines are out of scope")
-	}
-}
-
 func TestParseReportRange(t *testing.T) {
 	from, to, err := parseReportRange("2026-10-01", "2026-10-31", compNow)
 	if err != nil {
@@ -265,7 +253,7 @@ func TestISOReviewIncludesSinceRevokedGrants(t *testing.T) {
 func TestPCIReportOnlyTaggedMachines(t *testing.T) {
 	e := newEnv(t, nil)
 	ctx := context.Background()
-	pay := common.NewMachine("pay-01", "10.0.0.9", 22, map[string]string{PCITagKey: PCITagValue})
+	pay := common.NewMachine("pay-01", "10.0.0.9", 22, map[string]string{common.PCITagKey: common.PCITagValue})
 	if err := e.store.CreateMachine(ctx, pay); err != nil {
 		t.Fatal(err)
 	}

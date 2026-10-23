@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/sdk"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
 )
 
 // APIEndpointFor resolves the HTTP API base URL from a loaded config, falling
@@ -42,7 +44,8 @@ func (c *Common) SDKClient(cfg *common.Config) (*sdk.Client, error) {
 		return nil, fmt.Errorf("failed to parse private key %s: %w", cfg.Auth.KeyFile, err)
 	}
 
-	client, err := sdk.NewClient(APIEndpointFor(cfg), sdk.WithTimeout(c.Timeout))
+	client, err := sdk.NewClient(APIEndpointFor(cfg), sdk.WithTimeout(c.Timeout),
+		sdk.WithUserAgent(filepath.Base(os.Args[0])+"/"+version.Version))
 	if err != nil {
 		return nil, err
 	}

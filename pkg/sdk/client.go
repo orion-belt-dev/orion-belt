@@ -22,10 +22,27 @@ type Client struct {
 	apiKey       string
 	sessionToken string
 	bearerToken  string
+	userAgent    string
 }
 
 // Option configures a Client.
 type Option func(*Client)
+
+// WithUserAgent sets the User-Agent sent with every request, e.g.
+// "osh/1.3.1". The gateway records it as the device signal on access
+// requests.
+func WithUserAgent(userAgent string) Option {
+	return func(c *Client) {
+		c.userAgent = strings.TrimSpace(userAgent)
+	}
+}
+
+// setUserAgent applies the configured User-Agent, if any.
+func (c *Client) setUserAgent(req *http.Request) {
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+}
 
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(httpClient *http.Client) Option {
@@ -154,6 +171,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any, o
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	c.setUserAgent(req)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

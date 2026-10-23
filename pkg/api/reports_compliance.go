@@ -25,12 +25,6 @@ const (
 	reportTypePCIAdmin   = "pci-admin-activity"
 )
 
-// PCITagKey and PCITagValue mark a machine as PCI-in-scope:
-// tags: {pci: in-scope}.
-const (
-	PCITagKey   = "pci"
-	PCITagValue = "in-scope"
-)
 
 // complianceFetchLimit bounds how many rows of each source a report reads.
 // A report that hits it says so with truncated=true instead of silently
@@ -562,15 +556,6 @@ func buildGrantReviewRows(versions []*common.PermissionVersion, asOf time.Time, 
 
 // --- PCI ----------------------------------------------------------------------
 
-// IsPCIInScope reports whether a machine carries the pci: in-scope tag.
-func IsPCIInScope(m *common.Machine) bool {
-	if m == nil {
-		return false
-	}
-	v, ok := m.Tags[PCITagKey]
-	return ok && strings.EqualFold(strings.TrimSpace(v), PCITagValue)
-}
-
 // privilegedRemoteUsers are the target accounts a PCI report flags as
 // administrative even without a session-level command log.
 var privilegedRemoteUsers = map[string]bool{"root": true, "administrator": true, "admin": true}
@@ -594,7 +579,7 @@ func (s *APIServer) buildPCIReport(c *gin.Context, from, to time.Time) (*complia
 		Records:   rows,
 		Truncated: len(sessions) == complianceFetchLimit && inRange(sessions[len(sessions)-1].StartTime, from, to),
 	}
-	report.Filters["tag"] = PCITagKey + "=" + PCITagValue
+	report.Filters["tag"] = common.PCITagKey + "=" + common.PCITagValue
 	for _, r := range rows {
 		report.Rows = append(report.Rows, []string{r.SessionID, r.Actor, r.Target, r.RemoteUser, fmt.Sprint(r.Privileged), r.Source, r.StartTime, r.EndTime, r.Status, fmt.Sprint(r.Recording)})
 	}
@@ -607,7 +592,7 @@ func (s *APIServer) buildPCIReport(c *gin.Context, from, to time.Time) (*complia
 func buildPCIRows(sessions []*common.Session, from, to time.Time, names *complianceNames) []pciActivityRow {
 	rows := []pciActivityRow{}
 	for _, sess := range sessions {
-		if !inRange(sess.StartTime, from, to) || !IsPCIInScope(names.machines[sess.MachineID]) {
+		if !inRange(sess.StartTime, from, to) || !common.IsPCIInScope(names.machines[sess.MachineID]) {
 			continue
 		}
 		rows = append(rows, pciActivityRow{

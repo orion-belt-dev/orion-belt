@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -107,5 +108,36 @@ func TestTerminalDenialCarriesReason(t *testing.T) {
 	e.expect(r, http.StatusForbidden)
 	if reason, _ := r.obj(t)["reason"].(string); !strings.Contains(reason, "no grant on web-01") {
 		t.Errorf("reason = %q", reason)
+	}
+}
+
+// Each access request keeps the identity, source, client, time and target
+// signals it was made with, and returns them when read back.
+func TestAccessRequestRecordsRiskSignals(t *testing.T) {
+	e := newEnv(t, nil)
+	pay := common.NewMachine("pay-01", "10.0.0.9", 22, map[string]string{common.PCITagKey: common.PCITagValue})
+	if err := e.store.CreateMachine(context.Background(), pay); err != nil {
+		t.Fatal(err)
+	}
+	r := e.do(http.MethodPost, "/api/v1/access-requests", e.aliceKey, map[string]any{
+		"machine_id": pay.ID, "remote_users": []string{"root"}, "reason": "settlement batch",
+	}, "User-Agent", "osh/1.3.1")
+	e.expect(r, http.StatusCreated)
+	id, _ := r.obj(t)["id"].(string)
+
+	r = e.do(http.MethodGet, "/api/v1/access-requests/"+id, e.aliceKey, nil)
+	e.expect(r, http.StatusOK)
+	var got common.AccessRequest
+	r.json(t, &got)
+	s := got.RiskSignals
+	if s == nil {
+		t.Fatalf("no risk signals on %s", r.body)
+	}
+	if s.SourceIP != "192.0.2.10" || s.Device != "osh/1.3.1" || s.AuthMethod == "" ||
+		s.TargetSensitivity != common.SensitivityHigh || s.Weekday == "" || s.CollectedAt.IsZero() {
+		t.Errorf("signals = %+v", s)
+	}
+	if s.MFAEnrolled {
+		t.Error("alice has no MFA enrolled")
 	}
 }

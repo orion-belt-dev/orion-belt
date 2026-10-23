@@ -24,6 +24,7 @@ func (c *Client) doRequestBytes(ctx context.Context, method, path string, body a
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	c.setUserAgent(req)
 
 	if withAuth {
 		if c.apiKey != "" {
