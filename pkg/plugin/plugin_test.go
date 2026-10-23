@@ -98,6 +98,34 @@ func TestTriggerHookPropagatesPluginError(t *testing.T) {
 	}
 }
 
+// A failing plugin must not stop the plugins after it from receiving the
+// hook; every failure is still reported.
+func TestTriggerHookReachesEveryPluginWhenOneFails(t *testing.T) {
+	m := newTestManager(t)
+	var reached []string
+	for _, name := range []string{"broken-webhook", "audit", "also-broken"} {
+		name := name
+		p := &fakeHookPlugin{name: name, fn: func(ctx context.Context, hook Hook, hookCtx *HookContext) error {
+			reached = append(reached, name)
+			if strings.Contains(name, "broken") {
+				return errors.New(name + " is down")
+			}
+			return nil
+		}}
+		if err := m.Register(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := m.TriggerHook(context.Background(), HookSessionStart, &HookContext{})
+	if len(reached) != 3 {
+		t.Fatalf("plugins reached = %v, want all three", reached)
+	}
+	if err == nil || !strings.Contains(err.Error(), "broken-webhook is down") || !strings.Contains(err.Error(), "also-broken is down") {
+		t.Errorf("error = %v, want both failures", err)
+	}
+}
+
 func TestTriggerHookSuccess(t *testing.T) {
 	m := newTestManager(t)
 	called := false

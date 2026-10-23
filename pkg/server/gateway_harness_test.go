@@ -85,7 +85,7 @@ func resetDB(t *testing.T) {
 	}
 	defer db.Close()
 	// The schema may not exist yet on a fresh container; New migrates it.
-	_, _ = db.Exec(`TRUNCATE users, machines, ssh_ca_keys, ssh_certificates CASCADE`)
+	_, _ = db.Exec(`TRUNCATE users, machines, plugin_settings, ssh_ca_keys, ssh_certificates CASCADE`)
 }
 
 // harness is a running gateway with a user, a machine and that machine's

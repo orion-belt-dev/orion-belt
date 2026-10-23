@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -389,14 +390,17 @@ func (m *Manager) TriggerHook(ctx context.Context, hook Hook, hookCtx *HookConte
 	}
 	m.mu.RUnlock()
 
+	// Every enabled plugin gets the hook even when an earlier one fails: a
+	// broken webhook must not stop the audit or notification plugins from
+	// seeing the event.
+	var errs []error
 	for _, plugin := range plugins {
 		if err := m.callHook(ctx, plugin, hook, hookCtx); err != nil {
 			m.logger.Error("Hook %s failed for plugin %s: %v", hook, plugin.Name(), err)
-			return fmt.Errorf("hook %s failed: %w", hook, err)
+			errs = append(errs, fmt.Errorf("hook %s failed for plugin %s: %w", hook, plugin.Name(), err))
 		}
 	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 // callHook invokes a single plugin's OnHook with panic recovery and a bounded
