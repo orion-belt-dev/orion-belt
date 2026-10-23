@@ -49,3 +49,34 @@ func TestNewRiskSignals(t *testing.T) {
 		t.Error("an unknown user is not MFA-enrolled")
 	}
 }
+
+func TestFromDBTimestampRestoresTheWrittenInstant(t *testing.T) {
+	written := time.Date(2026, 10, 23, 18, 30, 0, 0, time.Local)
+	// The column keeps the local wall clock; lib/pq labels it UTC.
+	stored := time.Date(written.Year(), written.Month(), written.Day(), written.Hour(), written.Minute(), 0, 0, time.UTC)
+	if got := FromDBTimestamp(stored); !got.Equal(written) || got.Location() != time.UTC {
+		t.Errorf("FromDBTimestamp = %v, want %v in UTC", got, written)
+	}
+}
+
+func TestPermissionVersionActiveAt(t *testing.T) {
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	before, after := at.Add(-time.Hour), at.Add(time.Hour)
+	cases := []struct {
+		name string
+		v    PermissionVersion
+		want bool
+	}{
+		{"standing", PermissionVersion{Permission: Permission{GrantedAt: before}}, true},
+		{"not yet granted", PermissionVersion{Permission: Permission{GrantedAt: after}}, false},
+		{"expired", PermissionVersion{Permission: Permission{GrantedAt: before, ExpiresAt: &at}}, false},
+		{"expires later", PermissionVersion{Permission: Permission{GrantedAt: before, ExpiresAt: &after}}, true},
+		{"superseded before", PermissionVersion{Permission: Permission{GrantedAt: before}, SupersededAt: &at}, false},
+		{"superseded later", PermissionVersion{Permission: Permission{GrantedAt: before}, SupersededAt: &after}, true},
+	}
+	for _, c := range cases {
+		if got := c.v.ActiveAt(at); got != c.want {
+			t.Errorf("%s: ActiveAt = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

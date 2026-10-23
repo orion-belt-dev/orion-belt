@@ -67,6 +67,35 @@ func TestAuthHeadersPreferAPIKey(t *testing.T) {
 	}
 }
 
+// Every request path (JSON, raw bytes, multipart upload) sends the
+// configured User-Agent, which the gateway keeps as the device signal.
+func TestUserAgentOnEveryRequestPath(t *testing.T) {
+	var agents []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		agents = append(agents, r.Header.Get("User-Agent"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, WithAPIKey("k"), WithUserAgent(" osh/1.3.1 "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	_, _ = client.GetCurrentUser(ctx)
+	_, _ = client.ExportReport(ctx, "sessions", "csv")
+	_, _ = client.UploadFile(ctx, "web-01", "/tmp", "root", "a.txt", []byte("x"))
+	if len(agents) != 3 {
+		t.Fatalf("requests = %d", len(agents))
+	}
+	for i, a := range agents {
+		if a != "osh/1.3.1" {
+			t.Errorf("request %d User-Agent = %q", i, a)
+		}
+	}
+}
+
 func TestAPIErrorIncludesServerMessage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

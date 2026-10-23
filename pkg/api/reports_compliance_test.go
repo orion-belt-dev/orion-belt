@@ -290,3 +290,56 @@ func TestBuildSOC2RowsPolicyApproval(t *testing.T) {
 		}
 	}
 }
+
+// Every compliance report renders as a PDF, including the truncation note.
+func TestCompliancePDFs(t *testing.T) {
+	e := newEnv(t, nil)
+	for _, name := range []string{reportTypeSOC2Access, reportTypeISOReview, reportTypePCIAdmin} {
+		r := e.do(http.MethodGet, "/api/v1/reports/"+name+"/export?format=pdf", e.auditorKey, nil)
+		e.expect(r, http.StatusOK)
+		if !bytes.HasPrefix(r.body, []byte("%PDF")) {
+			t.Errorf("%s: not a PDF: %.20q", name, r.body)
+		}
+	}
+	report := &complianceReport{Type: "t", Title: "T", Columns: []string{"a", "b"}, Truncated: true,
+		Filters: map[string]string{"from": "x", "to": "y"}}
+	for i := 0; i < 80; i++ { // enough rows to need a second page
+		report.Rows = append(report.Rows, []string{"row", strings.Repeat("long value ", 20)})
+	}
+	if pdf, err := renderCompliancePDF(report, compNow); err != nil || len(pdf) == 0 {
+		t.Errorf("renderCompliancePDF = %d bytes, %v", len(pdf), err)
+	}
+	e.expect(e.do(http.MethodGet, "/api/v1/reports/iso27001-access-review/export?as_of=soon", e.auditorKey, nil), http.StatusBadRequest)
+}
+
+// An update that kept granted_at leaves two versions covering the review
+// time; only the one in force (the later) is listed.
+func TestBuildGrantReviewRowsKeepsOneVersionPerGrant(t *testing.T) {
+	granted := compNow.Add(-48 * time.Hour)
+	ended := compNow.Add(time.Hour)
+	versions := []*common.PermissionVersion{
+		{Permission: common.Permission{ID: "p1", UserID: "u-alice", MachineID: "m-web", GrantedAt: granted, RemoteUsers: []string{"root"}},
+			SupersededAt: &ended, EndReason: common.PermissionEndUpdated},
+		{Permission: common.Permission{ID: "p1", UserID: "u-alice", MachineID: "m-web", GrantedAt: granted, RemoteUsers: []string{"root", "app"}}},
+		{Permission: common.Permission{ID: "p2", UserID: "u-bob", MachineID: "m-web", GrantedAt: granted},
+			SupersededAt: ptrTime(compNow.Add(2 * time.Hour)), EndReason: common.PermissionEndRevoked},
+		{Permission: common.Permission{ID: "p2", UserID: "u-bob", MachineID: "m-web", GrantedAt: granted},
+			SupersededAt: ptrTime(compNow.Add(3 * time.Hour)), EndReason: common.PermissionEndUpdated},
+	}
+	rows := buildGrantReviewRows(versions, compNow, compNames())
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	for _, r := range rows {
+		switch r.PermissionID {
+		case "p1":
+			if len(r.RemoteUsers) != 2 || r.EndedAt != "" {
+				t.Errorf("p1 should be the current version: %+v", r)
+			}
+		case "p2":
+			if r.EndReason != common.PermissionEndUpdated {
+				t.Errorf("p2 should be the version that ended last: %+v", r)
+			}
+		}
+	}
+}

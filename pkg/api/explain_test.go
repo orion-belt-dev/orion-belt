@@ -173,3 +173,18 @@ func TestAnomaliesListedForReviewers(t *testing.T) {
 		t.Errorf("flagged_at = %v, want about now", a.FlaggedAt)
 	}
 }
+
+func TestExplainAccessInputs(t *testing.T) {
+	e := newEnv(t, nil)
+	r, ex := e.explain(e.auditorKey, "machine="+e.machine.ID+"&remote_user=root&user=alice&access_type=scp")
+	e.expect(r, http.StatusOK)
+	if ex.Username != "alice" || ex.AccessType != "scp" {
+		t.Errorf("explanation = %+v", ex)
+	}
+	r, _ = e.explain(e.aliceKey, "machine=web-01&remote_user=root&access_type=rdp")
+	e.expect(r, http.StatusBadRequest)
+	r, _ = e.explain(e.auditorKey, "machine=web-01&remote_user=root&user=nobody")
+	e.expect(r, http.StatusNotFound)
+	r, _ = e.explain(e.aliceKey, "machine=web-01&remote_user=root&user=alice")
+	e.expect(r, http.StatusOK)
+}

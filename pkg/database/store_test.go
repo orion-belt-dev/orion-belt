@@ -658,6 +658,96 @@ func TestPermissionVersions_ArchiveUpdatesAndRemovals(t *testing.T) {
 	}
 }
 
+// A pair's grants include expired ones, newest first; other pairs are left out.
+func TestListPairPermissions(t *testing.T) {
+	f := newFixture(t)
+	db := f.machineNamed(t, "db-01")
+	past := time.Now().Add(-time.Hour)
+	older := common.NewPermission(f.alice.ID, f.machine.ID, "ssh", []string{"root"}, f.admin.ID, &past)
+	older.GrantedAt = time.Now().Add(-2 * time.Hour)
+	newer := common.NewPermission(f.alice.ID, f.machine.ID, "scp", []string{"deploy"}, "", nil)
+	other := common.NewPermission(f.alice.ID, db.ID, "ssh", []string{"root"}, f.admin.ID, nil)
+	for _, p := range []*common.Permission{older, newer, other} {
+		if err := f.pg.CreatePermission(f.ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := f.pg.ListPairPermissions(f.ctx, f.alice.ID, f.machine.ID)
+	if err != nil || len(got) != 2 || got[0].ID != newer.ID || got[1].ID != older.ID {
+		t.Fatalf("ListPairPermissions = %+v, %v", got, err)
+	}
+	if got[0].GrantedBy != "" {
+		t.Errorf("a grant with no grantor reads back as %q", got[0].GrantedBy)
+	}
+}
+
+func TestRiskPolicyRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	if p, err := f.pg.GetRiskPolicy(f.ctx); p != nil || err != nil {
+		t.Fatalf("unset policy = %+v, %v", p, err)
+	}
+	policy := &common.RiskPolicy{
+		AutoApprove: common.AutoApproveRule{Enabled: true, MaxSensitivity: "low", MaxDurationSeconds: 600, SourceCIDRs: []string{"10.0.0.0/8"}},
+		Escalate:    common.EscalateRule{Enabled: true, Sensitivities: []string{"high"}},
+	}
+	if err := f.pg.UpsertRiskPolicy(f.ctx, policy, f.admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	policy.AutoApprove.MaxDurationSeconds = 900
+	if err := f.pg.UpsertRiskPolicy(f.ctx, policy, ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.pg.GetRiskPolicy(f.ctx)
+	if err != nil || got.AutoApprove.MaxDurationSeconds != 900 || got.Escalate.Sensitivities[0] != "high" || got.UpdatedBy != "" {
+		t.Fatalf("policy = %+v, %v", got, err)
+	}
+	if time.Since(got.UpdatedAt) > time.Minute || time.Since(got.UpdatedAt) < -time.Minute {
+		t.Errorf("updated_at = %v, want about now", got.UpdatedAt)
+	}
+}
+
+// Signals and the routing decision survive a write and every read path.
+func TestAccessRequestRiskFieldsRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	req := common.NewAccessRequest(f.alice.ID, f.machine.ID, []string{"root"}, "deploy", 600)
+	req.RiskSignals = &common.RiskSignals{SourceIP: "10.0.0.5", HourUTC: 9, Weekday: "Monday", TargetSensitivity: "low"}
+	req.RiskDecision = &common.RiskDecision{Outcome: common.RiskOutcomeEscalate, Reasons: []string{"no MFA"}}
+	plain := common.NewAccessRequest(f.alice.ID, f.machine.ID, []string{"root"}, "legacy", 600)
+	for _, r := range []*common.AccessRequest{req, plain} {
+		if err := f.pg.CreateAccessRequest(f.ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := f.pg.GetAccessRequest(f.ctx, req.ID)
+	if err != nil || got.RiskSignals == nil || got.RiskSignals.SourceIP != "10.0.0.5" ||
+		got.RiskDecision == nil || got.RiskDecision.Outcome != common.RiskOutcomeEscalate {
+		t.Fatalf("GetAccessRequest = %+v, %v", got, err)
+	}
+	pending, err := f.pg.ListPendingAccessRequests(f.ctx)
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("pending = %d, %v", len(pending), err)
+	}
+	for _, r := range pending {
+		if r.ID == plain.ID && (r.RiskSignals != nil || r.RiskDecision != nil) {
+			t.Errorf("a request without signals reads back with %+v / %+v", r.RiskSignals, r.RiskDecision)
+		}
+	}
+
+	// A row whose JSON cannot be decoded is reported, not silently dropped.
+	if _, err := f.pg.db.ExecContext(f.ctx, `UPDATE access_requests SET risk_decision = '[]' WHERE id = $1`, req.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pg.GetAccessRequest(f.ctx, req.ID); err == nil || !strings.Contains(err.Error(), "risk decision") {
+		t.Errorf("corrupt decision: %v", err)
+	}
+	if _, err := f.pg.db.ExecContext(f.ctx, `UPDATE access_requests SET risk_signals = '[]', risk_decision = NULL WHERE id = $1`, req.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pg.ListAllAccessRequests(f.ctx, 10, 0); err == nil || !strings.Contains(err.Error(), "risk signals") {
+		t.Errorf("corrupt signals: %v", err)
+	}
+}
+
 // --- audit logs ---------------------------------------------------------------------------------
 
 func TestAuditLogs_Filters(t *testing.T) {

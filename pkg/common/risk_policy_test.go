@@ -49,6 +49,19 @@ func TestEvaluateRiskAutoApprovesOnlyWhenEveryConditionHolds(t *testing.T) {
 	}
 }
 
+// With escalation off, a requester without MFA is held for review rather
+// than auto-approved.
+func TestEvaluateRiskAutoApproveRequiresMFA(t *testing.T) {
+	p := basePolicy()
+	p.Escalate.Enabled = false
+	s := lowRiskSignals()
+	s.MFAEnrolled = false
+	d := EvaluateRisk(p, s, []string{"deploy"}, 1800)
+	if d.Outcome != RiskOutcomeManual || !strings.Contains(strings.Join(d.Reasons, ";"), "no MFA") {
+		t.Errorf("decision = %+v", d)
+	}
+}
+
 func TestEvaluateRiskEscalationWins(t *testing.T) {
 	s := lowRiskSignals()
 	s.MFAEnrolled = false
@@ -91,11 +104,12 @@ func TestRiskPolicyValidate(t *testing.T) {
 	bad.AutoApprove.SourceCIDRs = []string{"10.0.0.1"}
 	bad.AutoApprove.HoursUTC = &HourRange{Start: 9, End: 9}
 	bad.Escalate.Sensitivities = []string{"critical"}
+	bad.Escalate.OutsideHoursUTC = &HourRange{Start: 25, End: 3}
 	err := bad.Validate()
 	if err == nil {
 		t.Fatal("invalid policy accepted")
 	}
-	for _, want := range []string{"max_sensitivity", "max_duration_seconds", "not a CIDR", "must differ", "critical"} {
+	for _, want := range []string{"max_sensitivity", "max_duration_seconds", "not a CIDR", "must differ", "critical", "escalate.outside_hours_utc"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
@@ -111,5 +125,13 @@ func TestHourRangeWrapsMidnight(t *testing.T) {
 		if r.Contains(h) != want {
 			t.Errorf("%d: got %v", h, !want)
 		}
+	}
+}
+
+func TestEvaluateRiskNamesAnUnknownSource(t *testing.T) {
+	p := &RiskPolicy{Escalate: EscalateRule{Enabled: true, SourceOutsideCIDRs: []string{"10.0.0.0/8"}}}
+	d := EvaluateRisk(p, &RiskSignals{TargetSensitivity: SensitivityLow}, nil, 60)
+	if d.Outcome != RiskOutcomeEscalate || !strings.Contains(d.Reasons[0], "an unknown source") {
+		t.Errorf("decision = %+v", d)
 	}
 }
