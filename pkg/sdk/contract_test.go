@@ -166,6 +166,7 @@ func endpoints() []endpoint {
 		{"ListAuditLogs", func(ctx context.Context, c *Client) error { return ignore(c.ListAuditLogs(ctx, 3)) }, "GET", "/api/v1/audit-logs?limit=3", false, "", `null`},
 		{"ListAuditLogsAll", func(ctx context.Context, c *Client) error { return ignore(c.ListAuditLogs(ctx, 0)) }, "GET", "/api/v1/audit-logs", false, "", `[]`},
 		{"ExportReportDefault", func(ctx context.Context, c *Client) error { return ignore(c.ExportReport(ctx, "access", "")) }, "GET", "/api/v1/reports/access/export", false, "", `csv`},
+		{"ListAnomalies", func(ctx context.Context, c *Client) error { return ignore(c.ListAnomalies(ctx, 5, "u1")) }, "GET", "/api/v1/anomalies?limit=5&user_id=u1", false, "", `[]`},
 		{"ExplainAccess", func(ctx context.Context, c *Client) error {
 			return ignore(c.ExplainAccess(ctx, "web-01", "root", "", "bob"))
 		}, "GET", "/api/v1/access/explain?machine=web-01&remote_user=root&user=bob", false, "", `{}`},

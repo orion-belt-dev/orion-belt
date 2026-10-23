@@ -25,7 +25,6 @@ const (
 	reportTypePCIAdmin   = "pci-admin-activity"
 )
 
-
 // complianceFetchLimit bounds how many rows of each source a report reads.
 // A report that hits it says so with truncated=true instead of silently
 // dropping events.

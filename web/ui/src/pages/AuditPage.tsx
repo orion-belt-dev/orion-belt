@@ -6,6 +6,7 @@ import { fmtTime, shortId } from "../lib/format";
 import { Pagination, SortTh, useTableState } from "../components/DataTable";
 import { useUserDirectory } from "../lib/useUserDirectory";
 import { ComplianceReportsCard } from "../components/ComplianceReportsCard";
+import { FlaggedSessionsCard } from "../components/FlaggedSessionsCard";
 import { useAuth } from "../auth/AuthContext";
 import { roleOf } from "../lib/nav";
 
@@ -97,6 +98,7 @@ export function AuditPage() {
           </button>
         </div>
       </div>
+      {canExportCompliance ? <FlaggedSessionsCard userName={userName} /> : null}
       {canExportCompliance ? <ComplianceReportsCard /> : null}
       <div className="card">
         {exportErr ? <div className="err">{exportErr}</div> : null}

@@ -1465,6 +1465,44 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/anomalies:
+    get:
+      tags: [Reports]
+      summary: List sessions flagged as unusual
+      description: |
+        Sessions are flagged, never blocked, when a user opens their first
+        session on a high-sensitivity machine (`first_time_access`) or starts
+        one outside every hour they have used before (`off_hours`, after 10
+        earlier sessions). Each flag carries the signal that raised it.
+        Newest first. Requires role admin, operator, or auditor.
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        "200":
+          description: Flagged sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccessAnomaly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/dashboard/usage:
     get:
       tags: [Reports]
@@ -2289,6 +2327,34 @@ components:
               hint: { type: string }
 
   schemas:
+    AccessAnomaly:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [first_time_access, off_hours]
+        signal:
+          type: string
+          description: What raised the flag, in words.
+        user_id:
+          type: string
+        machine_id:
+          type: string
+        machine:
+          type: string
+        remote_user:
+          type: string
+        session_id:
+          type: string
+        ip_address:
+          type: string
+        flagged_at:
+          type: string
+          format: date-time
+      required: [id, kind, signal, user_id, flagged_at]
+
     AccessExplanation:
       type: object
       properties:

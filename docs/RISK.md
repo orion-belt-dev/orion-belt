@@ -28,3 +28,21 @@ oadmin machines update db-01 --tag env=prod --tag sensitivity=high
 ```
 
 `--tag` on update replaces the whole tag set, so repeat the existing tags.
+
+## Flagged sessions
+
+Sessions are flagged when they look unusual, and are never blocked for it.
+Each flag names the signal that raised it, so a reviewer can act on it.
+
+| Kind | Raised when |
+|---|---|
+| `first_time_access` | A user opens their first session on a machine whose sensitivity is `high`. That includes untagged PCI-in-scope machines. |
+| `off_hours` | A session starts outside every UTC hour, give or take one hour, in which the user started a session before. It is only judged once the user has 10 earlier sessions. |
+
+Both SSH sessions through the gateway and console terminals are checked when
+they start. Flags are written to the audit log as `anomaly.<kind>` and listed
+separately from denials:
+
+- Console: **Audit → Flagged sessions** (admins, operators, auditors)
+- CLI: `oadmin anomalies list [--for alice] [--limit 50]`
+- API: `GET /api/v1/anomalies?user_id=&limit=`

@@ -243,6 +243,28 @@ func (c *Client) ExplainAccess(ctx context.Context, machine, remoteUser, accessT
 	return &out, nil
 }
 
+// ListAnomalies returns sessions flagged as unusual, newest first. limit <= 0
+// uses the server default; userID narrows to one user.
+func (c *Client) ListAnomalies(ctx context.Context, limit int, userID string) ([]AccessAnomaly, error) {
+	values := url.Values{}
+	addIntQuery(values, "limit", limit)
+	if u := strings.TrimSpace(userID); u != "" {
+		values.Set("user_id", u)
+	}
+	path := "/anomalies"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var out []AccessAnomaly
+	if err := c.Do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []AccessAnomaly{}
+	}
+	return out, nil
+}
+
 // GetUsageDashboard returns windowed operational usage analytics.
 func (c *Client) GetUsageDashboard(ctx context.Context, windowHours, top int) (*UsageDashboard, error) {
 	values := url.Values{}

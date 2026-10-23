@@ -1534,8 +1534,13 @@ func (s *PostgresStore) CreateAuditLog(ctx context.Context, log *common.AuditLog
 	return nil
 }
 
+// escapeLike escapes LIKE wildcards so v matches literally.
+func escapeLike(v string) string {
+	return strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(v)
+}
+
 // ListAuditLogs lists audit logs with pagination and filters. Supported
-// filter keys: "user_id", "action", "resource".
+// filter keys: "user_id", "action", "resource" (exact) and "action_prefix".
 func (s *PostgresStore) ListAuditLogs(ctx context.Context, limit, offset int, filters map[string]interface{}) ([]*common.AuditLog, error) {
 	query := `SELECT id, COALESCE(user_id, ''), action, resource, metadata, ip_address, timestamp FROM audit_logs`
 
@@ -1554,6 +1559,11 @@ func (s *PostgresStore) ListAuditLogs(ctx context.Context, limit, offset int, fi
 		}
 		args = append(args, strVal)
 		conditions = append(conditions, fmt.Sprintf("%s = $%d", key, len(args)))
+	}
+	// action_prefix selects a family of actions, e.g. "anomaly.".
+	if prefix, ok := filters["action_prefix"].(string); ok && prefix != "" {
+		args = append(args, escapeLike(prefix)+"%")
+		conditions = append(conditions, fmt.Sprintf(`action LIKE $%d ESCAPE '\'`, len(args)))
 	}
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")

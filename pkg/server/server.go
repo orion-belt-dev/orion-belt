@@ -11,6 +11,7 @@ import (
 	"time"
 
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
+	"github.com/orion-belt-dev/orion-belt/pkg/anomaly"
 	"github.com/orion-belt-dev/orion-belt/pkg/api"
 	"github.com/orion-belt-dev/orion-belt/pkg/auth"
 	"github.com/orion-belt-dev/orion-belt/pkg/authz"
@@ -928,6 +929,13 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 	// channel.
 	if err := s.store.CreateSession(ctx, session); err != nil {
 		s.logger.Error("Failed to create session record: %v", err)
+	} else if flags, err := anomaly.Check(ctx, s.store, session, machine, ""); err != nil {
+		// Flagging is advisory: a failure is logged, never fatal to the session.
+		s.logger.Warn("Anomaly check failed for session %s: %v", session.ID, err)
+	} else {
+		for _, f := range flags {
+			s.logger.Info("Session %s flagged %s: %s", session.ID, f.Kind, f.Signal)
+		}
 	}
 
 	// Start recording

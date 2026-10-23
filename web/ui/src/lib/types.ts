@@ -95,6 +95,20 @@ export type CapabilityCatalog = {
   capabilities: Capability[];
 };
 
+// A session flagged as unusual for review; it was not blocked.
+export type AccessAnomaly = {
+  id: string;
+  kind: "first_time_access" | "off_hours" | string;
+  signal: string;
+  user_id: string;
+  machine_id?: string;
+  machine?: string;
+  remote_user?: string;
+  session_id?: string;
+  ip_address?: string;
+  flagged_at: string;
+};
+
 export type AccessLink = {
   relation: "role" | "grant" | "access_request" | "openfga" | "none";
   ref?: string;

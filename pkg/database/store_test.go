@@ -686,6 +686,9 @@ func TestAuditLogs_Filters(t *testing.T) {
 		{"by user and action", map[string]interface{}{"user_id": f.admin.ID, "action": "login"}, 1},
 		{"by resource", map[string]interface{}{"resource": "user"}, 1},
 		{"blank and non-string values ignored", map[string]interface{}{"action": "", "resource": 5, "unknown": "x"}, 4},
+		{"by action prefix", map[string]interface{}{"action_prefix": "log"}, 3},
+		{"prefix wildcards are literal", map[string]interface{}{"action_prefix": "log_"}, 0},
+		{"prefix with a dot", map[string]interface{}{"action_prefix": "user."}, 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

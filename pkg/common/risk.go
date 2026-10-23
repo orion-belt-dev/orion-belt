@@ -84,3 +84,17 @@ func NewRiskSignals(sourceIP, userAgent, authMethod string, user *User, target *
 		CollectedAt:       now,
 	}
 }
+
+// AccessAnomaly is a flagged session: unusual, worth a look, not blocked.
+type AccessAnomaly struct {
+	ID         string    `json:"id"`
+	Kind       string    `json:"kind"`   // first_time_access | off_hours
+	Signal     string    `json:"signal"` // what triggered the flag
+	UserID     string    `json:"user_id"`
+	MachineID  string    `json:"machine_id,omitempty"`
+	Machine    string    `json:"machine,omitempty"`
+	RemoteUser string    `json:"remote_user,omitempty"`
+	SessionID  string    `json:"session_id,omitempty"`
+	IPAddress  string    `json:"ip_address,omitempty"`
+	FlaggedAt  time.Time `json:"flagged_at"`
+}

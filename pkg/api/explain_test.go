@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/anomaly"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 )
 
@@ -139,5 +141,35 @@ func TestAccessRequestRecordsRiskSignals(t *testing.T) {
 	}
 	if s.MFAEnrolled {
 		t.Error("alice has no MFA enrolled")
+	}
+}
+
+func TestAnomaliesListedForReviewers(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	e.machine.Tags = map[string]string{common.SensitivityTagKey: common.SensitivityHigh}
+	sess := common.NewSession(e.bob.ID, e.machine.ID, "root", "")
+	if err := e.store.CreateSession(ctx, sess); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := anomaly.Check(ctx, e.store, sess, e.machine, "192.0.2.7"); err != nil {
+		t.Fatal(err)
+	}
+
+	e.expect(e.do(http.MethodGet, "/api/v1/anomalies", e.aliceKey, nil), http.StatusForbidden)
+	r := e.do(http.MethodGet, "/api/v1/anomalies?user_id="+e.bob.ID, e.auditorKey, nil)
+	e.expect(r, http.StatusOK)
+	var got []common.AccessAnomaly
+	r.json(t, &got)
+	if len(got) != 1 {
+		t.Fatalf("anomalies = %s", r.body)
+	}
+	a := got[0]
+	if a.Kind != anomaly.KindFirstAccess || a.SessionID != sess.ID || a.Machine != "web-01" ||
+		a.IPAddress != "192.0.2.7" || !strings.Contains(a.Signal, "sensitivity high") {
+		t.Errorf("anomaly = %+v", a)
+	}
+	if time.Since(a.FlaggedAt) > time.Minute || time.Since(a.FlaggedAt) < -time.Minute {
+		t.Errorf("flagged_at = %v, want about now", a.FlaggedAt)
 	}
 }

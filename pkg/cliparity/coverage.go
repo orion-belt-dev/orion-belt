@@ -131,6 +131,7 @@ var Coverage = map[string]Cover{
 	// --- Audit, reporting, usage ------------------------------------------
 	"GET /api/v1/audit-logs":           {Command: "oadmin audit list"},
 	"GET /api/v1/reports/:name/export": {Command: "oadmin reports export"},
+	"GET /api/v1/anomalies":            {Command: "oadmin anomalies list"},
 	"GET /api/v1/dashboard/usage":      {Command: "oadmin usage"},
 	"GET /api/v1/setup/status":         {Command: "oadmin setup status"},
 

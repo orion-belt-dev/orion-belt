@@ -565,3 +565,33 @@ func TestSplitFirst(t *testing.T) {
 		t.Errorf("splitFirst(no space) = %q", got)
 	}
 }
+
+// The first session on a sensitive machine is flagged for review, and only
+// the first; the session itself runs normally.
+func TestGateway_FlagsFirstSessionOnSensitiveMachine(t *testing.T) {
+	h := startHarness(t, nil)
+	ctx := context.Background()
+	h.machine.Tags = map[string]string{common.SensitivityTagKey: common.SensitivityHigh}
+	if err := h.srv.store.UpdateMachine(ctx, h.machine); err != nil {
+		t.Fatal(err)
+	}
+	h.connectAgent(t)
+	h.grant(t, "root")
+
+	for i := 0; i < 2; i++ {
+		if res := h.runClient(t, "alice+web-01", "uptime", ""); res.status != 5 {
+			t.Fatalf("session %d = %+v", i, res)
+		}
+	}
+
+	flags, err := h.srv.store.ListAuditLogs(ctx, 10, 0, map[string]interface{}{"action_prefix": "anomaly."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(flags) != 1 || flags[0].Action != "anomaly.first_time_access" || flags[0].UserID != h.alice.ID {
+		t.Fatalf("flags = %+v", flags)
+	}
+	if signal, _ := flags[0].Metadata["signal"].(string); !strings.Contains(signal, "web-01") {
+		t.Errorf("signal = %q", signal)
+	}
+}

@@ -104,6 +104,9 @@ type AccessExplanation = common.AccessExplanation
 // AccessLink is one relationship considered for an access decision.
 type AccessLink = common.AccessLink
 
+// AccessAnomaly is a session flagged as unusual (not blocked).
+type AccessAnomaly = common.AccessAnomaly
+
 // SSHKey is a user SSH key record.
 type SSHKey = common.SSHKey
 
