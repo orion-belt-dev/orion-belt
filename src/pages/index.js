@@ -26,13 +26,13 @@ function HomepageHeader() {
           <div className={styles.buttons}>
             <Link
               className={`button button--lg ${styles.ctaPrimary}`}
-              to="/docs/quickstart/try-in-10-minutes">
-              Try it in 10 minutes
+              to="/docs/quickstart/get-started">
+              Get started
             </Link>
             <Link
               className={`button button--lg ${styles.ctaSecondary}`}
-              to="https://github.com/orion-belt-dev/orion-belt">
-              View on GitHub
+              to="/docs/quickstart/try-in-10-minutes">
+              Try it in 10 minutes
             </Link>
           </div>
         </div>

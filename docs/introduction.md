@@ -64,9 +64,10 @@ flowchart TB
 
 ## Getting started
 
-1. **[Try in 10 minutes](./quickstart/try-in-10-minutes)** — Docker quickstart to first recorded session  
-2. [Installation](./quickstart/installation) — packages / source  
-3. [Server setup](./quickstart/server) · [Agent](./quickstart/agent) · [Client](./quickstart/client)
+1. **[Get started](./quickstart/get-started)** — install the server, an agent and the clients, per OS  
+2. [Try in 10 minutes](./quickstart/try-in-10-minutes) — Docker lab to first recorded session  
+3. [Installation](./quickstart/installation) — every install method, including from source  
+4. [Server setup](./quickstart/server) · [Agent](./quickstart/agent) · [Client](./quickstart/client)
 
 ## Community
 

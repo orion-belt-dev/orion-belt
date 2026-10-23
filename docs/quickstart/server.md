@@ -50,7 +50,7 @@ origin settings, `ORION_RECORDING_ENCRYPTION_KEY`, `ORION_MFA_REQUIRED`.
 ```bash
 cp .env.prod.example .env.prod
 # POSTGRES_PASSWORD, ORION_JWT_SECRET, public URL (ORION_PUBLIC_URL / host+origin)
-# optional: ORION_IMAGE_TAG=1.2.0  (default :latest)
+# optional: ORION_IMAGE_TAG=1.3.0  (default :latest)
 make docker-prod-up
 # or: docker compose -f docker-compose.prod.yml --env-file .env.prod pull && up -d
 ```
@@ -71,7 +71,7 @@ service, and runs setup. Details and unattended flags:
 ## Option D — Packages / systemd
 
 1. Install the `orion-belt` package (deb/rpm/apk — public mirror
-   [orion-belt-dev.github.io/packages](https://orion-belt-dev.github.io/packages),
+   [pkgs.orion-belt.dev](https://pkgs.orion-belt.dev),
    or the main repo `docs/PACKAGING.md`).
 2. Edit `/etc/orion-belt/server.yaml` — at least:
    - `server.public_url` — origin browsers/API clients use (e.g. `https://orion.example.com`). **Not** the bind address. Agents default to this URL's host on port **2222** unless you set `public_ssh_host` / `public_ssh_port`.

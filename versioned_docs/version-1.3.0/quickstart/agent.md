@@ -41,7 +41,7 @@ Confirm status under **Machines** in the UI.
 
 1. Sign in as **admin** or **operator**
 2. **Add agent** → pick OS → set agent name, gateway host (SSH **2222**), package base URL
-   (default: `https://orion-belt-dev.github.io/packages`)
+   (default: `https://pkgs.orion-belt.dev`)
 3. **Generate install script** → run on the target as root
 
 API: `POST /api/v1/admin/agents/install-script` (see OpenAPI in the main repo).
@@ -49,7 +49,7 @@ API: `POST /api/v1/admin/agents/install-script` (see OpenAPI in the main repo).
 ## Production — manual
 
 1. Install `orion-belt-agent` (packages —
-   [packages mirror](https://orion-belt-dev.github.io/packages) or main repo `docs/PACKAGING.md`)
+   [pkgs.orion-belt.dev](https://pkgs.orion-belt.dev) or main repo `docs/PACKAGING.md`)
 2. Edit `/etc/orion-belt/agent.yaml` — gateway host + port **2222**
 3. Key + register:
    - `ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""`

@@ -138,6 +138,11 @@ const config = {
             label: 'Documentation',
           },
           {
+            to: '/docs/quickstart/get-started',
+            label: 'Get started',
+            position: 'left',
+          },
+          {
             to: '/docs/quickstart/try-in-10-minutes',
             label: 'Try in 10 min',
             position: 'left',
@@ -168,7 +173,7 @@ const config = {
             items: [
               {label: 'Introduction', to: '/docs/introduction'},
               {label: 'Try in 10 minutes', to: '/docs/quickstart/try-in-10-minutes'},
-              {label: 'Quick Start', to: '/docs/quickstart/server'},
+              {label: 'Get started', to: '/docs/quickstart/get-started'},
               {label: 'Architecture', to: '/docs/architecture/overview'},
             ],
           },

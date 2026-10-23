@@ -40,14 +40,14 @@ Full walkthrough: [Try in 10 minutes](./try-in-10-minutes).
 ### Published images (GHCR)
 
 ```bash
-docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.2.0
-docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.2.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.3.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.3.0
 # or :latest
 ```
 
 From a clone: `cp .env.prod.example .env.prod` (set secrets + public URL), then
-`make docker-prod-up`. Pin with `ORION_IMAGE_TAG=1.2.0` if you do not want
-`:latest`. Image list: [packages/CONTAINERS](https://orion-belt-dev.github.io/packages/CONTAINERS).
+`make docker-prod-up`. Pin with `ORION_IMAGE_TAG=1.3.0` if you do not want
+`:latest`. Image list: [CONTAINERS](https://pkgs.orion-belt.dev/CONTAINERS).
 
 ## curl | bash (Linux server)
 
@@ -101,7 +101,7 @@ make build
 Public mirror (default for **Add agent** install scripts):
 
 ```text
-https://orion-belt-dev.github.io/packages
+https://pkgs.orion-belt.dev
 ```
 
 From a checkout of the repo (local / air-gapped builds):

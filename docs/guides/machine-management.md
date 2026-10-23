@@ -18,7 +18,7 @@ flowchart TD
 
 1. Console → **Add agent**
 2. Choose OS, name, gateway host (port **2222**), package base URL
-   (default `https://orion-belt-dev.github.io/packages`)
+   (default `https://pkgs.orion-belt.dev`)
 3. **Generate install script** → run as root on the target  
    or save the private key and run the [Docker agent](../quickstart/agent)
 
