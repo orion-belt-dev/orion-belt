@@ -1,0 +1,63 @@
+# Build the site from this branch (orion-belt-docs) and publish build/ to the
+# gh-pages branch of the same repository, which serves https://orion-belt.dev.
+#
+# This file only runs from the orion-belt-docs branch: GitHub reads push
+# workflows from the branch that was pushed.
+name: Deploy site
+
+on:
+  push:
+    branches: [orion-belt-docs]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits rather than racing on gh-pages.
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # push to gh-pages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # Install scripts are only @swc/core's fallback and core-js's banner;
+      # the build does not need them.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - run: npm run build
+
+      - name: Publish build/ to gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --depth 1 --branch gh-pages "$url" pages
+          find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a build/. pages/
+
+          cd pages
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "Deploy website from orion-belt-docs@${SOURCE_SHA::7}"
+          git push origin gh-pages

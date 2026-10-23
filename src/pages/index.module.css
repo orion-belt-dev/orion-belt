@@ -1,0 +1,129 @@
+/* Hero sits on Night in both colour modes; the mark is its one bold element. */
+.hero {
+  background: var(--ob-night);
+  border-bottom: 1px solid var(--ob-hairline);
+  color: var(--ob-starlight);
+  padding: 6rem 0 5.5rem;
+}
+
+.heroInner {
+  align-items: center;
+  display: grid;
+  gap: 3rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.heroText {
+  max-width: 38rem;
+}
+
+.heroTitle {
+  color: var(--ob-starlight);
+  font-size: 4rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin-bottom: 1rem;
+}
+
+.heroSubtitle {
+  color: var(--ob-starlight);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin-bottom: 1.25rem;
+}
+
+.heroDescription {
+  color: var(--ob-nebula);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.ctaPrimary,
+.ctaSecondary {
+  font-weight: 500;
+  text-decoration: none !important;
+}
+
+/* Infima's .button reads these, so they win whatever the stylesheet order. */
+/* Night text on Rigel: 4.99:1. */
+.ctaPrimary {
+  --ifm-button-background-color: var(--ob-rigel);
+  --ifm-button-border-color: var(--ob-rigel);
+  --ifm-button-color: var(--ob-night);
+}
+
+.ctaPrimary:hover {
+  --ifm-button-background-color: #5B8FFF;
+  --ifm-button-border-color: #5B8FFF;
+  color: var(--ob-night);
+}
+
+/* Nebula outline on Night: 6.27:1, above the 3:1 needed for a boundary. */
+.ctaSecondary {
+  --ifm-button-background-color: transparent;
+  --ifm-button-border-color: var(--ob-nebula);
+  --ifm-button-color: var(--ob-starlight);
+}
+
+.ctaSecondary:hover {
+  --ifm-button-border-color: var(--ob-starlight);
+  color: var(--ob-starlight);
+}
+
+.ctaPrimary:focus-visible,
+.ctaSecondary:focus-visible {
+  outline-color: var(--ob-starlight);
+}
+
+.heroMark {
+  height: auto;
+  width: clamp(12rem, 24vw, 20rem);
+}
+
+@media screen and (max-width: 996px) {
+  .hero {
+    padding: 4rem 0 3.5rem;
+  }
+
+  .heroInner {
+    gap: 2rem;
+  }
+
+  .heroTitle {
+    font-size: 3rem;
+  }
+
+  .heroSubtitle {
+    font-size: 1.25rem;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .heroInner {
+    grid-template-columns: 1fr;
+  }
+
+  /* On narrow screens the mark leads, small, above the title. */
+  .heroMark {
+    grid-row: 1;
+    width: 4.5rem;
+  }
+
+  .heroTitle {
+    font-size: 2.5rem;
+  }
+
+  .heroDescription {
+    font-size: 1rem;
+  }
+}

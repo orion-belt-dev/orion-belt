@@ -1,0 +1,81 @@
+---
+sidebar_position: 4
+title: Client Setup
+---
+
+# Orion-Belt Client Setup
+
+The **osh client** allows users to connect to agents through the Orion-Belt server.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User["Client (osh)"] --> Server["Orion-Belt Server"]
+    Server --> Agent["Agent Machine"]
+```
+
+---
+
+## Install Client
+
+1. **Copy client binary** (`osh`) to local machine.
+2. **Generate Client Key (if needed):**
+
+```bash
+ssh-keygen -t ed25519 -f ~/.orion-belt/client_key -N ""
+```
+
+3. **Create client config** `~/.orion-belt/client.yaml`
+
+```yaml
+server:
+  host: "192.168.0.109"
+  port: 2222
+  api_endpoint: "http://192.168.0.109:8080/api"
+
+auth:
+  key_file: "~/.orion-belt/client_key"
+  username: "client"
+```
+
+---
+
+## Basic Commands
+
+```bash
+# List available machines
+osh --list
+
+# Connect to a machine
+osh agent01 -u client
+
+# Request temporary access
+osh db-01 --request-access --reason "Emergency" --duration 3600
+
+# Show config
+osh --config ~/.orion-belt/client.yaml
+```
+
+---
+
+## FAQ
+
+* **Why must a local Linux user exist on the agent?**
+  The client maps to a Linux user for permissions and isolation.
+
+* **Which keys to use?**
+
+  * Client config uses **private key**.
+  * Server already has the client public key.
+
+* **Connection fails due to authentication?**
+
+  * Verify correct key is in `client.yaml`.
+  * Ensure agent is registered on the server.
+  * Make sure Linux user exists on agent.
+
+* **Temporary access**
+  Use `--request-access` with a reason and duration. The server grants temporary credentials.

@@ -1,0 +1,120 @@
+/**
+ * Orion Belt theme for Infima, from the brand kit (orion-belt-brand/web and
+ * tokens). Betelgeuse orange is reserved for live and recording states, so it
+ * is defined here but not used for decoration.
+ */
+@font-face { font-family: "Geist"; font-weight: 400; font-display: swap; src: url("/fonts/Geist-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Geist"; font-weight: 500; font-display: swap; src: url("/fonts/Geist-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Geist"; font-weight: 600; font-display: swap; src: url("/fonts/Geist-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Geist Mono"; font-weight: 400; font-display: swap; src: url("/fonts/GeistMono-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Geist Mono"; font-weight: 500; font-display: swap; src: url("/fonts/GeistMono-Medium.ttf") format("truetype"); }
+
+:root {
+  --ob-night: #0A0F1C;
+  --ob-deep-space: #111A2E;
+  --ob-hairline: #24304D;
+  --ob-nebula: #8A94A8;
+  --ob-starlight: #F2F4F8;
+  --ob-paper: #F4F6FA;
+  --ob-ink-muted: #4A5368;
+  --ob-rigel: #3D7BFF;
+  --ob-rigel-ink: #1F5FE0;
+  --ob-betelgeuse: #FF7A45;
+
+  --ob-border: #D5DBE6;
+  --ob-surface: #FFFFFF;
+
+  --ifm-color-primary: #1F5FE0;
+  --ifm-color-primary-dark: #1C56CA;
+  --ifm-color-primary-darker: #1A51BF;
+  --ifm-color-primary-darkest: #15439D;
+  --ifm-color-primary-light: #3570E3;
+  --ifm-color-primary-lighter: #4179E5;
+  --ifm-color-primary-lightest: #6493EA;
+
+  --ifm-background-color: var(--ob-paper);
+  --ifm-background-surface-color: var(--ob-surface);
+  --ifm-navbar-background-color: var(--ob-paper);
+  --ifm-footer-background-color: var(--ob-night);
+  --ifm-font-color-base: var(--ob-night);
+  --ifm-color-emphasis-600: var(--ob-ink-muted);
+  --ifm-toc-border-color: var(--ob-border);
+  --ifm-hr-border-color: var(--ob-border);
+  --ifm-table-border-color: var(--ob-border);
+
+  --ifm-font-family-base: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+  --ifm-font-family-monospace: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --ifm-heading-font-weight: 600;
+  --ifm-font-weight-bold: 600;
+  --ifm-code-font-size: 92%;
+  --ifm-global-radius: 12px;
+  --ifm-code-border-radius: 6px;
+  --ifm-button-border-radius: 999px;
+  --docusaurus-highlighted-code-line-bg: rgba(31, 95, 224, 0.10);
+}
+
+[data-theme="dark"] {
+  --ob-border: var(--ob-hairline);
+  --ob-surface: var(--ob-deep-space);
+
+  --ifm-color-primary: #3D7BFF;
+  --ifm-color-primary-dark: #1F67FF;
+  --ifm-color-primary-darker: #0F5CFF;
+  --ifm-color-primary-darkest: #0049E0;
+  --ifm-color-primary-light: #5B8FFF;
+  --ifm-color-primary-lighter: #6B9AFF;
+  --ifm-color-primary-lightest: #99B9FF;
+
+  --ifm-background-color: var(--ob-night);
+  --ifm-background-surface-color: var(--ob-deep-space);
+  --ifm-navbar-background-color: var(--ob-night);
+  --ifm-font-color-base: var(--ob-starlight);
+  --ifm-color-emphasis-600: var(--ob-nebula);
+  --ifm-toc-border-color: var(--ob-hairline);
+  --ifm-hr-border-color: var(--ob-hairline);
+  --ifm-table-border-color: var(--ob-hairline);
+  --docusaurus-highlighted-code-line-bg: rgba(61, 123, 255, 0.16);
+}
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+
+.navbar {
+  border-bottom: 1px solid var(--ob-border);
+  box-shadow: none;
+}
+
+.navbar__title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.navbar__logo img {
+  height: 1.75rem;
+}
+
+/* The footer is always Night, so its links use the dark-ground colours. */
+.footer--dark {
+  --ifm-footer-link-color: var(--ob-nebula);
+  --ifm-footer-link-hover-color: var(--ob-starlight);
+  --ifm-footer-title-color: var(--ob-starlight);
+  border-top: 1px solid var(--ob-hairline);
+}
+
+/* Inline code reads as something to type: mono, with a hairline frame. */
+code {
+  border-color: var(--ob-border);
+}
+
+/* Geist Mono's contextual alternates drop the space in "cmd --flag". */
+code,
+pre,
+kbd {
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-variant-ligatures: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}

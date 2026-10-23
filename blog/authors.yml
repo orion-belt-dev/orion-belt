@@ -1,0 +1,8 @@
+orion:
+  name: Orion Belt
+  title: Maintainers
+  url: https://orion-belt.dev
+  image_url: https://github.com/orion-belt-dev.png
+  page: true
+  socials:
+    github: orion-belt-dev

@@ -1,0 +1,34 @@
+ssh:
+  label: SSH
+  permalink: /ssh
+  description: SSH access, bastions, and tunnels
+
+pam:
+  label: PAM
+  permalink: /pam
+  description: Privileged access management
+
+self-hosted:
+  label: Self-hosted
+  permalink: /self-hosted
+  description: Running infrastructure yourself
+
+teleport:
+  label: Teleport
+  permalink: /teleport
+  description: Comparisons and alternatives
+
+architecture:
+  label: Architecture
+  permalink: /architecture
+  description: Design and tradeoffs
+
+security:
+  label: Security
+  permalink: /security
+  description: Threat model and hardening
+
+ops:
+  label: Ops
+  permalink: /ops
+  description: Deploying and running Orion Belt
