@@ -346,18 +346,54 @@ print(f"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Orion Belt packages</title>
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F4F6FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0A0F1C" media="(prefers-color-scheme: dark)">
+<script>
+// Apply a saved theme before first paint; without one the page follows the system.
+try {{ var t = localStorage.getItem("ob-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; }} catch (e) {{}}
+</script>
 <style>
-:root {{ --bg:#fff; --fg:#111; --muted:#555; --code:#f4f4f5; --link:#0b57d0; --line:#e4e4e7; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --bg:#0b0b0c; --fg:#e7e7ea; --muted:#a1a1aa; --code:#18181b; --link:#8ab4f8; --line:#27272a; }} }}
-body {{ background:var(--bg); color:var(--fg); font:16px/1.55 ui-sans-serif,system-ui,sans-serif; max-width:56rem; margin:2rem auto; padding:0 1rem; }}
-a {{ color:var(--link); }} h2 {{ margin-top:2rem; border-bottom:1px solid var(--line); padding-bottom:.25rem; }}
-pre, code {{ background:var(--code); border-radius:6px; }} code {{ padding:.1em .35em; }}
-pre {{ padding:.75rem 1rem; overflow-x:auto; }} p.muted {{ color:var(--muted); }}
-table {{ border-collapse:collapse; width:100%; }} td {{ padding:.3rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }}
+/* Orion Belt brand tokens (same values as orion-belt.dev). */
+:root {{
+  color-scheme: light;
+  --bg:#F4F6FA; --surface:#FFFFFF; --fg:#0A0F1C; --muted:#4A5368; --line:#D5DBE6;
+  --link:#1F5FE0; --accent:#1F5FE0; --code:#E9EDF4; --focus:#1F5FE0;
+}}
+@media (prefers-color-scheme: dark) {{
+  :root:not([data-theme="light"]) {{
+    color-scheme: dark;
+    --bg:#0A0F1C; --surface:#111A2E; --fg:#F2F4F8; --muted:#8A94A8; --line:#24304D;
+    --link:#7DA6FF; --accent:#3D7BFF; --code:#111A2E; --focus:#7DA6FF;
+  }}
+}}
+:root[data-theme="dark"] {{
+  color-scheme: dark;
+  --bg:#0A0F1C; --surface:#111A2E; --fg:#F2F4F8; --muted:#8A94A8; --line:#24304D;
+  --link:#7DA6FF; --accent:#3D7BFF; --code:#111A2E; --focus:#7DA6FF;
+}}
+body {{ background:var(--bg); color:var(--fg); font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; max-width:56rem; margin:2rem auto; padding:0 1rem; }}
+a {{ color:var(--link); }}
+a:focus-visible, button:focus-visible {{ outline:2px solid var(--focus); outline-offset:2px; }}
+header {{ display:flex; align-items:center; gap:.75rem; }}
+header h1 {{ margin:0; flex:1; font-size:1.75rem; letter-spacing:-.02em; }}
+header svg {{ width:2.25rem; height:2.25rem; flex:none; }}
+.mark-ring {{ stroke:var(--fg); }} .mark-star {{ fill:var(--fg); }} .mark-core {{ fill:var(--accent); }}
+#theme {{ font:inherit; font-size:.875rem; color:var(--fg); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:.35rem .9rem; min-height:2rem; cursor:pointer; }}
+h2 {{ margin-top:2rem; border-bottom:1px solid var(--line); padding-bottom:.25rem; letter-spacing:-.01em; }}
+pre, code {{ background:var(--code); border-radius:6px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.92em; }}
+code {{ padding:.1em .35em; }}
+pre {{ padding:.75rem 1rem; overflow-x:auto; border:1px solid var(--line); }} pre code {{ padding:0; }}
+p.muted {{ color:var(--muted); }}
+table {{ border-collapse:collapse; width:100%; }} td {{ padding:.3rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }}
 </style>
 </head>
 <body>
+<header>
+<svg viewBox="0 0 96 96" aria-hidden="true"><path class="mark-ring" d="M77.99 47.16A30 30 0 0 1 29.37 71.51M18.01 48.84A30 30 0 0 1 66.63 24.49" fill="none" stroke-width="10" stroke-linecap="round"/><circle class="mark-star" cx="20" cy="62" r="7.5"/><circle class="mark-star" cx="76" cy="34" r="7.5"/><circle class="mark-core" cx="48" cy="48" r="11"/></svg>
 <h1>Orion Belt packages</h1>
+<button id="theme" type="button">Dark theme</button>
+</header>
 <p>Signed package repositories for Orion Belt <strong>{e(tag)}</strong>: the server and agent for Linux, and the
 <code>osh</code>, <code>ocp</code> and <code>oadmin</code> clients for Linux, macOS, Windows, the BSDs, illumos and Solaris.</p>
 <p class="muted">Signing key: <a href="orion-belt.asc">orion-belt.asc</a>{f" — fingerprint <code>{e(fpr)}</code>" if fpr else ""}.
@@ -407,6 +443,22 @@ docker pull ghcr.io/orion-belt-dev/orion-belt-agent:{e(ver)}</pre>
 
 <h2>Client downloads</h2>
 <table>{rows}</table>
+<script>
+// Light/dark switch. The page follows the system until the button is used.
+(function () {{
+  var root = document.documentElement, btn = document.getElementById("theme");
+  var sys = window.matchMedia("(prefers-color-scheme: dark)");
+  function dark() {{ return root.dataset.theme ? root.dataset.theme === "dark" : sys.matches; }}
+  function label() {{ btn.textContent = dark() ? "Light theme" : "Dark theme"; }}
+  btn.addEventListener("click", function () {{
+    root.dataset.theme = dark() ? "light" : "dark";
+    try {{ localStorage.setItem("ob-theme", root.dataset.theme); }} catch (e) {{}}
+    label();
+  }});
+  sys.addEventListener("change", label);
+  label();
+}})();
+</script>
 </body>
 </html>""")
 PY
