@@ -1,48 +1,54 @@
 # Gateway performance baseline for scripts/perf-check.sh.
-# Format: benchmark<TAB>metric<TAB>best-of-N value.
+# Format: benchmark<TAB>metric<TAB>best-of-5 value (benchtime=1000x).
 #
-# Seeded with allocation metrics only, on purpose.
+# Allocation metrics only, on purpose.
 #
-# B/op and allocs/op are properties of the source tree, not of the machine —
-# they drift <0.02% between runs — so they gate meaningfully (5%) no matter
-# where the suite runs, and they catch the subtle regressions first.
+# B/op and allocs/op are properties of the source tree and the Go toolchain,
+# not of the machine, so they gate meaningfully (5%) wherever the suite runs.
+# A Go upgrade can move them (Go 1.27 did: MaybeCompressGzip and the recorded
+# proxy path); re-record then.
 #
-# Timing metrics (ns/op, p50-ms, sessions/s, MB/s) are machine-dependent, and
-# these numbers would have come from a laptop. Rather than commit values that
-# would immediately fail on a CI runner, they are left out: perf-check.sh
-# reports them as "new, not in baseline" and passes. Record them on the runner
-# via the "Performance benchmarks" workflow (workflow_dispatch,
-# update_baseline=true) and commit the result — after that, the timing gate is
-# live too and this header can go.
+# Timing metrics (ns/op, p50-ms, sessions/s, MB/s) are left out: perf-check.sh
+# reports them as "new, not in baseline" and passes. The under-load latency
+# percentiles are bimodal on the CI runner (clients_32 p50 lands near 20 ms or
+# near 75 ms from run to run), so a best-of-N timing baseline fails at random.
 #
-# See docs/BENCHMARKS.md.
-BenchmarkGatewayProxyThroughput/proxy_only	B/op	65920
-BenchmarkGatewayProxyThroughput/proxy_only	allocs/op	9
-BenchmarkGatewayProxyThroughput/recorded	B/op	1496861
-BenchmarkGatewayProxyThroughput/recorded	allocs/op	66
-BenchmarkMaybeCompressGzip	B/op	814642
-BenchmarkMaybeCompressGzip	allocs/op	21
-BenchmarkSessionEstablish/host_cert	B/op	113149
-BenchmarkSessionEstablish/host_cert	allocs/op	816
-BenchmarkSessionEstablish/legacy_pubkey	B/op	98143
-BenchmarkSessionEstablish/legacy_pubkey	allocs/op	682
-BenchmarkSessionEstablish/user_cert	B/op	119372
-BenchmarkSessionEstablish/user_cert	allocs/op	874
-BenchmarkSessionEstablishUnderLoad/host_cert/clients_32	B/op	113206
-BenchmarkSessionEstablishUnderLoad/host_cert/clients_32	allocs/op	816
-BenchmarkSessionEstablishUnderLoad/host_cert/clients_64	B/op	113227
-BenchmarkSessionEstablishUnderLoad/host_cert/clients_64	allocs/op	816
-BenchmarkSessionEstablishUnderLoad/host_cert/clients_8	B/op	113171
-BenchmarkSessionEstablishUnderLoad/host_cert/clients_8	allocs/op	816
-BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_32	B/op	98324
-BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_32	allocs/op	683
-BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_64	B/op	98240
-BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_64	allocs/op	683
-BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_8	B/op	98186
-BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_8	allocs/op	682
-BenchmarkSessionEstablishUnderLoad/user_cert/clients_32	B/op	119427
-BenchmarkSessionEstablishUnderLoad/user_cert/clients_32	allocs/op	874
-BenchmarkSessionEstablishUnderLoad/user_cert/clients_64	B/op	119446
-BenchmarkSessionEstablishUnderLoad/user_cert/clients_64	allocs/op	874
-BenchmarkSessionEstablishUnderLoad/user_cert/clients_8	B/op	119388
-BenchmarkSessionEstablishUnderLoad/user_cert/clients_8	allocs/op	874
+# Recorded on the CI runner with the "Performance benchmarks" workflow
+# (workflow_dispatch, update_baseline=true); keep only the B/op and allocs/op
+# lines. See docs/BENCHMARKS.md.
+BenchmarkGatewayProxyThroughput/proxy_only	B/op	65770
+BenchmarkGatewayProxyThroughput/proxy_only	allocs/op	8
+BenchmarkGatewayProxyThroughput/recorded	B/op	1496804
+BenchmarkGatewayProxyThroughput/recorded	allocs/op	98
+BenchmarkInjectChannelDataDisabled	B/op	0
+BenchmarkInjectChannelDataDisabled	allocs/op	0
+BenchmarkMaybeCompressGzip	B/op	1076784
+BenchmarkMaybeCompressGzip	allocs/op	18
+BenchmarkSessionEstablish/host_cert	B/op	113197
+BenchmarkSessionEstablish/host_cert	allocs/op	821
+BenchmarkSessionEstablish/legacy_pubkey	B/op	98242
+BenchmarkSessionEstablish/legacy_pubkey	allocs/op	687
+BenchmarkSessionEstablish/user_cert	B/op	119421
+BenchmarkSessionEstablish/user_cert	allocs/op	879
+BenchmarkSessionEstablishUnderLoad/host_cert/clients_32	B/op	113239
+BenchmarkSessionEstablishUnderLoad/host_cert/clients_32	allocs/op	821
+BenchmarkSessionEstablishUnderLoad/host_cert/clients_64	B/op	113250
+BenchmarkSessionEstablishUnderLoad/host_cert/clients_64	allocs/op	821
+BenchmarkSessionEstablishUnderLoad/host_cert/clients_8	B/op	113204
+BenchmarkSessionEstablishUnderLoad/host_cert/clients_8	allocs/op	821
+BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_32	B/op	98277
+BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_32	allocs/op	688
+BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_64	B/op	98262
+BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_64	allocs/op	688
+BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_8	B/op	98351
+BenchmarkSessionEstablishUnderLoad/legacy_pubkey/clients_8	allocs/op	688
+BenchmarkSessionEstablishUnderLoad/user_cert/clients_32	B/op	119452
+BenchmarkSessionEstablishUnderLoad/user_cert/clients_32	allocs/op	879
+BenchmarkSessionEstablishUnderLoad/user_cert/clients_64	B/op	119485
+BenchmarkSessionEstablishUnderLoad/user_cert/clients_64	allocs/op	879
+BenchmarkSessionEstablishUnderLoad/user_cert/clients_8	B/op	119432
+BenchmarkSessionEstablishUnderLoad/user_cert/clients_8	allocs/op	879
+BenchmarkStartDisabled	B/op	0
+BenchmarkStartDisabled	allocs/op	0
+BenchmarkStartEnabled	B/op	1014
+BenchmarkStartEnabled	allocs/op	3
