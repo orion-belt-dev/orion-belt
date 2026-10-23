@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -167,6 +168,17 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`UPDATE users SET role = 'admin' WHERE is_admin = true AND (role IS NULL OR role = '' OR role = 'user')`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source VARCHAR(32) NOT NULL DEFAULT 'ssh'`,
 		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS access_type VARCHAR(50) NOT NULL DEFAULT 'both'`,
+		// Identity, source, time and target signals captured with each
+		// request, for risk-based approval (NULL for older requests).
+		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS risk_signals JSONB`,
+		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS risk_decision JSONB`,
+		// Singleton admin policy for routing access requests by risk.
+		`CREATE TABLE IF NOT EXISTS risk_policy (
+			id SMALLINT PRIMARY KEY CHECK (id = 1),
+			policy JSONB NOT NULL,
+			updated_at TIMESTAMP NOT NULL,
+			updated_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS user_ssh_keys (
 			id VARCHAR(36) PRIMARY KEY,
 			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -266,6 +278,24 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_subject ON ssh_certificates(subject_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_expires_at ON ssh_certificates(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_ssh_certificates_revoked_at ON ssh_certificates(revoked_at)`,
+		// permission_history keeps every grant version that stopped applying
+		// because it was changed or removed, so access reviews can be run as of
+		// a past date. No foreign keys: the record must outlive the user or
+		// machine it names. Rows are written by archivePermissionsSQL.
+		`CREATE TABLE IF NOT EXISTS permission_history (
+			history_id BIGSERIAL PRIMARY KEY,
+			permission_id VARCHAR(36) NOT NULL,
+			user_id VARCHAR(36) NOT NULL,
+			machine_id VARCHAR(36) NOT NULL,
+			access_type VARCHAR(50) NOT NULL,
+			remote_users TEXT[] NOT NULL,
+			granted_by VARCHAR(36),
+			granted_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP,
+			superseded_at TIMESTAMP NOT NULL,
+			end_reason VARCHAR(20) NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_permission_history_granted_at ON permission_history(granted_at)`,
 	}
 
 	for _, migration := range migrations {
@@ -632,7 +662,7 @@ func (s *PostgresStore) DeleteUser(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to clear certificate revoker: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE user_id = $1`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, archivePermissionsSQL(`DELETE FROM permissions WHERE user_id = $2`, common.PermissionEndRevoked), time.Now(), id); err != nil {
 		return fmt.Errorf("failed to delete user permissions: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM access_requests WHERE user_id = $1`, id); err != nil {
@@ -782,7 +812,7 @@ func (s *PostgresStore) DeleteMachine(ctx context.Context, id string) error {
 
 	// Explicit deletes keep behaviour correct even before the CASCADE migration
 	// has run on an upgraded database.
-	if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE machine_id = $1`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, archivePermissionsSQL(`DELETE FROM permissions WHERE machine_id = $2`, common.PermissionEndRevoked), time.Now(), id); err != nil {
 		return fmt.Errorf("failed to delete machine permissions: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM access_requests WHERE machine_id = $1`, id); err != nil {
@@ -1038,16 +1068,24 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	if request.AccessType == "" {
 		request.AccessType = "both"
 	}
-	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at)
-			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at, risk_signals, risk_decision)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	remoteUsers := pq.Array(request.RemoteUsers)
+	signals, err := jsonOrNull(request.RiskSignals)
+	if err != nil {
+		return fmt.Errorf("failed to encode risk signals: %w", err)
+	}
+	decision, err := jsonOrNull(request.RiskDecision)
+	if err != nil {
+		return fmt.Errorf("failed to encode risk decision: %w", err)
+	}
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err = s.db.ExecContext(ctx, query,
 		request.ID, request.UserID, request.MachineID,
 		remoteUsers, request.AccessType,
 		request.Reason, request.Duration, request.Status, request.RequestedAt,
-		request.ReviewedAt, request.ReviewedBy, request.ExpiresAt)
+		request.ReviewedAt, request.ReviewedBy, request.ExpiresAt, signals, decision)
 
 	if err != nil {
 		return fmt.Errorf("failed to create access request: %w", err)
@@ -1055,24 +1093,63 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	return nil
 }
 
+// jsonOrNull encodes v, or returns nil (SQL NULL) for a nil pointer.
+func jsonOrNull[T any](v *T) ([]byte, error) {
+	if v == nil {
+		return nil, nil
+	}
+	return json.Marshal(v)
+}
+
+// accessRequestColumns is the column list scanAccessRequest reads.
+const accessRequestColumns = `id, user_id, machine_id, remote_users, access_type, reason, duration, status,
+	requested_at, reviewed_at, reviewed_by, expires_at, risk_signals, risk_decision`
+
+// rowScanner is satisfied by *sql.Row and *sql.Rows.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanAccessRequest reads one row selected with accessRequestColumns.
+func scanAccessRequest(row rowScanner) (*common.AccessRequest, error) {
+	request := &common.AccessRequest{}
+	var remoteUsers pq.StringArray
+	var signals, decision []byte
+	if err := row.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
+		&request.Duration, &request.Status, &request.RequestedAt,
+		&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt, &signals, &decision); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("failed to scan access request: %w", err)
+	}
+	request.RemoteUsers = []string(remoteUsers)
+	if len(signals) > 0 {
+		request.RiskSignals = &common.RiskSignals{}
+		if err := json.Unmarshal(signals, request.RiskSignals); err != nil {
+			return nil, fmt.Errorf("failed to decode risk signals of access request %s: %w", request.ID, err)
+		}
+	}
+	if len(decision) > 0 {
+		request.RiskDecision = &common.RiskDecision{}
+		if err := json.Unmarshal(decision, request.RiskDecision); err != nil {
+			return nil, fmt.Errorf("failed to decode risk decision of access request %s: %w", request.ID, err)
+		}
+	}
+	return request, nil
+}
+
 // GetAccessRequest retrieves an access request by ID
 func (s *PostgresStore) GetAccessRequest(ctx context.Context, id string) (*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests WHERE id = $1`
-	var remoteUsers pq.StringArray
-	request := &common.AccessRequest{}
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-		&request.Duration, &request.Status, &request.RequestedAt,
-		&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt)
-
-	if err == sql.ErrNoRows {
+	request, err := scanAccessRequest(s.db.QueryRowContext(ctx, query, id))
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get access request: %w", err)
 	}
-	request.RemoteUsers = []string(remoteUsers)
 	return request, nil
 }
 
@@ -1098,7 +1175,7 @@ func (s *PostgresStore) UpdateAccessRequest(ctx context.Context, request *common
 
 // ListPendingAccessRequests lists all pending access requests
 func (s *PostgresStore) ListPendingAccessRequests(ctx context.Context) ([]*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests WHERE status = 'pending' ORDER BY requested_at DESC`
 
 	rows, err := s.db.QueryContext(ctx, query)
@@ -1108,15 +1185,11 @@ func (s *PostgresStore) ListPendingAccessRequests(ctx context.Context) ([]*commo
 	defer rows.Close()
 
 	var requests []*common.AccessRequest
-	var remoteUsers pq.StringArray
 	for rows.Next() {
-		request := &common.AccessRequest{}
-		if err := rows.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-			&request.Duration, &request.Status, &request.RequestedAt,
-			&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("failed to scan access request: %w", err)
+		request, err := scanAccessRequest(rows)
+		if err != nil {
+			return nil, err
 		}
-		request.RemoteUsers = []string(remoteUsers)
 		requests = append(requests, request)
 	}
 
@@ -1125,7 +1198,7 @@ func (s *PostgresStore) ListPendingAccessRequests(ctx context.Context) ([]*commo
 
 // ListAllAccessRequests lists access requests of any status, paginated.
 func (s *PostgresStore) ListAllAccessRequests(ctx context.Context, limit, offset int) ([]*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests ORDER BY requested_at DESC LIMIT $1 OFFSET $2`
 
 	rows, err := s.db.QueryContext(ctx, query, limit, offset)
@@ -1136,14 +1209,10 @@ func (s *PostgresStore) ListAllAccessRequests(ctx context.Context, limit, offset
 
 	var requests []*common.AccessRequest
 	for rows.Next() {
-		request := &common.AccessRequest{}
-		var remoteUsers pq.StringArray
-		if err := rows.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-			&request.Duration, &request.Status, &request.RequestedAt,
-			&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("failed to scan access request: %w", err)
+		request, err := scanAccessRequest(rows)
+		if err != nil {
+			return nil, err
 		}
-		request.RemoteUsers = []string(remoteUsers)
 		requests = append(requests, request)
 	}
 
@@ -1152,7 +1221,7 @@ func (s *PostgresStore) ListAllAccessRequests(ctx context.Context, limit, offset
 
 // ListUserAccessRequests lists access requests for a specific user
 func (s *PostgresStore) ListUserAccessRequests(ctx context.Context, userID string, limit, offset int) ([]*common.AccessRequest, error) {
-	query := `SELECT id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at
+	query := `SELECT ` + accessRequestColumns + `
 			  FROM access_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT $2 OFFSET $3`
 
 	rows, err := s.db.QueryContext(ctx, query, userID, limit, offset)
@@ -1163,14 +1232,10 @@ func (s *PostgresStore) ListUserAccessRequests(ctx context.Context, userID strin
 
 	var requests []*common.AccessRequest
 	for rows.Next() {
-		request := &common.AccessRequest{}
-		var remoteUsers pq.StringArray
-		if err := rows.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
-			&request.Duration, &request.Status, &request.RequestedAt,
-			&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("failed to scan access request: %w", err)
+		request, err := scanAccessRequest(rows)
+		if err != nil {
+			return nil, err
 		}
-		request.RemoteUsers = []string(remoteUsers)
 		requests = append(requests, request)
 	}
 
@@ -1187,7 +1252,7 @@ func (s *PostgresStore) CreatePermission(ctx context.Context, permission *common
 
 	_, err := s.db.ExecContext(ctx, query,
 		permission.ID, permission.UserID, permission.MachineID,
-		permission.AccessType, remoteUsers, permission.GrantedBy,
+		permission.AccessType, remoteUsers, nullableString(permission.GrantedBy),
 		permission.GrantedAt, permission.ExpiresAt)
 
 	if err != nil {
@@ -1238,10 +1303,21 @@ func (s *PostgresStore) HasPermissionWithRemoteUser(ctx context.Context, userID,
 	return count > 0, nil
 }
 
+// archivePermissionsSQL wraps a DELETE ... RETURNING * on permissions so the
+// removed rows land in permission_history in the same statement. $1 is the
+// time the versions ended; the delete's own parameters start at $2.
+func archivePermissionsSQL(deleteStmt, reason string) string {
+	return `WITH gone AS (` + deleteStmt + ` RETURNING *)
+		INSERT INTO permission_history (permission_id, user_id, machine_id, access_type,
+			remote_users, granted_by, granted_at, expires_at, superseded_at, end_reason)
+		SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at,
+			expires_at, $1, '` + reason + `' FROM gone`
+}
+
 // DeletePermission deletes a permission
 func (s *PostgresStore) DeletePermission(ctx context.Context, id string) error {
-	query := `DELETE FROM permissions WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
+	query := archivePermissionsSQL(`DELETE FROM permissions WHERE id = $2`, common.PermissionEndRevoked)
+	result, err := s.db.ExecContext(ctx, query, time.Now(), id)
 
 	if err != nil {
 		return fmt.Errorf("failed to delete permission: %w", err)
@@ -1340,15 +1416,89 @@ func (s *PostgresStore) ListAllPermissions(ctx context.Context, limit, offset in
 
 // UpdatePermission updates mutable grant fields.
 func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common.Permission) error {
+	// The CTE reads the row as it was before this statement, so the version
+	// being replaced is archived atomically with the update.
 	_, err := s.db.ExecContext(ctx, `
+		WITH previous AS (
+			INSERT INTO permission_history (permission_id, user_id, machine_id, access_type,
+				remote_users, granted_by, granted_at, expires_at, superseded_at, end_reason)
+			SELECT id, user_id, machine_id, access_type, remote_users, granted_by, granted_at,
+				expires_at, $7, $8
+			FROM permissions WHERE id=$6
+		)
 		UPDATE permissions SET access_type=$1, remote_users=$2, expires_at=$3, granted_by=$4, granted_at=$5
 		WHERE id=$6`,
 		permission.AccessType, pq.Array(permission.RemoteUsers), permission.ExpiresAt,
-		permission.GrantedBy, permission.GrantedAt, permission.ID)
+		nullableString(permission.GrantedBy), permission.GrantedAt, permission.ID, time.Now(), common.PermissionEndUpdated)
 	if err != nil {
 		return fmt.Errorf("failed to update permission: %w", err)
 	}
 	return nil
+}
+
+// ListPairPermissions returns every grant userID holds on machineID, expired
+// ones included, newest first.
+func (s *PostgresStore) ListPairPermissions(ctx context.Context, userID, machineID string) ([]*common.Permission, error) {
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''), granted_at, expires_at
+			  FROM permissions WHERE user_id = $1 AND machine_id = $2
+			  ORDER BY granted_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, userID, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list permissions for user %s on machine %s: %w", userID, machineID, err)
+	}
+	defer rows.Close()
+
+	var permissions []*common.Permission
+	for rows.Next() {
+		permission := &common.Permission{}
+		var remoteUsers pq.StringArray
+		if err := rows.Scan(&permission.ID, &permission.UserID, &permission.MachineID,
+			&permission.AccessType, &remoteUsers, &permission.GrantedBy, &permission.GrantedAt,
+			&permission.ExpiresAt); err != nil {
+			return nil, fmt.Errorf("failed to scan permission: %w", err)
+		}
+		permission.RemoteUsers = []string(remoteUsers)
+		permissions = append(permissions, permission)
+	}
+	return permissions, rows.Err()
+}
+
+// ListPermissionVersions returns grant versions newest first: every current
+// permission row (expired ones included) and every archived version that was
+// later changed or revoked. Archived versions carry SupersededAt.
+func (s *PostgresStore) ListPermissionVersions(ctx context.Context, limit int) ([]*common.PermissionVersion, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	query := `SELECT id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''),
+			         granted_at, expires_at, NULL::timestamp, ''
+			  FROM permissions
+			  UNION ALL
+			  SELECT permission_id, user_id, machine_id, access_type, remote_users, COALESCE(granted_by, ''),
+			         granted_at, expires_at, superseded_at, end_reason
+			  FROM permission_history
+			  ORDER BY 7 DESC LIMIT $1`
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list permission versions: %w", err)
+	}
+	defer rows.Close()
+
+	var versions []*common.PermissionVersion
+	for rows.Next() {
+		v := &common.PermissionVersion{}
+		var remoteUsers pq.StringArray
+		if err := rows.Scan(&v.ID, &v.UserID, &v.MachineID, &v.AccessType, &remoteUsers,
+			&v.GrantedBy, &v.GrantedAt, &v.ExpiresAt, &v.SupersededAt, &v.EndReason); err != nil {
+			return nil, fmt.Errorf("failed to scan permission version: %w", err)
+		}
+		v.RemoteUsers = []string(remoteUsers)
+		versions = append(versions, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list permission versions: %w", err)
+	}
+	return versions, nil
 }
 
 // FindActivePermission returns an existing non-expired grant for the user/machine/access_type trio.
@@ -1397,8 +1547,9 @@ func (s *PostgresStore) CreateAuditLog(ctx context.Context, log *common.AuditLog
 	query := `INSERT INTO audit_logs (id, user_id, action, resource, metadata, ip_address, timestamp)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
+	// An empty actor (a server-CLI change, a system event) is stored as NULL.
 	_, err := s.db.ExecContext(ctx, query,
-		log.ID, log.UserID, log.Action, log.Resource,
+		log.ID, nullableString(log.UserID), log.Action, log.Resource,
 		metadata, log.IPAddress, log.Timestamp)
 
 	if err != nil {
@@ -1407,8 +1558,13 @@ func (s *PostgresStore) CreateAuditLog(ctx context.Context, log *common.AuditLog
 	return nil
 }
 
+// escapeLike escapes LIKE wildcards so v matches literally.
+func escapeLike(v string) string {
+	return strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(v)
+}
+
 // ListAuditLogs lists audit logs with pagination and filters. Supported
-// filter keys: "user_id", "action", "resource".
+// filter keys: "user_id", "action", "resource" (exact) and "action_prefix".
 func (s *PostgresStore) ListAuditLogs(ctx context.Context, limit, offset int, filters map[string]interface{}) ([]*common.AuditLog, error) {
 	query := `SELECT id, COALESCE(user_id, ''), action, resource, metadata, ip_address, timestamp FROM audit_logs`
 
@@ -1427,6 +1583,11 @@ func (s *PostgresStore) ListAuditLogs(ctx context.Context, limit, offset int, fi
 		}
 		args = append(args, strVal)
 		conditions = append(conditions, fmt.Sprintf("%s = $%d", key, len(args)))
+	}
+	// action_prefix selects a family of actions, e.g. "anomaly.".
+	if prefix, ok := filters["action_prefix"].(string); ok && prefix != "" {
+		args = append(args, escapeLike(prefix)+"%")
+		conditions = append(conditions, fmt.Sprintf(`action LIKE $%d ESCAPE '\'`, len(args)))
 	}
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
@@ -1622,6 +1783,46 @@ func (s *PostgresStore) UpsertNotificationPolicy(ctx context.Context, policy *co
 		  updated_at=NOW()`,
 		pq.Array(emptyIfNil(policy.AllowedChannels)), mandatory)
 	return err
+}
+
+// GetRiskPolicy returns the risk policy, or nil when none has been set.
+func (s *PostgresStore) GetRiskPolicy(ctx context.Context) (*common.RiskPolicy, error) {
+	var raw []byte
+	var updatedBy sql.NullString
+	p := &common.RiskPolicy{}
+	err := s.db.QueryRowContext(ctx, `SELECT policy, updated_at, updated_by FROM risk_policy WHERE id=1`).
+		Scan(&raw, &p.UpdatedAt, &updatedBy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get risk policy: %w", err)
+	}
+	if err := json.Unmarshal(raw, p); err != nil {
+		return nil, fmt.Errorf("failed to decode risk policy: %w", err)
+	}
+	p.UpdatedAt = common.FromDBTimestamp(p.UpdatedAt)
+	p.UpdatedBy = updatedBy.String
+	return p, nil
+}
+
+// UpsertRiskPolicy replaces the singleton risk policy, attributed to updatedBy.
+func (s *PostgresStore) UpsertRiskPolicy(ctx context.Context, policy *common.RiskPolicy, updatedBy string) error {
+	raw, err := json.Marshal(struct {
+		AutoApprove common.AutoApproveRule `json:"auto_approve"`
+		Escalate    common.EscalateRule    `json:"escalate"`
+	}{policy.AutoApprove, policy.Escalate})
+	if err != nil {
+		return fmt.Errorf("failed to encode risk policy: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO risk_policy (id, policy, updated_at, updated_by) VALUES (1, $1, $2, $3)
+		ON CONFLICT (id) DO UPDATE SET policy=EXCLUDED.policy, updated_at=EXCLUDED.updated_at, updated_by=EXCLUDED.updated_by`,
+		raw, time.Now(), nullableString(updatedBy))
+	if err != nil {
+		return fmt.Errorf("failed to save risk policy: %w", err)
+	}
+	return nil
 }
 
 // ListNotificationTemplates returns every stored copy override, in the stable

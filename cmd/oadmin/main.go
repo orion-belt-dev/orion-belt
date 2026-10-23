@@ -33,6 +33,8 @@ func init() {
 	rootCmd.AddCommand(newPermissionsCmd())
 	rootCmd.AddCommand(newSessionsCmd())
 	rootCmd.AddCommand(newAuditCmd())
+	rootCmd.AddCommand(newAnomaliesCmd())
+	rootCmd.AddCommand(newRiskPolicyCmd())
 	rootCmd.AddCommand(newPluginsCmd())
 	rootCmd.AddCommand(newAgentsCmd())
 	rootCmd.AddCommand(newNotificationsCmd())

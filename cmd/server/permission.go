@@ -172,6 +172,12 @@ func runPermGrant(cmd *cobra.Command, args []string) {
 	if err := authService.GrantPermission(ctx, user.ID, machine.ID, permAccessType, remoteUsers, grantedBy, duration); err != nil {
 		logger.Fatal("Failed to grant permission: %v", err)
 	}
+	auditLocal(ctx, store, "", "permission.grant", "machine:"+machine.ID, map[string]interface{}{
+		"user_id":      user.ID,
+		"access_type":  permAccessType,
+		"remote_users": remoteUsers,
+		"granted_by":   grantorUsername,
+	})
 
 	logger.Info("Permission granted successfully:")
 	fmt.Printf("  User:         %s\n", permUsername)

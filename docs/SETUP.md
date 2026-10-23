@@ -191,6 +191,37 @@ Connecting to an agent host directly, without the gateway, bypasses Orion Belt
 and is not recorded. Point users at the gateway and restrict direct SSH access
 to the targets.
 
+## Break-glass admin access
+
+Keep one local admin account that does not depend on anything outside the
+gateway: no identity provider, no other admin, and no working console
+session. This is the recommended recovery path when sign-in through the
+usual route fails.
+
+1. Create it once, with a key kept offline (a hardware key or a sealed file):
+
+   ```bash
+   orion-belt-server user create --name breakglass --email security@example.com \
+     --key "$(cat breakglass.pub)" --admin
+   ```
+
+2. To use it, sign in like any admin. `osh login` signs the server's
+   challenge with the key and opens the console. `ssh -i breakglass.pem -p 2222
+   breakglass+web-01@gateway-host` reaches a machine.
+
+3. If even that key is lost, someone with shell access to the server host can
+   create a fresh admin with the same `orion-belt-server user create ... --admin`
+   command. It reads the server's configuration and writes to the database
+   directly.
+
+Nothing about this path is silent. Its sign-ins are the same `auth.login`
+audit events as any other admin's. Every `orion-belt-server` command that
+changes state records an audit entry marked `via: server-cli`, with the host
+and the operating-system account that ran it. That covers `user create`,
+`user delete`, `permission grant`, `agent register`, `agent delete` and the
+setup wizard's admin. Review the audit log for these entries after any
+recovery, and rotate the break-glass key once it has been used.
+
 ## In the console
 
 Admins and operators see **Setup guide** and **Add agent** in the navigation,

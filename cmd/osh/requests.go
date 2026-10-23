@@ -118,4 +118,9 @@ func runRequestsGet(cmd *cobra.Command, args []string) {
 	cliflags.Print("Requested:    %s", cliflags.FormatTime(request.RequestedAt))
 	cliflags.Print("Reviewed:     %s", cliflags.FormatTimePtr(request.ReviewedAt))
 	cliflags.Print("Expires:      %s", cliflags.FormatTimePtr(request.ExpiresAt))
+	if sig := request.RiskSignals; sig != nil {
+		cliflags.Print("Signals:      from %s, %s %02d:00 UTC, target sensitivity %s",
+			cliflags.OrDash(sig.SourceIP), sig.Weekday, sig.HourUTC, sig.TargetSensitivity)
+		cliflags.Print("Client:       %s (%s, MFA enrolled: %t)", cliflags.OrDash(sig.Device), cliflags.OrDash(sig.AuthMethod), sig.MFAEnrolled)
+	}
 }

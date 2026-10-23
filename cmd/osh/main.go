@@ -77,6 +77,7 @@ func init() {
 	rootCmd.AddCommand(newWhoamiCmd())
 	rootCmd.AddCommand(newRequestsCmd())
 	rootCmd.AddCommand(newCatalogCmd())
+	rootCmd.AddCommand(newExplainCmd())
 	rootCmd.AddCommand(newKeysCmd())
 	rootCmd.AddCommand(newAPIKeysCmd())
 	rootCmd.AddCommand(newMFACmd())

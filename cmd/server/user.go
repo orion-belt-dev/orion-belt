@@ -89,6 +89,10 @@ func runUserCreate(cmd *cobra.Command, args []string) {
 	if err := store.CreateUser(ctx, user); err != nil {
 		logger.Fatal("Failed to create user: %v", err)
 	}
+	auditLocal(ctx, store, "", "user.create", "user:"+user.ID, map[string]interface{}{
+		"username": user.Username,
+		"role":     user.EffectiveRole(),
+	})
 
 	logger.Info("User created successfully:")
 	fmt.Printf("  Username: %s\n", userName)
@@ -159,6 +163,7 @@ func runUserDelete(cmd *cobra.Command, args []string) {
 	if err := store.DeleteUser(ctx, user.ID); err != nil {
 		logger.Fatal("Failed to delete user: %v", err)
 	}
+	auditLocal(ctx, store, "", "user.delete", "user:"+user.ID, map[string]interface{}{"username": user.Username})
 
 	fmt.Printf("User '%s' deleted successfully.\n", username)
 }

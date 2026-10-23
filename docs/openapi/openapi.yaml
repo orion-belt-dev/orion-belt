@@ -1048,6 +1048,62 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/access/explain:
+    get:
+      tags: [Permissions]
+      summary: Explain an access decision
+      description: |
+        Says whether a user may reach a machine as a remote account and lists
+        the relationships behind the answer: privileged role, each grant on
+        the machine (with the access request it came from), and pending or
+        rejected requests. The decision comes from the same check the gateway
+        enforces. Denied SSH sessions and console terminals show the summary
+        inline.
+
+        A plain user may only explain their own access; admins, operators and
+        auditors may pass `user`.
+      parameters:
+        - name: machine
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Machine name or ID.
+        - name: remote_user
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Account on the target, e.g. `root`.
+        - name: access_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ssh, scp]
+            default: ssh
+        - name: user
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Username or ID to explain (defaults to the caller).
+      responses:
+        "200":
+          description: Decision and relationship chain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessExplanation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/access-requests:
     get:
       tags: [Access Requests]
@@ -1283,11 +1339,28 @@ paths:
       tags: [Reports]
       summary: Export a report as CSV, PDF, or structured JSON
       description: |
-        Exports report data for either `sessions` or `audit`.
+        Exports report data for `sessions`, `audit`, or one of the
+        compliance reports.
 
         Authorization and scope follow existing report/list rules:
         - privileged roles can export organization-wide data
         - non-privileged users are limited to their own records
+
+        Compliance reports are organization-wide and require role admin,
+        operator, or auditor (403 otherwise):
+        - `soc2-access`: every session started and access request made
+          between `from` and `to`, with actor, target, timestamp, stated
+          reason, and approver. Each session names what authorized it
+          (`access_request:<id>`, `permission:<id>`, or `role:<role>`).
+        - `iso27001-access-review`: every grant in force at `as_of`, marked
+          `standing` or `time-boxed` with its expiry. Grants changed or
+          revoked since are included from the grant history.
+        - `pci-admin-activity`: sessions between `from` and `to` on machines
+          tagged `pci: in-scope`.
+
+        Each compliance source is read up to 5000 rows; `truncated: true` in
+        the JSON envelope (and a note in the PDF) means a narrower range is
+        needed for a complete report.
 
         Supported formats:
         - `csv` (spreadsheet-friendly)
@@ -1299,7 +1372,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [sessions, audit, audit-logs]
+            enum: [sessions, audit, audit-logs, soc2-access, iso27001-access-review, pci-admin-activity]
           description: Report name (`audit-logs` is accepted as an alias of `audit`).
         - name: format
           in: query
@@ -1341,6 +1414,31 @@ paths:
             minimum: 1
             maximum: 5000
           description: Optional maximum number of rows to export.
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Start of the range for `soc2-access` and `pci-admin-activity`
+            (RFC3339 or YYYY-MM-DD). Defaults to 30 days before `to`.
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            End of the range (RFC3339 or YYYY-MM-DD; a bare date covers the
+            whole day). Defaults to now.
+        - name: as_of
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Point in time for `iso27001-access-review` (RFC3339 or
+            YYYY-MM-DD; a bare date means the end of that day). Defaults to
+            now.
       responses:
         "200":
           description: File attachment in the requested format.
@@ -1362,6 +1460,44 @@ paths:
                 $ref: "#/components/schemas/ReportExportEnvelope"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/anomalies:
+    get:
+      tags: [Reports]
+      summary: List sessions flagged as unusual
+      description: |
+        Sessions are flagged, never blocked, when a user opens their first
+        session on a high-sensitivity machine (`first_time_access`) or starts
+        one outside every hour they have used before (`off_hours`, after 10
+        earlier sessions). Each flag carries the signal that raised it.
+        Newest first. Requires role admin, operator, or auditor.
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        "200":
+          description: Flagged sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccessAnomaly"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1868,6 +2004,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/NotificationPrefsResponse"
 
+  /api/v1/admin/risk-policy:
+    get:
+      tags: [Access Requests]
+      summary: Get the access-request risk policy
+      description: All rules are off when no policy has been set. Admins and operators.
+      responses:
+        "200":
+          description: Risk policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskPolicy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Access Requests]
+      summary: Replace the risk policy (admin only)
+      description: |
+        Each new access request is evaluated against its `risk_signals`.
+        Escalation is checked first: any matching condition makes the request
+        approvable only by an admin. Otherwise, when every auto-approve
+        condition holds, the request is approved at once with no reviewer
+        (`reviewed_by` null, audited as `access.auto_approve`).
+        High-sensitivity targets and unlimited durations are never
+        auto-approved. The decision is stored as `risk_decision`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskPolicy"
+      responses:
+        "200":
+          description: Saved policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/admin/notifications/policy:
     get:
       tags: [Admin, Notifications]
@@ -2191,12 +2374,95 @@ components:
               hint: { type: string }
 
   schemas:
+    AccessAnomaly:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [first_time_access, off_hours]
+        signal:
+          type: string
+          description: What raised the flag, in words.
+        user_id:
+          type: string
+        machine_id:
+          type: string
+        machine:
+          type: string
+        remote_user:
+          type: string
+        session_id:
+          type: string
+        ip_address:
+          type: string
+        flagged_at:
+          type: string
+          format: date-time
+      required: [id, kind, signal, user_id, flagged_at]
+
+    AccessExplanation:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        summary:
+          type: string
+          description: One sentence naming the deciding relationship.
+        user_id:
+          type: string
+        username:
+          type: string
+        machine_id:
+          type: string
+        machine:
+          type: string
+        access_type:
+          type: string
+        remote_user:
+          type: string
+        chain:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccessLink"
+      required: [allowed, summary, user_id, machine_id, access_type, remote_user, chain]
+
+    AccessLink:
+      type: object
+      properties:
+        relation:
+          type: string
+          enum: [role, grant, access_request, openfga, none]
+        ref:
+          type: string
+          description: "`permission:<id>`, `access_request:<id>` or `role:<role>`."
+        holds:
+          type: boolean
+          description: True for the link that authorizes the access.
+        detail:
+          type: string
+        via:
+          type: string
+          description: The access request a grant was created from.
+        reason:
+          type: string
+        granted_by:
+          type: string
+        at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+      required: [relation, holds, detail]
+
     ReportExportEnvelope:
       type: object
       properties:
         report_type:
           type: string
-          description: Report type (`sessions` or `audit`).
+          description: Report type (`sessions`, `audit`, or a compliance report name).
         format:
           type: string
           enum: [csv, pdf, json]
@@ -2209,6 +2475,9 @@ components:
             type: string
         record_count:
           type: integer
+        truncated:
+          type: boolean
+          description: Compliance reports only; true when a source hit the 5000-row read limit.
         records:
           type: array
           items:
@@ -2766,6 +3035,120 @@ components:
           type: string
           format: date-time
           nullable: true
+        risk_signals:
+          $ref: "#/components/schemas/RiskSignals"
+        risk_decision:
+          $ref: "#/components/schemas/RiskDecision"
+    RiskDecision:
+      type: object
+      properties:
+        outcome:
+          type: string
+          enum: [manual, auto_approve, escalate]
+        reasons:
+          type: array
+          items:
+            type: string
+      required: [outcome, reasons]
+    HourRange:
+      type: object
+      description: UTC hours, start inclusive, end exclusive; may wrap midnight (22-6).
+      properties:
+        start:
+          type: integer
+          minimum: 0
+          maximum: 23
+        end:
+          type: integer
+          minimum: 0
+          maximum: 24
+      required: [start, end]
+    RiskPolicy:
+      type: object
+      properties:
+        auto_approve:
+          type: object
+          description: Approve with no reviewer only when every set condition holds.
+          properties:
+            enabled:
+              type: boolean
+            max_sensitivity:
+              type: string
+              enum: [low, medium]
+            max_duration_seconds:
+              type: integer
+              minimum: 1
+              maximum: 86400
+            hours_utc:
+              $ref: "#/components/schemas/HourRange"
+            source_cidrs:
+              type: array
+              items:
+                type: string
+            require_mfa:
+              type: boolean
+            remote_users:
+              type: array
+              items:
+                type: string
+              description: The only accounts that may be auto-approved.
+        escalate:
+          type: object
+          description: Any matching condition sends the request to an admin.
+          properties:
+            enabled:
+              type: boolean
+            sensitivities:
+              type: array
+              items:
+                type: string
+                enum: [low, medium, high, unset]
+            outside_hours_utc:
+              $ref: "#/components/schemas/HourRange"
+            without_mfa:
+              type: boolean
+            source_outside_cidrs:
+              type: array
+              items:
+                type: string
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_by:
+          type: string
+          readOnly: true
+    RiskSignals:
+      type: object
+      description: |
+        Captured when the request is made, as input for risk-based approval.
+        Absent on requests made before signal collection existed.
+      properties:
+        source_ip:
+          type: string
+        device:
+          type: string
+          description: The client's User-Agent, e.g. `osh/1.3.1` (empty when not sent).
+        auth_method:
+          type: string
+        mfa_enrolled:
+          type: boolean
+          description: The requester has TOTP or WebAuthn enrolled.
+        hour_utc:
+          type: integer
+          minimum: 0
+          maximum: 23
+        weekday:
+          type: string
+        target_sensitivity:
+          type: string
+          enum: [low, medium, high, unset]
+          description: |
+            From the machine's `sensitivity` tag; a machine tagged
+            `pci: in-scope` without one counts as `high`.
+        collected_at:
+          type: string
+          format: date-time
     CreateAccessRequest:
       type: object
       required: [machine_id, remote_users, reason]

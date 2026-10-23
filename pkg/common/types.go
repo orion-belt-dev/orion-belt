@@ -175,6 +175,11 @@ type AccessRequest struct {
 	ReviewedAt  *time.Time `json:"reviewed_at,omitempty"`
 	ReviewedBy  *string    `json:"reviewed_by,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// RiskSignals are captured when the request is made; nil for requests
+	// that predate signal collection.
+	RiskSignals *RiskSignals `json:"risk_signals,omitempty"`
+	// RiskDecision is how the risk policy routed the request.
+	RiskDecision *RiskDecision `json:"risk_decision,omitempty"`
 }
 
 // Permission represents a ReBAC permission
@@ -187,6 +192,77 @@ type Permission struct {
 	GrantedBy   string     `json:"granted_by"`
 	GrantedAt   time.Time  `json:"granted_at"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// FromDBTimestamp turns a value read from a TIMESTAMP (without time zone)
+// column back into the instant that was written. Writers store the server's
+// local wall clock and lib/pq returns it labelled UTC; on a UTC host this is
+// a no-op.
+func FromDBTimestamp(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.Local).UTC()
+}
+
+// Why a grant version stopped applying (PermissionVersion.EndReason).
+const (
+	PermissionEndUpdated = "updated"
+	PermissionEndRevoked = "revoked"
+)
+
+// PermissionVersion is one version of a grant. SupersededAt is nil while the
+// version is the current row; otherwise it records when the grant was changed
+// (EndReason "updated") or removed (EndReason "revoked").
+type PermissionVersion struct {
+	Permission
+	SupersededAt *time.Time `json:"superseded_at,omitempty"`
+	EndReason    string     `json:"end_reason,omitempty"`
+}
+
+// ActiveAt reports whether this version authorised access at t.
+func (v *PermissionVersion) ActiveAt(t time.Time) bool {
+	if v.GrantedAt.After(t) {
+		return false
+	}
+	if v.ExpiresAt != nil && !v.ExpiresAt.After(t) {
+		return false
+	}
+	return v.SupersededAt == nil || v.SupersededAt.After(t)
+}
+
+// Relations an AccessLink can describe.
+const (
+	LinkRole          = "role"
+	LinkGrant         = "grant"
+	LinkAccessRequest = "access_request"
+	LinkOpenFGA       = "openfga"
+	LinkNone          = "none"
+)
+
+// AccessExplanation is an access decision together with the relationships
+// that produced it, for "why can (or can't) I reach this machine?".
+type AccessExplanation struct {
+	Allowed    bool         `json:"allowed"`
+	Summary    string       `json:"summary"`
+	UserID     string       `json:"user_id"`
+	Username   string       `json:"username"`
+	MachineID  string       `json:"machine_id"`
+	Machine    string       `json:"machine"`
+	AccessType string       `json:"access_type"`
+	RemoteUser string       `json:"remote_user"`
+	Chain      []AccessLink `json:"chain"`
+}
+
+// AccessLink is one relationship considered for a decision. Holds is true
+// for the link(s) that authorise the access.
+type AccessLink struct {
+	Relation  string     `json:"relation"`
+	Ref       string     `json:"ref,omitempty"` // permission:<id>, access_request:<id>, role:<role>
+	Holds     bool       `json:"holds"`
+	Detail    string     `json:"detail"`
+	Via       string     `json:"via,omitempty"` // the access request a grant came from
+	Reason    string     `json:"reason,omitempty"`
+	GrantedBy string     `json:"granted_by,omitempty"`
+	At        *time.Time `json:"at,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // AuditLog represents an audit log entry

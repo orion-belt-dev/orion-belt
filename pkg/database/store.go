@@ -62,6 +62,12 @@ type Store interface {
 	FindActivePermission(ctx context.Context, userID, machineID, accessType string) (*common.Permission, error)
 	HasPermission(ctx context.Context, userID, machineID, accessType string) (bool, error)
 	HasPermissionWithRemoteUser(ctx context.Context, userID, machineID, accessType, remoteUser string) (bool, error)
+	// ListPermissionVersions returns current grants (expired included) and
+	// archived versions that were later changed or revoked, newest first.
+	ListPermissionVersions(ctx context.Context, limit int) ([]*common.PermissionVersion, error)
+	// ListPairPermissions returns every grant a user holds on a machine,
+	// expired ones included, newest first.
+	ListPairPermissions(ctx context.Context, userID, machineID string) ([]*common.Permission, error)
 
 	// Audit log operations
 	CreateAuditLog(ctx context.Context, log *common.AuditLog) error
@@ -75,6 +81,11 @@ type Store interface {
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	GetNotificationPrefs(ctx context.Context, userID string) (*common.NotificationPrefs, error)
 	UpsertNotificationPrefs(ctx context.Context, prefs *common.NotificationPrefs) error
+
+	// Admin-set routing of access requests by risk (singleton). Get returns
+	// nil, nil when no policy has been set.
+	GetRiskPolicy(ctx context.Context) (*common.RiskPolicy, error)
+	UpsertRiskPolicy(ctx context.Context, policy *common.RiskPolicy, updatedBy string) error
 
 	// Admin-set boundary that user preferences are resolved within (singleton).
 	GetNotificationPolicy(ctx context.Context) (*common.NotificationPolicy, error)

@@ -599,6 +599,155 @@ func TestPermissions_ChecksAndExpiry(t *testing.T) {
 	}
 }
 
+// Every grant version that stops applying is kept: updates, revokes, and the
+// grants removed with a deleted user or machine.
+func TestPermissionVersions_ArchiveUpdatesAndRemovals(t *testing.T) {
+	f := newFixture(t)
+	db := f.machineNamed(t, "db-01")
+	bob := f.user(t, "bob", false)
+
+	updated := common.NewPermission(f.alice.ID, f.machine.ID, "ssh", []string{"deploy"}, f.admin.ID, nil)
+	revoked := common.NewPermission(f.alice.ID, db.ID, "ssh", []string{"root"}, f.admin.ID, nil)
+	byUser := common.NewPermission(bob.ID, f.machine.ID, "ssh", []string{"root"}, f.admin.ID, nil)
+	byMachine := common.NewPermission(f.alice.ID, db.ID, "scp", []string{"root"}, f.admin.ID, nil)
+	for _, p := range []*common.Permission{updated, revoked, byUser, byMachine} {
+		if err := f.pg.CreatePermission(f.ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	updated.RemoteUsers = []string{"deploy", "app"}
+	if err := f.pg.UpdatePermission(f.ctx, updated); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.pg.DeletePermission(f.ctx, revoked.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.pg.DeleteUser(f.ctx, bob.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.pg.DeleteMachine(f.ctx, db.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	versions, err := f.pg.ListPermissionVersions(f.ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, v := range versions {
+		state := "current"
+		if v.SupersededAt != nil {
+			state = v.EndReason
+		}
+		got[v.ID] = append(got[v.ID], state+":"+strings.Join(v.RemoteUsers, ","))
+	}
+	for _, s := range got {
+		sort.Strings(s)
+	}
+	want := map[string]string{
+		updated.ID:   "current:deploy,app updated:deploy",
+		revoked.ID:   "revoked:root",
+		byUser.ID:    "revoked:root",
+		byMachine.ID: "revoked:root",
+	}
+	for id, w := range want {
+		if g := strings.Join(got[id], " "); g != w {
+			t.Errorf("versions of %s = %q, want %q", id, g, w)
+		}
+	}
+}
+
+// A pair's grants include expired ones, newest first; other pairs are left out.
+func TestListPairPermissions(t *testing.T) {
+	f := newFixture(t)
+	db := f.machineNamed(t, "db-01")
+	past := time.Now().Add(-time.Hour)
+	older := common.NewPermission(f.alice.ID, f.machine.ID, "ssh", []string{"root"}, f.admin.ID, &past)
+	older.GrantedAt = time.Now().Add(-2 * time.Hour)
+	newer := common.NewPermission(f.alice.ID, f.machine.ID, "scp", []string{"deploy"}, "", nil)
+	other := common.NewPermission(f.alice.ID, db.ID, "ssh", []string{"root"}, f.admin.ID, nil)
+	for _, p := range []*common.Permission{older, newer, other} {
+		if err := f.pg.CreatePermission(f.ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := f.pg.ListPairPermissions(f.ctx, f.alice.ID, f.machine.ID)
+	if err != nil || len(got) != 2 || got[0].ID != newer.ID || got[1].ID != older.ID {
+		t.Fatalf("ListPairPermissions = %+v, %v", got, err)
+	}
+	if got[0].GrantedBy != "" {
+		t.Errorf("a grant with no grantor reads back as %q", got[0].GrantedBy)
+	}
+}
+
+func TestRiskPolicyRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	if p, err := f.pg.GetRiskPolicy(f.ctx); p != nil || err != nil {
+		t.Fatalf("unset policy = %+v, %v", p, err)
+	}
+	policy := &common.RiskPolicy{
+		AutoApprove: common.AutoApproveRule{Enabled: true, MaxSensitivity: "low", MaxDurationSeconds: 600, SourceCIDRs: []string{"10.0.0.0/8"}},
+		Escalate:    common.EscalateRule{Enabled: true, Sensitivities: []string{"high"}},
+	}
+	if err := f.pg.UpsertRiskPolicy(f.ctx, policy, f.admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	policy.AutoApprove.MaxDurationSeconds = 900
+	if err := f.pg.UpsertRiskPolicy(f.ctx, policy, ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.pg.GetRiskPolicy(f.ctx)
+	if err != nil || got.AutoApprove.MaxDurationSeconds != 900 || got.Escalate.Sensitivities[0] != "high" || got.UpdatedBy != "" {
+		t.Fatalf("policy = %+v, %v", got, err)
+	}
+	if time.Since(got.UpdatedAt) > time.Minute || time.Since(got.UpdatedAt) < -time.Minute {
+		t.Errorf("updated_at = %v, want about now", got.UpdatedAt)
+	}
+}
+
+// Signals and the routing decision survive a write and every read path.
+func TestAccessRequestRiskFieldsRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	req := common.NewAccessRequest(f.alice.ID, f.machine.ID, []string{"root"}, "deploy", 600)
+	req.RiskSignals = &common.RiskSignals{SourceIP: "10.0.0.5", HourUTC: 9, Weekday: "Monday", TargetSensitivity: "low"}
+	req.RiskDecision = &common.RiskDecision{Outcome: common.RiskOutcomeEscalate, Reasons: []string{"no MFA"}}
+	plain := common.NewAccessRequest(f.alice.ID, f.machine.ID, []string{"root"}, "legacy", 600)
+	for _, r := range []*common.AccessRequest{req, plain} {
+		if err := f.pg.CreateAccessRequest(f.ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := f.pg.GetAccessRequest(f.ctx, req.ID)
+	if err != nil || got.RiskSignals == nil || got.RiskSignals.SourceIP != "10.0.0.5" ||
+		got.RiskDecision == nil || got.RiskDecision.Outcome != common.RiskOutcomeEscalate {
+		t.Fatalf("GetAccessRequest = %+v, %v", got, err)
+	}
+	pending, err := f.pg.ListPendingAccessRequests(f.ctx)
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("pending = %d, %v", len(pending), err)
+	}
+	for _, r := range pending {
+		if r.ID == plain.ID && (r.RiskSignals != nil || r.RiskDecision != nil) {
+			t.Errorf("a request without signals reads back with %+v / %+v", r.RiskSignals, r.RiskDecision)
+		}
+	}
+
+	// A row whose JSON cannot be decoded is reported, not silently dropped.
+	if _, err := f.pg.db.ExecContext(f.ctx, `UPDATE access_requests SET risk_decision = '[]' WHERE id = $1`, req.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pg.GetAccessRequest(f.ctx, req.ID); err == nil || !strings.Contains(err.Error(), "risk decision") {
+		t.Errorf("corrupt decision: %v", err)
+	}
+	if _, err := f.pg.db.ExecContext(f.ctx, `UPDATE access_requests SET risk_signals = '[]', risk_decision = NULL WHERE id = $1`, req.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pg.ListAllAccessRequests(f.ctx, 10, 0); err == nil || !strings.Contains(err.Error(), "risk signals") {
+		t.Errorf("corrupt signals: %v", err)
+	}
+}
+
 // --- audit logs ---------------------------------------------------------------------------------
 
 func TestAuditLogs_Filters(t *testing.T) {
@@ -608,6 +757,8 @@ func TestAuditLogs_Filters(t *testing.T) {
 		common.NewAuditLog(f.alice.ID, "logout", "session", "10.0.0.1", nil),
 		common.NewAuditLog(f.admin.ID, "login", "session", "10.0.0.2", nil),
 		common.NewAuditLog(f.admin.ID, "user.create", "user", "10.0.0.2", nil),
+		// No actor: a change made with the server CLI.
+		common.NewAuditLog("", "login.cli", "user", "", nil),
 	}
 	for i, e := range entries {
 		e.Timestamp = time.Now().Add(time.Duration(i) * time.Second)
@@ -621,12 +772,15 @@ func TestAuditLogs_Filters(t *testing.T) {
 		filters map[string]interface{}
 		want    int
 	}{
-		{"no filter", nil, 4},
+		{"no filter", nil, 5},
 		{"by user", map[string]interface{}{"user_id": f.alice.ID}, 2},
 		{"by action", map[string]interface{}{"action": "login"}, 2},
 		{"by user and action", map[string]interface{}{"user_id": f.admin.ID, "action": "login"}, 1},
-		{"by resource", map[string]interface{}{"resource": "user"}, 1},
-		{"blank and non-string values ignored", map[string]interface{}{"action": "", "resource": 5, "unknown": "x"}, 4},
+		{"by resource", map[string]interface{}{"resource": "user"}, 2},
+		{"blank and non-string values ignored", map[string]interface{}{"action": "", "resource": 5, "unknown": "x"}, 5},
+		{"by action prefix", map[string]interface{}{"action_prefix": "log"}, 4},
+		{"prefix wildcards are literal", map[string]interface{}{"action_prefix": "log_"}, 0},
+		{"prefix with a dot", map[string]interface{}{"action_prefix": "user."}, 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -638,10 +792,10 @@ func TestAuditLogs_Filters(t *testing.T) {
 	}
 
 	logs, _ := f.pg.ListAuditLogs(f.ctx, 1, 0, nil)
-	if len(logs) != 1 || logs[0].Action != "user.create" {
-		t.Errorf("newest entry = %+v, want user.create", logs)
+	if len(logs) != 1 || logs[0].Action != "login.cli" || logs[0].UserID != "" {
+		t.Errorf("newest entry = %+v, want login.cli with no actor", logs)
 	}
-	first, _ := f.pg.ListAuditLogs(f.ctx, 1, 3, nil)
+	first, _ := f.pg.ListAuditLogs(f.ctx, 1, 4, nil)
 	if len(first) != 1 || first[0].Metadata["method"] != "key" {
 		t.Errorf("oldest entry = %+v, want metadata round-tripped", first)
 	}

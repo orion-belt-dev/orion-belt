@@ -62,11 +62,15 @@ func runListRequests(cmd *cobra.Command, args []string) {
 	cliflags.Print("Pending Access Requests (%d):\n", len(requests))
 
 	names := newNameIndex(client, true, true)
-	table := cliflags.NewTable("REQUEST ID", "USER", "MACHINE", "REMOTE USER", "REASON", "DURATION", "REQUESTED")
+	table := cliflags.NewTable("REQUEST ID", "USER", "MACHINE", "REMOTE USER", "REASON", "DURATION", "REQUESTED", "SENSITIVITY", "SOURCE")
 	for _, req := range requests {
 		remoteUser := "default"
 		if len(req.RemoteUsers) > 0 {
 			remoteUser = req.RemoteUsers[0]
+		}
+		sensitivity, source := "-", "-"
+		if sig := req.RiskSignals; sig != nil {
+			sensitivity, source = sig.TargetSensitivity, cliflags.OrDash(sig.SourceIP)
 		}
 		table.Row(
 			req.ID,
@@ -76,6 +80,8 @@ func runListRequests(cmd *cobra.Command, args []string) {
 			cliflags.Truncate(req.Reason, 20),
 			cliflags.FormatDuration(time.Duration(req.Duration)*time.Second),
 			cliflags.FormatDuration(time.Since(req.RequestedAt)),
+			sensitivity,
+			source,
 		)
 	}
 	table.Flush()

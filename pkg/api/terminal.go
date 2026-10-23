@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/orion-belt-dev/orion-belt/pkg/anomaly"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
 	"golang.org/x/crypto/ssh"
@@ -106,7 +107,11 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 		return
 	}
 	if err := s.authService.CheckPermissionWithRemoteUser(c.Request.Context(), uid, m.ID, "ssh", remoteUser); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "permission denied"})
+		body := gin.H{"error": "permission denied"}
+		if reason := s.denialReason(c, uid, m.ID, remoteUser); reason != "" {
+			body["reason"] = reason
+		}
+		c.JSON(http.StatusForbidden, body)
 		return
 	}
 
@@ -130,6 +135,13 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 		"remote_user": remoteUser,
 		"source":      "web",
 	})
+	if flags, err := anomaly.Check(ctx, s.store, session, m, c.ClientIP()); err != nil {
+		s.logger.Warn("Anomaly check failed for session %s: %v", session.ID, err)
+	} else {
+		for _, f := range flags {
+			s.logger.Info("Session %s flagged %s: %s", session.ID, f.Kind, f.Signal)
+		}
+	}
 	metrics.Default.SessionStarted()
 
 	title := fmt.Sprintf("%s as %s (web)", m.Name, remoteUser)

@@ -49,6 +49,26 @@ export type AccessRequest = {
   reviewed_at?: string | null;
   created_at?: string;
   expires_at?: string | null;
+  risk_signals?: RiskSignals;
+  risk_decision?: RiskDecision;
+};
+
+// How the risk policy routed a request, and why.
+export type RiskDecision = {
+  outcome: "manual" | "auto_approve" | "escalate";
+  reasons: string[];
+};
+
+// Captured when an access request is made, as input for risk-based approval.
+export type RiskSignals = {
+  source_ip?: string;
+  device?: string;
+  auth_method?: string;
+  mfa_enrolled: boolean;
+  hour_utc: number;
+  weekday: string;
+  target_sensitivity: "low" | "medium" | "high" | "unset";
+  collected_at: string;
 };
 
 // What the logged-in user could ask for, and why it is being offered.
@@ -80,6 +100,44 @@ export type CapabilityCatalog = {
   generated_at: string;
   truncated?: boolean;
   capabilities: Capability[];
+};
+
+// A session flagged as unusual for review; it was not blocked.
+export type AccessAnomaly = {
+  id: string;
+  kind: "first_time_access" | "off_hours" | string;
+  signal: string;
+  user_id: string;
+  machine_id?: string;
+  machine?: string;
+  remote_user?: string;
+  session_id?: string;
+  ip_address?: string;
+  flagged_at: string;
+};
+
+export type AccessLink = {
+  relation: "role" | "grant" | "access_request" | "openfga" | "none";
+  ref?: string;
+  holds: boolean;
+  detail: string;
+  via?: string;
+  reason?: string;
+  granted_by?: string;
+  at?: string;
+  expires_at?: string;
+};
+
+export type AccessExplanation = {
+  allowed: boolean;
+  summary: string;
+  user_id: string;
+  username: string;
+  machine_id: string;
+  machine: string;
+  access_type: string;
+  remote_user: string;
+  chain: AccessLink[];
 };
 
 export type UsageDashboard = {

@@ -9,14 +9,20 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
+
+// userAgent identifies this binary and version to the gateway, which keeps
+// it as the device signal on access requests.
+var userAgent = filepath.Base(os.Args[0]) + "/" + version.Version
 
 // APIClient handles REST API communication with the Orion-Belt server
 type APIClient struct {
@@ -215,6 +221,7 @@ func (c *APIClient) doRequestNoAuth(method, path string, body interface{}, resul
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -257,6 +264,7 @@ func (c *APIClient) doRequest(method, path string, body interface{}, result inte
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
 	} else if c.sessionToken != "" {

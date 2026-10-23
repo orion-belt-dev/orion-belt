@@ -56,6 +56,7 @@ func (c *Client) doMultipart(ctx context.Context, method, path string, fields ma
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	c.setUserAgent(req)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)

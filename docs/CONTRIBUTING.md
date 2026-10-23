@@ -95,6 +95,24 @@ go test ./pkg/recording/ -bench=. -benchtime=200ms
 
 Target is higher package coverage over time; new packages should bring tests. Lab depth: [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md). Before a release: [RELEASE_SMOKE.md](RELEASE_SMOKE.md) / `make release-smoke` ([V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md)).
 
+### Integration suites
+
+The tests below exercise whole request paths against a real PostgreSQL
+started by `internal/pgtest` (a container, or `ORION_TEST_POSTGRES_DSN`).
+Without either they skip. In CI they run in the Coverage ratchet job, on
+GitHub-hosted runners that have Docker. The Test job on the local runners has
+no Docker daemon and skips them.
+
+| Path | Suite |
+|---|---|
+| Authentication: key, password+TOTP, WebAuthn, JWT and API-key logins, MFA, browser bootstrap | `pkg/api/auth_flows_test.go`, `pkg/api/webauthn_flow_test.go`, `pkg/api/security_test.go` |
+| Sessions through the gateway: SSH proxying, exec, recording, denials, anomaly flags | `pkg/server/gateway_test.go`, `pkg/server/gateway_paths_test.go` |
+| Console terminal sessions | `pkg/api/terminal_test.go` |
+| JIT access: request, approve/reject, risk policy, explanations, compliance reports | `pkg/api/core_handlers_test.go`, `pkg/api/risk_test.go`, `pkg/api/explain_test.go`, `pkg/api/reports_compliance_test.go` |
+| Plugin hooks: access_request/access_granted on the JIT path, post_auth and session_start/end on the gateway, disabling a plugin | `pkg/api/plugin_hooks_test.go`, `pkg/server/plugin_hooks_test.go` |
+
+Run one path with `-run`, e.g. `go test ./pkg/server -run Gateway`.
+
 ### Coverage ratchet
 
 We are raising unit coverage toward ~80%, one package per PR. `coverage-baseline.txt`

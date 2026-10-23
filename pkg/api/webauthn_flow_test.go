@@ -207,6 +207,9 @@ func TestWebAuthn_RegisterLoginAndDelete(t *testing.T) {
 		t.Errorf("login = %v", login)
 	}
 	e.expect(e.do("GET", "/api/v1/auth/me", "", nil, "X-Session-Token", login["session_token"].(string)), 200)
+	if !e.audited("auth.login.webauthn") {
+		t.Error("WebAuthn login not audited")
+	}
 	if c, _ := e.store.GetWebAuthnCredentialByCredID(ctx, authr.credID); c.SignCount != authr.count {
 		t.Errorf("stored sign count = %d, want %d", c.SignCount, authr.count)
 	}

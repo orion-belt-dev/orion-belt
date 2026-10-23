@@ -68,6 +68,7 @@ Every listing command accepts `--json`.
 | `osh [user@]machine` | Open a session through the gateway |
 | `osh --list` | List machines you can reach |
 | `osh --request-access [user@]machine --reason … [--duration secs]` | Raise a JIT access request |
+| `osh explain [user@]machine [--for user]` | Explain why you (or, for admins and auditors, someone else) can or cannot reach a machine as an account |
 | `osh login` | Sign in to the web console (see above) |
 | `osh whoami` | Show the identity and role the gateway resolved |
 | `osh requests list [--status …]` / `get <id>` | Track your own access requests |
@@ -105,7 +106,9 @@ prints backup codes once, for the same reason.
 | `oadmin notifications policy` / `set-policy` | Set the org-wide notification bounds |
 | `oadmin notifications templates [--body]` / `set-template` / `reset-template` | Edit the copy recipients see per event |
 | `oadmin ca export` / `list-certs` / `revoke <serial>` | Manage the SSH CA |
-| `oadmin reports export <name>` | Export a compliance report |
+| `oadmin anomalies list [--for user]` | Review sessions flagged as unusual (see [RISK.md](RISK.md)) |
+| `oadmin risk-policy show` / `set --file …` | Auto-approve low-risk requests, escalate high-risk ones to admins (see [RISK.md](RISK.md)) |
+| `oadmin reports export <name> [--from/--to/--as-of]` | Export a report: `sessions`, `audit`, or a compliance report (see [COMPLIANCE_REPORTS.md](COMPLIANCE_REPORTS.md)) |
 | `oadmin usage [--window H]` | Access volume and approval latency |
 | `oadmin setup status` | First-run checklist |
 | `oadmin gateway-info` | Addresses the gateway advertises to clients and agents |

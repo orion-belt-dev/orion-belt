@@ -98,6 +98,21 @@ type APIKey = common.APIKey
 // Permission is a machine access permission record.
 type Permission = common.Permission
 
+// AccessExplanation is an access decision and the relationships behind it.
+type AccessExplanation = common.AccessExplanation
+
+// AccessLink is one relationship considered for an access decision.
+type AccessLink = common.AccessLink
+
+// RiskPolicy routes access requests by risk: auto-approve or escalate.
+type RiskPolicy = common.RiskPolicy
+
+// RiskDecision is how the risk policy routed one request.
+type RiskDecision = common.RiskDecision
+
+// AccessAnomaly is a session flagged as unusual (not blocked).
+type AccessAnomaly = common.AccessAnomaly
+
 // SSHKey is a user SSH key record.
 type SSHKey = common.SSHKey
 

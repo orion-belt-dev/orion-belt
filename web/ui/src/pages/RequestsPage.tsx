@@ -206,11 +206,24 @@ export function RequestsPage() {
                 </td>
                 <td>
                   <Badge status={r.status}>{r.status}</Badge>
+                  {r.risk_decision && r.risk_decision.outcome !== "manual" ? (
+                    <div className="muted" title={r.risk_decision.reasons.join("; ")}>
+                      {r.risk_decision.outcome === "escalate" ? "escalated: admin approval" : "auto-approved by policy"}
+                    </div>
+                  ) : null}
                 </td>
                 <td className="mono">
                   {r.status === "approved" && r.expires_at ? `until ${fmtTime(r.expires_at)}` : fmtTTL(r.duration)}
                 </td>
-                <td className="mono">{fmtTime(r.requested_at)}</td>
+                <td className="mono">
+                  {fmtTime(r.requested_at)}
+                  {r.risk_signals ? (
+                    <div className="muted" title={r.risk_signals.device || undefined}>
+                      {r.risk_signals.source_ip || "unknown source"} · {r.risk_signals.target_sensitivity} sensitivity
+                      {r.risk_signals.mfa_enrolled ? "" : " · no MFA"}
+                    </div>
+                  ) : null}
+                </td>
                 <td>
                   {approve && r.status === "pending" ? (
                     <div className="row">

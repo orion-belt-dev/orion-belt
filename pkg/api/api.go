@@ -238,6 +238,9 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		// What the caller could ask for, given their current relationships
 		protected.GET("/capabilities", s.listCapabilities)
 
+		// Why a user can or cannot reach a machine as a given account
+		protected.GET("/access/explain", s.explainAccess)
+
 		// Access request management
 		protected.GET("/access-requests", s.listAccessRequests)
 		protected.POST("/access-requests", s.createAccessRequest)
@@ -253,6 +256,7 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		protected.GET("/audit-logs", s.listAuditLogs)
 		protected.GET("/reports/:name/export", s.exportReport)
 		protected.GET("/dashboard/usage", s.usageDashboard)
+		protected.GET("/anomalies", s.listAnomalies)
 
 		// Notifications (in-app, scoped to the authenticated user)
 		protected.GET("/notifications", s.listNotifications)
@@ -293,6 +297,8 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		admin.DELETE("/machines/:id", s.deleteMachine)
 
 		// Notification policy (bounds for per-user preferences)
+		admin.GET("/risk-policy", s.getRiskPolicy)
+		admin.PUT("/risk-policy", s.putRiskPolicy)
 		admin.GET("/notifications/policy", s.getNotificationPolicy)
 		admin.PUT("/notifications/policy", s.putNotificationPolicy)
 
@@ -445,6 +451,7 @@ func (s *APIServer) loginWithKey(c *gin.Context) {
 	response.User.Email = user.Email
 	response.User.IsAdmin = user.IsAdmin
 
+	s.auditLogin(c, user, "key")
 	c.JSON(http.StatusOK, response)
 }
 
@@ -667,6 +674,8 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 	if req.AccessType != "" {
 		accessReq.AccessType = req.AccessType
 	}
+	accessReq.RiskSignals = s.collectRiskSignals(c, userID.(string), req.MachineID)
+	accessReq.RiskDecision = s.evaluateRisk(c, accessReq)
 
 	if err := s.store.CreateAccessRequest(ctx, accessReq); err != nil {
 		s.logger.Error("Failed to create access request: %v", err)
@@ -695,7 +704,7 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 		"duration":   duration,
 	})
 
-	c.JSON(http.StatusCreated, accessReq)
+	c.JSON(http.StatusCreated, s.applyRiskPolicy(c, accessReq))
 }
 
 // getAccessRequest gets a specific access request by ID
@@ -767,6 +776,13 @@ func (s *APIServer) approveAccessRequest(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+
+	// A request the risk policy escalated needs an admin, not an operator.
+	if pending, err := s.store.GetAccessRequest(ctx, requestID); err == nil && pending.RiskDecision != nil &&
+		pending.RiskDecision.Outcome == common.RiskOutcomeEscalate && !callerIsAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this request was escalated by the risk policy and needs an admin to approve it"})
+		return
+	}
 
 	if err := s.authService.ApproveAccessRequestWithTTL(ctx, requestID, reviewerID, req.Duration); err != nil {
 		s.logger.Error("Failed to approve access request: %v", err)

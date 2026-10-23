@@ -114,6 +114,7 @@ var Coverage = map[string]Cover{
 	"POST /api/v1/access-requests":                   {Command: "osh --request-access"},
 	"GET /api/v1/access-requests":                    {Command: "osh requests list"},
 	"GET /api/v1/capabilities":                       {Command: "osh catalog"},
+	"GET /api/v1/access/explain":                     {Command: "osh explain"},
 	"GET /api/v1/access-requests/:id":                {Command: "osh requests get"},
 	"GET /api/v1/admin/access-requests/pending":      {Command: "oadmin requests list"},
 	"POST /api/v1/admin/access-requests/:id/approve": {Command: "oadmin requests approve"},
@@ -130,6 +131,7 @@ var Coverage = map[string]Cover{
 	// --- Audit, reporting, usage ------------------------------------------
 	"GET /api/v1/audit-logs":           {Command: "oadmin audit list"},
 	"GET /api/v1/reports/:name/export": {Command: "oadmin reports export"},
+	"GET /api/v1/anomalies":            {Command: "oadmin anomalies list"},
 	"GET /api/v1/dashboard/usage":      {Command: "oadmin usage"},
 	"GET /api/v1/setup/status":         {Command: "oadmin setup status"},
 
@@ -140,6 +142,8 @@ var Coverage = map[string]Cover{
 	"POST /api/v1/notifications/read-all":                 {Command: "osh notifications read --all"},
 	"GET /api/v1/notifications/prefs":                     {Command: "osh notifications prefs"},
 	"PUT /api/v1/notifications/prefs":                     {Command: "osh notifications prefs --set"},
+	"GET /api/v1/admin/risk-policy":                       {Command: "oadmin risk-policy show"},
+	"PUT /api/v1/admin/risk-policy":                       {Command: "oadmin risk-policy set"},
 	"GET /api/v1/admin/notifications/policy":              {Command: "oadmin notifications policy"},
 	"PUT /api/v1/admin/notifications/policy":              {Command: "oadmin notifications set-policy"},
 	"GET /api/v1/admin/notifications/templates":           {Command: "oadmin notifications templates"},

@@ -24,6 +24,7 @@ func (c *Client) doRequestBytes(ctx context.Context, method, path string, body a
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	c.setUserAgent(req)
 
 	if withAuth {
 		if c.apiKey != "" {
@@ -203,11 +204,65 @@ func (c *Client) ListAuditLogs(ctx context.Context, limit int) ([]AuditLog, erro
 // ExportReport downloads report bytes by report name and optional format.
 // Format examples: csv, pdf, siem.
 func (c *Client) ExportReport(ctx context.Context, reportName, format string) ([]byte, error) {
-	path := "/reports/" + url.PathEscape(reportName) + "/export"
+	return c.ExportReportWithParams(ctx, reportName, format, nil)
+}
+
+// ExportReportWithParams is ExportReport with extra query parameters, such as
+// from/to for the soc2-access and pci-admin-activity reports or as_of for
+// iso27001-access-review.
+func (c *Client) ExportReportWithParams(ctx context.Context, reportName, format string, params url.Values) ([]byte, error) {
+	values := url.Values{}
+	for k, v := range params {
+		values[k] = v
+	}
 	if strings.TrimSpace(format) != "" {
-		path += "?format=" + url.QueryEscape(format)
+		values.Set("format", format)
+	}
+	path := "/reports/" + url.PathEscape(reportName) + "/export"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 	return c.doRequestBytes(ctx, http.MethodGet, path, nil, true)
+}
+
+// ExplainAccess says whether a user may reach machine (name or ID) as
+// remoteUser, and which grants, requests or role decide it. accessType
+// defaults to ssh; user (name or ID) defaults to the caller.
+func (c *Client) ExplainAccess(ctx context.Context, machine, remoteUser, accessType, user string) (*AccessExplanation, error) {
+	q := url.Values{"machine": {machine}, "remote_user": {remoteUser}}
+	if t := strings.TrimSpace(accessType); t != "" {
+		q.Set("access_type", t)
+	}
+	if u := strings.TrimSpace(user); u != "" {
+		q.Set("user", u)
+	}
+	var out AccessExplanation
+	if err := c.Do(ctx, http.MethodGet, "/access/explain?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListAnomalies returns sessions flagged as unusual, newest first. limit <= 0
+// uses the server default; userID narrows to one user.
+func (c *Client) ListAnomalies(ctx context.Context, limit int, userID string) ([]AccessAnomaly, error) {
+	values := url.Values{}
+	addIntQuery(values, "limit", limit)
+	if u := strings.TrimSpace(userID); u != "" {
+		values.Set("user_id", u)
+	}
+	path := "/anomalies"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var out []AccessAnomaly
+	if err := c.Do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []AccessAnomaly{}
+	}
+	return out, nil
 }
 
 // GetUsageDashboard returns windowed operational usage analytics.
@@ -326,6 +381,25 @@ func (c *Client) GetNotificationPolicy(ctx context.Context) (*NotificationPolicy
 func (c *Client) PutNotificationPolicy(ctx context.Context, policy NotificationPolicy) (*NotificationPolicy, error) {
 	var out NotificationPolicy
 	if err := c.Do(ctx, http.MethodPut, "/admin/notifications/policy", policy, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetRiskPolicy returns the access-request risk policy (all rules off when
+// none has been set). Admins and operators.
+func (c *Client) GetRiskPolicy(ctx context.Context) (*RiskPolicy, error) {
+	var out RiskPolicy
+	if err := c.Do(ctx, http.MethodGet, "/admin/risk-policy", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PutRiskPolicy replaces the risk policy outright. Admin-only.
+func (c *Client) PutRiskPolicy(ctx context.Context, policy RiskPolicy) (*RiskPolicy, error) {
+	var out RiskPolicy
+	if err := c.Do(ctx, http.MethodPut, "/admin/risk-policy", policy, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

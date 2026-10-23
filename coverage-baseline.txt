@@ -2,14 +2,15 @@
 # Regenerate with: scripts/coverage-check.sh --update
 # A package may never drop below its recorded value; raising it is the goal (~80%).
 pkg/agent	90.5
+pkg/anomaly	98.1
 pkg/api	91.2
-pkg/auth	96.1
+pkg/auth	96.3
 pkg/authz	95.6
 pkg/ca	93.5
 pkg/client	96.7
 pkg/cliflags	98.1
 pkg/cliparity	98.3
-pkg/common	99.1
+pkg/common	99.3
 pkg/cryptutil	90.2
 pkg/database	95.4
 pkg/metrics	100.0
@@ -17,11 +18,11 @@ pkg/notify	91.7
 pkg/plugin	100.0
 pkg/recording	93.9
 pkg/sdk	98.4
-pkg/server	91.3
+pkg/server	91.4
 pkg/tracing	96.9
 pkg/version	100.0
-plugins/audit-logger	97.8
+plugins/audit-logger	98.0
 plugins/chatops-access-request	96.6
-plugins/email-notifications	94.3
-plugins/notification	96.7
+plugins/email-notifications	96.4
+plugins/notification	96.9
 plugins/webhook-notifications	96.7
