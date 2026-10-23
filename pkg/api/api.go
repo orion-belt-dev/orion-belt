@@ -297,6 +297,8 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		admin.DELETE("/machines/:id", s.deleteMachine)
 
 		// Notification policy (bounds for per-user preferences)
+		admin.GET("/risk-policy", s.getRiskPolicy)
+		admin.PUT("/risk-policy", s.putRiskPolicy)
 		admin.GET("/notifications/policy", s.getNotificationPolicy)
 		admin.PUT("/notifications/policy", s.putNotificationPolicy)
 
@@ -673,6 +675,7 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 		accessReq.AccessType = req.AccessType
 	}
 	accessReq.RiskSignals = s.collectRiskSignals(c, userID.(string), req.MachineID)
+	accessReq.RiskDecision = s.evaluateRisk(c, accessReq)
 
 	if err := s.store.CreateAccessRequest(ctx, accessReq); err != nil {
 		s.logger.Error("Failed to create access request: %v", err)
@@ -701,7 +704,7 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 		"duration":   duration,
 	})
 
-	c.JSON(http.StatusCreated, accessReq)
+	c.JSON(http.StatusCreated, s.applyRiskPolicy(c, accessReq))
 }
 
 // getAccessRequest gets a specific access request by ID
@@ -773,6 +776,13 @@ func (s *APIServer) approveAccessRequest(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+
+	// A request the risk policy escalated needs an admin, not an operator.
+	if pending, err := s.store.GetAccessRequest(ctx, requestID); err == nil && pending.RiskDecision != nil &&
+		pending.RiskDecision.Outcome == common.RiskOutcomeEscalate && !callerIsAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this request was escalated by the risk policy and needs an admin to approve it"})
+		return
+	}
 
 	if err := s.authService.ApproveAccessRequestWithTTL(ctx, requestID, reviewerID, req.Duration); err != nil {
 		s.logger.Error("Failed to approve access request: %v", err)

@@ -50,6 +50,13 @@ export type AccessRequest = {
   created_at?: string;
   expires_at?: string | null;
   risk_signals?: RiskSignals;
+  risk_decision?: RiskDecision;
+};
+
+// How the risk policy routed a request, and why.
+export type RiskDecision = {
+  outcome: "manual" | "auto_approve" | "escalate";
+  reasons: string[];
 };
 
 // Captured when an access request is made, as input for risk-based approval.

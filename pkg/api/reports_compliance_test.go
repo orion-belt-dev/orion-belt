@@ -271,3 +271,22 @@ func TestPCIReportOnlyTaggedMachines(t *testing.T) {
 		t.Errorf("pci report = %s", body)
 	}
 }
+
+// A request the risk policy approved names the policy, not a blank, as its
+// approver, and so does the session it authorised.
+func TestBuildSOC2RowsPolicyApproval(t *testing.T) {
+	reviewed := compNow.Add(-2 * time.Hour)
+	rows := buildSOC2Rows(soc2Inputs{
+		From: compNow.Add(-24 * time.Hour), To: compNow, Names: compNames(),
+		Requests: []*common.AccessRequest{{
+			ID: "r1", UserID: "u-bob", MachineID: "m-web", RemoteUsers: []string{"deploy"},
+			Status: "approved", RequestedAt: reviewed, ReviewedAt: &reviewed,
+		}},
+		Sessions: []*common.Session{{ID: "s1", UserID: "u-bob", MachineID: "m-web", RemoteUser: "deploy", StartTime: compNow.Add(-time.Hour)}},
+	})
+	for _, r := range rows {
+		if r.Approver != riskPolicyApprover || r.ApproverID != "" {
+			t.Errorf("%s row approver = %q/%q", r.EventType, r.Approver, r.ApproverID)
+		}
+	}
+}

@@ -2004,6 +2004,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/NotificationPrefsResponse"
 
+  /api/v1/admin/risk-policy:
+    get:
+      tags: [Access Requests]
+      summary: Get the access-request risk policy
+      description: All rules are off when no policy has been set. Admins and operators.
+      responses:
+        "200":
+          description: Risk policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskPolicy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Access Requests]
+      summary: Replace the risk policy (admin only)
+      description: |
+        Each new access request is evaluated against its `risk_signals`.
+        Escalation is checked first: any matching condition makes the request
+        approvable only by an admin. Otherwise, when every auto-approve
+        condition holds, the request is approved at once with no reviewer
+        (`reviewed_by` null, audited as `access.auto_approve`).
+        High-sensitivity targets and unlimited durations are never
+        auto-approved. The decision is stored as `risk_decision`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskPolicy"
+      responses:
+        "200":
+          description: Saved policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/admin/notifications/policy:
     get:
       tags: [Admin, Notifications]
@@ -2990,6 +3037,87 @@ components:
           nullable: true
         risk_signals:
           $ref: "#/components/schemas/RiskSignals"
+        risk_decision:
+          $ref: "#/components/schemas/RiskDecision"
+    RiskDecision:
+      type: object
+      properties:
+        outcome:
+          type: string
+          enum: [manual, auto_approve, escalate]
+        reasons:
+          type: array
+          items:
+            type: string
+      required: [outcome, reasons]
+    HourRange:
+      type: object
+      description: UTC hours, start inclusive, end exclusive; may wrap midnight (22-6).
+      properties:
+        start:
+          type: integer
+          minimum: 0
+          maximum: 23
+        end:
+          type: integer
+          minimum: 0
+          maximum: 24
+      required: [start, end]
+    RiskPolicy:
+      type: object
+      properties:
+        auto_approve:
+          type: object
+          description: Approve with no reviewer only when every set condition holds.
+          properties:
+            enabled:
+              type: boolean
+            max_sensitivity:
+              type: string
+              enum: [low, medium]
+            max_duration_seconds:
+              type: integer
+              minimum: 1
+              maximum: 86400
+            hours_utc:
+              $ref: "#/components/schemas/HourRange"
+            source_cidrs:
+              type: array
+              items:
+                type: string
+            require_mfa:
+              type: boolean
+            remote_users:
+              type: array
+              items:
+                type: string
+              description: The only accounts that may be auto-approved.
+        escalate:
+          type: object
+          description: Any matching condition sends the request to an admin.
+          properties:
+            enabled:
+              type: boolean
+            sensitivities:
+              type: array
+              items:
+                type: string
+                enum: [low, medium, high, unset]
+            outside_hours_utc:
+              $ref: "#/components/schemas/HourRange"
+            without_mfa:
+              type: boolean
+            source_outside_cidrs:
+              type: array
+              items:
+                type: string
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_by:
+          type: string
+          readOnly: true
     RiskSignals:
       type: object
       description: |

@@ -104,6 +104,12 @@ type AccessExplanation = common.AccessExplanation
 // AccessLink is one relationship considered for an access decision.
 type AccessLink = common.AccessLink
 
+// RiskPolicy routes access requests by risk: auto-approve or escalate.
+type RiskPolicy = common.RiskPolicy
+
+// RiskDecision is how the risk policy routed one request.
+type RiskDecision = common.RiskDecision
+
 // AccessAnomaly is a session flagged as unusual (not blocked).
 type AccessAnomaly = common.AccessAnomaly
 

@@ -277,7 +277,8 @@ func (a *AuthService) ApproveAccessRequest(ctx context.Context, requestID, revie
 	return a.ApproveAccessRequestWithTTL(ctx, requestID, reviewerID, nil)
 }
 
-// ApproveAccessRequestWithTTL approves a temporary access request. If
+// ApproveAccessRequestWithTTL approves a temporary access request.
+// reviewerID is empty when the risk policy approves it. If
 // durationOverride is non-nil, it replaces the requester's originally
 // requested duration (in seconds). A duration of 0 means unlimited (no
 // expiry), matching the JIT convention: default 30 minutes, 0 = unlimited.
@@ -309,7 +310,12 @@ func (a *AuthService) ApproveAccessRequestWithTTL(ctx context.Context, requestID
 	request.Duration = durationSeconds
 	request.Status = "approved"
 	request.ReviewedAt = &now
-	request.ReviewedBy = &reviewerID
+	// An empty reviewer is an approval by the risk policy: no person
+	// reviewed it, so none is recorded.
+	request.ReviewedBy = nil
+	if reviewerID != "" {
+		request.ReviewedBy = &reviewerID
+	}
 	request.ExpiresAt = expiresAt
 
 	if err := a.store.UpdateAccessRequest(ctx, request); err != nil {

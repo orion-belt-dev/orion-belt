@@ -89,6 +89,9 @@ func (a *AuthService) grantLink(ctx context.Context, g *common.Permission, acces
 	if r := sourceRequest(g, requests); r != nil {
 		link.Via = "access_request:" + r.ID
 		link.Reason = r.Reason
+		if r.ReviewedBy == nil {
+			link.GrantedBy = "risk policy"
+		}
 	}
 
 	switch {
@@ -115,8 +118,14 @@ func (a *AuthService) grantLink(ctx context.Context, g *common.Permission, acces
 // approved by the grantor, and reviewed when the grant was written.
 func sourceRequest(g *common.Permission, requests []*common.AccessRequest) *common.AccessRequest {
 	for _, r := range requests {
-		if r.Status != "approved" || r.MachineID != g.MachineID || r.ReviewedAt == nil ||
-			r.ReviewedBy == nil || *r.ReviewedBy != g.GrantedBy {
+		if r.Status != "approved" || r.MachineID != g.MachineID || r.ReviewedAt == nil {
+			continue
+		}
+		reviewer := "" // approved by the risk policy
+		if r.ReviewedBy != nil {
+			reviewer = *r.ReviewedBy
+		}
+		if reviewer != g.GrantedBy {
 			continue
 		}
 		if d := r.ReviewedAt.Sub(g.GrantedAt); d > -5*time.Second && d < 5*time.Second {

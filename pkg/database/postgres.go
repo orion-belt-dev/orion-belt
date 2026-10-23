@@ -171,6 +171,14 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		// Identity, source, time and target signals captured with each
 		// request, for risk-based approval (NULL for older requests).
 		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS risk_signals JSONB`,
+		`ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS risk_decision JSONB`,
+		// Singleton admin policy for routing access requests by risk.
+		`CREATE TABLE IF NOT EXISTS risk_policy (
+			id SMALLINT PRIMARY KEY CHECK (id = 1),
+			policy JSONB NOT NULL,
+			updated_at TIMESTAMP NOT NULL,
+			updated_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS user_ssh_keys (
 			id VARCHAR(36) PRIMARY KEY,
 			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1060,23 +1068,24 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	if request.AccessType == "" {
 		request.AccessType = "both"
 	}
-	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at, risk_signals)
-			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at, risk_signals, risk_decision)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	remoteUsers := pq.Array(request.RemoteUsers)
-	var signals []byte
-	if request.RiskSignals != nil {
-		var err error
-		if signals, err = json.Marshal(request.RiskSignals); err != nil {
-			return fmt.Errorf("failed to encode risk signals: %w", err)
-		}
+	signals, err := jsonOrNull(request.RiskSignals)
+	if err != nil {
+		return fmt.Errorf("failed to encode risk signals: %w", err)
+	}
+	decision, err := jsonOrNull(request.RiskDecision)
+	if err != nil {
+		return fmt.Errorf("failed to encode risk decision: %w", err)
 	}
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err = s.db.ExecContext(ctx, query,
 		request.ID, request.UserID, request.MachineID,
 		remoteUsers, request.AccessType,
 		request.Reason, request.Duration, request.Status, request.RequestedAt,
-		request.ReviewedAt, request.ReviewedBy, request.ExpiresAt, signals)
+		request.ReviewedAt, request.ReviewedBy, request.ExpiresAt, signals, decision)
 
 	if err != nil {
 		return fmt.Errorf("failed to create access request: %w", err)
@@ -1084,9 +1093,17 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	return nil
 }
 
+// jsonOrNull encodes v, or returns nil (SQL NULL) for a nil pointer.
+func jsonOrNull[T any](v *T) ([]byte, error) {
+	if v == nil {
+		return nil, nil
+	}
+	return json.Marshal(v)
+}
+
 // accessRequestColumns is the column list scanAccessRequest reads.
 const accessRequestColumns = `id, user_id, machine_id, remote_users, access_type, reason, duration, status,
-	requested_at, reviewed_at, reviewed_by, expires_at, risk_signals`
+	requested_at, reviewed_at, reviewed_by, expires_at, risk_signals, risk_decision`
 
 // rowScanner is satisfied by *sql.Row and *sql.Rows.
 type rowScanner interface {
@@ -1097,10 +1114,10 @@ type rowScanner interface {
 func scanAccessRequest(row rowScanner) (*common.AccessRequest, error) {
 	request := &common.AccessRequest{}
 	var remoteUsers pq.StringArray
-	var signals []byte
+	var signals, decision []byte
 	if err := row.Scan(&request.ID, &request.UserID, &request.MachineID, &remoteUsers, &request.AccessType, &request.Reason,
 		&request.Duration, &request.Status, &request.RequestedAt,
-		&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt, &signals); err != nil {
+		&request.ReviewedAt, &request.ReviewedBy, &request.ExpiresAt, &signals, &decision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
@@ -1111,6 +1128,12 @@ func scanAccessRequest(row rowScanner) (*common.AccessRequest, error) {
 		request.RiskSignals = &common.RiskSignals{}
 		if err := json.Unmarshal(signals, request.RiskSignals); err != nil {
 			return nil, fmt.Errorf("failed to decode risk signals of access request %s: %w", request.ID, err)
+		}
+	}
+	if len(decision) > 0 {
+		request.RiskDecision = &common.RiskDecision{}
+		if err := json.Unmarshal(decision, request.RiskDecision); err != nil {
+			return nil, fmt.Errorf("failed to decode risk decision of access request %s: %w", request.ID, err)
 		}
 	}
 	return request, nil
@@ -1229,7 +1252,7 @@ func (s *PostgresStore) CreatePermission(ctx context.Context, permission *common
 
 	_, err := s.db.ExecContext(ctx, query,
 		permission.ID, permission.UserID, permission.MachineID,
-		permission.AccessType, remoteUsers, permission.GrantedBy,
+		permission.AccessType, remoteUsers, nullableString(permission.GrantedBy),
 		permission.GrantedAt, permission.ExpiresAt)
 
 	if err != nil {
@@ -1406,7 +1429,7 @@ func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common
 		UPDATE permissions SET access_type=$1, remote_users=$2, expires_at=$3, granted_by=$4, granted_at=$5
 		WHERE id=$6`,
 		permission.AccessType, pq.Array(permission.RemoteUsers), permission.ExpiresAt,
-		permission.GrantedBy, permission.GrantedAt, permission.ID, time.Now(), common.PermissionEndUpdated)
+		nullableString(permission.GrantedBy), permission.GrantedAt, permission.ID, time.Now(), common.PermissionEndUpdated)
 	if err != nil {
 		return fmt.Errorf("failed to update permission: %w", err)
 	}
@@ -1760,6 +1783,46 @@ func (s *PostgresStore) UpsertNotificationPolicy(ctx context.Context, policy *co
 		  updated_at=NOW()`,
 		pq.Array(emptyIfNil(policy.AllowedChannels)), mandatory)
 	return err
+}
+
+// GetRiskPolicy returns the risk policy, or nil when none has been set.
+func (s *PostgresStore) GetRiskPolicy(ctx context.Context) (*common.RiskPolicy, error) {
+	var raw []byte
+	var updatedBy sql.NullString
+	p := &common.RiskPolicy{}
+	err := s.db.QueryRowContext(ctx, `SELECT policy, updated_at, updated_by FROM risk_policy WHERE id=1`).
+		Scan(&raw, &p.UpdatedAt, &updatedBy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get risk policy: %w", err)
+	}
+	if err := json.Unmarshal(raw, p); err != nil {
+		return nil, fmt.Errorf("failed to decode risk policy: %w", err)
+	}
+	p.UpdatedAt = common.FromDBTimestamp(p.UpdatedAt)
+	p.UpdatedBy = updatedBy.String
+	return p, nil
+}
+
+// UpsertRiskPolicy replaces the singleton risk policy, attributed to updatedBy.
+func (s *PostgresStore) UpsertRiskPolicy(ctx context.Context, policy *common.RiskPolicy, updatedBy string) error {
+	raw, err := json.Marshal(struct {
+		AutoApprove common.AutoApproveRule `json:"auto_approve"`
+		Escalate    common.EscalateRule    `json:"escalate"`
+	}{policy.AutoApprove, policy.Escalate})
+	if err != nil {
+		return fmt.Errorf("failed to encode risk policy: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO risk_policy (id, policy, updated_at, updated_by) VALUES (1, $1, $2, $3)
+		ON CONFLICT (id) DO UPDATE SET policy=EXCLUDED.policy, updated_at=EXCLUDED.updated_at, updated_by=EXCLUDED.updated_by`,
+		raw, time.Now(), nullableString(updatedBy))
+	if err != nil {
+		return fmt.Errorf("failed to save risk policy: %w", err)
+	}
+	return nil
 }
 
 // ListNotificationTemplates returns every stored copy override, in the stable

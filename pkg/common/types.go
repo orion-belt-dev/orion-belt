@@ -178,6 +178,8 @@ type AccessRequest struct {
 	// RiskSignals are captured when the request is made; nil for requests
 	// that predate signal collection.
 	RiskSignals *RiskSignals `json:"risk_signals,omitempty"`
+	// RiskDecision is how the risk policy routed the request.
+	RiskDecision *RiskDecision `json:"risk_decision,omitempty"`
 }
 
 // Permission represents a ReBAC permission

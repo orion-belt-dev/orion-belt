@@ -29,6 +29,40 @@ oadmin machines update db-01 --tag env=prod --tag sensitivity=high
 
 `--tag` on update replaces the whole tag set, so repeat the existing tags.
 
+## Risk policy
+
+An admin can route new access requests by their signals. Without a policy,
+every request waits for the usual review.
+
+- **Escalate**: any matching condition makes the request approvable only by
+  an admin. An operator's approval is refused.
+- **Auto-approve**: when every condition holds, the request is approved at
+  once. No reviewer is recorded (`reviewed_by` is null and reports name the
+  approver as "risk policy"), and the approval is audited as
+  `access.auto_approve`. `max_sensitivity` (`low` or `medium`) and
+  `max_duration_seconds` (at most 24 h) are required. High-sensitivity
+  targets and unlimited durations are never auto-approved.
+
+Escalation is checked first. Each request keeps the outcome and its reasons
+as `risk_decision`, and the console's Requests page shows it.
+
+```sh
+oadmin risk-policy show
+oadmin risk-policy set --file - <<'JSON'
+{
+  "auto_approve": {"enabled": true, "max_sensitivity": "low", "max_duration_seconds": 3600,
+                   "hours_utc": {"start": 8, "end": 18}, "source_cidrs": ["10.0.0.0/8"],
+                   "require_mfa": true, "remote_users": ["deploy"]},
+  "escalate": {"enabled": true, "sensitivities": ["high"], "without_mfa": true,
+               "outside_hours_utc": {"start": 7, "end": 20}}
+}
+JSON
+```
+
+Hour ranges are UTC, with the start included and the end excluded. They can
+wrap midnight, for example `{"start": 22, "end": 6}`. Only admins can change
+the policy, and each change is audited as `risk_policy.update`.
+
 ## Flagged sessions
 
 Sessions are flagged when they look unusual, and are never blocked for it.

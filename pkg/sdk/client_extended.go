@@ -386,6 +386,25 @@ func (c *Client) PutNotificationPolicy(ctx context.Context, policy NotificationP
 	return &out, nil
 }
 
+// GetRiskPolicy returns the access-request risk policy (all rules off when
+// none has been set). Admins and operators.
+func (c *Client) GetRiskPolicy(ctx context.Context) (*RiskPolicy, error) {
+	var out RiskPolicy
+	if err := c.Do(ctx, http.MethodGet, "/admin/risk-policy", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PutRiskPolicy replaces the risk policy outright. Admin-only.
+func (c *Client) PutRiskPolicy(ctx context.Context, policy RiskPolicy) (*RiskPolicy, error) {
+	var out RiskPolicy
+	if err := c.Do(ctx, http.MethodPut, "/admin/risk-policy", policy, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ListNotificationTemplates returns the copy for every templatable event,
 // each with its built-in default and supported placeholders. Admin-only.
 func (c *Client) ListNotificationTemplates(ctx context.Context) ([]NotificationTemplateEntry, error) {

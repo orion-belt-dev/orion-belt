@@ -394,10 +394,7 @@ func buildSOC2Rows(in soc2Inputs) []accessEventRow {
 			Authorization: authzAccessRequest,
 			AuthorizedBy:  "access_request:" + req.ID,
 		}
-		if req.ReviewedBy != nil {
-			row.ApproverID = *req.ReviewedBy
-			row.Approver = in.Names.user(*req.ReviewedBy)
-		}
+		setApprover(&row, req, in.Names)
 		rows = append(rows, row)
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Timestamp < rows[j].Timestamp })
@@ -427,8 +424,7 @@ func explainSession(row *accessEventRow, sess *common.Session, in soc2Inputs) {
 		row.Authorization = authzAccessRequest
 		row.AuthorizedBy = "access_request:" + best.ID
 		row.Reason = best.Reason
-		row.ApproverID = *best.ReviewedBy
-		row.Approver = in.Names.user(*best.ReviewedBy)
+		setApprover(row, best, in.Names)
 		return
 	}
 
@@ -461,6 +457,20 @@ func endsLater(a, b *common.PermissionVersion) bool {
 		return true
 	}
 	return b.SupersededAt != nil && a.SupersededAt.After(*b.SupersededAt)
+}
+
+// riskPolicyApprover names the approver of a request the risk policy
+// approved with nobody reviewing it.
+const riskPolicyApprover = "risk policy"
+
+func setApprover(row *accessEventRow, req *common.AccessRequest, names *complianceNames) {
+	switch {
+	case req.ReviewedBy != nil:
+		row.ApproverID = *req.ReviewedBy
+		row.Approver = names.user(*req.ReviewedBy)
+	case req.Status == "approved":
+		row.Approver = riskPolicyApprover
+	}
 }
 
 func grantKind(expiresAt *time.Time) string {

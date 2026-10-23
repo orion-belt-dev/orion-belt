@@ -142,6 +142,8 @@ var Coverage = map[string]Cover{
 	"POST /api/v1/notifications/read-all":                 {Command: "osh notifications read --all"},
 	"GET /api/v1/notifications/prefs":                     {Command: "osh notifications prefs"},
 	"PUT /api/v1/notifications/prefs":                     {Command: "osh notifications prefs --set"},
+	"GET /api/v1/admin/risk-policy":                       {Command: "oadmin risk-policy show"},
+	"PUT /api/v1/admin/risk-policy":                       {Command: "oadmin risk-policy set"},
 	"GET /api/v1/admin/notifications/policy":              {Command: "oadmin notifications policy"},
 	"PUT /api/v1/admin/notifications/policy":              {Command: "oadmin notifications set-policy"},
 	"GET /api/v1/admin/notifications/templates":           {Command: "oadmin notifications templates"},

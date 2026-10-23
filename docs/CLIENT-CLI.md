@@ -107,6 +107,7 @@ prints backup codes once, for the same reason.
 | `oadmin notifications templates [--body]` / `set-template` / `reset-template` | Edit the copy recipients see per event |
 | `oadmin ca export` / `list-certs` / `revoke <serial>` | Manage the SSH CA |
 | `oadmin anomalies list [--for user]` | Review sessions flagged as unusual (see [RISK.md](RISK.md)) |
+| `oadmin risk-policy show` / `set --file …` | Auto-approve low-risk requests, escalate high-risk ones to admins (see [RISK.md](RISK.md)) |
 | `oadmin reports export <name> [--from/--to/--as-of]` | Export a report: `sessions`, `audit`, or a compliance report (see [COMPLIANCE_REPORTS.md](COMPLIANCE_REPORTS.md)) |
 | `oadmin usage [--window H]` | Access volume and approval latency |
 | `oadmin setup status` | First-run checklist |

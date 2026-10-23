@@ -82,6 +82,11 @@ type Store interface {
 	GetNotificationPrefs(ctx context.Context, userID string) (*common.NotificationPrefs, error)
 	UpsertNotificationPrefs(ctx context.Context, prefs *common.NotificationPrefs) error
 
+	// Admin-set routing of access requests by risk (singleton). Get returns
+	// nil, nil when no policy has been set.
+	GetRiskPolicy(ctx context.Context) (*common.RiskPolicy, error)
+	UpsertRiskPolicy(ctx context.Context, policy *common.RiskPolicy, updatedBy string) error
+
 	// Admin-set boundary that user preferences are resolved within (singleton).
 	GetNotificationPolicy(ctx context.Context) (*common.NotificationPolicy, error)
 	UpsertNotificationPolicy(ctx context.Context, policy *common.NotificationPolicy) error
