@@ -113,20 +113,29 @@ func (l *gatewayLink) adopt(cl *ssh.Client) {
 	go func() {
 		defer l.wg.Done()
 		cl.Wait()
-		l.mu.Lock()
-		lost := l.client == cl && !l.closed
-		if lost {
-			l.client = nil
-		}
-		l.mu.Unlock()
-		if lost && l.life.Err() == nil {
-			l.c.status("Connection to the gateway lost; reconnecting. The local port stays open.")
-			l.wg.Add(1)
-			go func() {
-				defer l.wg.Done()
-				l.get(l.life, true)
-			}()
-		}
+		l.lost(cl)
+	}()
+}
+
+// lost retires cl as the live connection, if it still is, tells the user,
+// and redials in the background. Whichever notices first (the connection's
+// watcher or a failed open) reports it; the other finds nothing to do.
+func (l *gatewayLink) lost(cl *ssh.Client) {
+	l.mu.Lock()
+	current := l.client == cl && !l.closed
+	if current {
+		l.client = nil
+	}
+	l.mu.Unlock()
+	cl.Close()
+	if !current || l.life.Err() != nil {
+		return
+	}
+	l.c.status("Connection to the gateway lost; reconnecting. The local port stays open.")
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		l.get(l.life, true)
 	}()
 }
 
@@ -144,13 +153,20 @@ func (l *gatewayLink) openStream(ctx context.Context, open func(*ssh.Client) (st
 			return nil, err
 		}
 		s, err := open(cl)
-		if err == nil || isPermanent(err) {
-			return s, err
+		if err == nil {
+			return s, nil
 		}
 		var openErr *ssh.OpenChannelError
-		if !errors.As(err, &openErr) {
-			// The link itself failed under us; drop it so get redials.
-			l.drop(cl)
+		if errors.As(err, &openErr) {
+			// The gateway answered: a refusal is final, anything else (the
+			// target's agent reconnecting) is worth another try.
+			if isPermanent(err) {
+				return nil, err
+			}
+		} else {
+			// No answer at all means the link failed under us, whatever
+			// the error says; retire it so get redials.
+			l.lost(cl)
 		}
 		select {
 		case <-ctx.Done():
@@ -159,16 +175,6 @@ func (l *gatewayLink) openStream(ctx context.Context, open func(*ssh.Client) (st
 		}
 		wait = min(wait*2, 5*time.Second)
 	}
-}
-
-// drop discards cl as the live connection.
-func (l *gatewayLink) drop(cl *ssh.Client) {
-	cl.Close()
-	l.mu.Lock()
-	if l.client == cl {
-		l.client = nil
-	}
-	l.mu.Unlock()
 }
 
 // close ends the link and waits for its background goroutines.
@@ -205,20 +211,23 @@ func keepClientAlive(cl *ssh.Client, interval, timeout time.Duration) {
 			_, _, err := cl.SendRequest("keepalive@openssh.com", true, nil)
 			replied <- err
 		}()
+		// A closed connection fails the request at once, so there is no
+		// separate case for it: no reply in time and a failed request are
+		// both the end of this connection.
+		var err error
 		select {
-		case <-done:
-			return
-		case err := <-replied:
-			if err != nil {
-				cl.Close()
-				return
-			}
+		case err = <-replied:
 		case <-time.After(timeout):
+			err = errNoKeepaliveReply
+		}
+		if err != nil {
 			cl.Close()
 			return
 		}
 	}
 }
+
+var errNoKeepaliveReply = errors.New("no keepalive reply")
 
 // isPermanent reports whether retrying err cannot help. Only network
 // failures are worth retrying: a dropped or refused TCP connection, a

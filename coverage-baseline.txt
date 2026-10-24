@@ -7,7 +7,7 @@ pkg/api	91.2
 pkg/auth	96.3
 pkg/authz	95.6
 pkg/ca	93.5
-pkg/client	96.7
+pkg/client	97.5
 pkg/cliflags	98.1
 pkg/cliparity	98.3
 pkg/common	99.3

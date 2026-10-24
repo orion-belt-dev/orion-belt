@@ -474,7 +474,9 @@ func TestRequestKubeAccess_SendsScopes(t *testing.T) {
 func TestForward_RetriesUnavailableTarget(t *testing.T) {
 	fastRedial(t)
 	g := startGateway(t, func(string, ssh.Channel) uint32 { return 0 })
+	g.mu.Lock()
 	g.busy = 2
+	g.mu.Unlock()
 	cfg, _ := clientConfig(t, g, nil)
 	c, _ := NewSSHClient(cfg, quietLogger)
 
@@ -635,5 +637,78 @@ func TestKeepClientAliveReturnsOnClose(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("keepalive loop outlived its connection")
+	}
+}
+
+// Redialling stops when the caller gives up, mid-backoff.
+func TestGatewayLink_RedialStopsWithContext(t *testing.T) {
+	fastRedial(t)
+	g := startGateway(t, func(string, ssh.Channel) uint32 { return 0 })
+	g.mu.Lock()
+	g.dropNew = true
+	g.mu.Unlock()
+	cfg, _ := clientConfig(t, g, nil)
+	c, _ := NewSSHClient(cfg, quietLogger)
+	link := newGatewayLink(context.Background(), c, "alice")
+	defer link.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := link.get(ctx, true); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("get = %v, want the deadline", err)
+	}
+}
+
+// A connection dialled after the link closed is not kept.
+func TestGatewayLink_ClosedLinkKeepsNothing(t *testing.T) {
+	g := startGateway(t, func(string, ssh.Channel) uint32 { return 0 })
+	cfg, _ := clientConfig(t, g, nil)
+	c, _ := NewSSHClient(cfg, quietLogger)
+	link := newGatewayLink(context.Background(), c, "alice")
+	link.close()
+	cl, err := link.get(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.current() != nil {
+		t.Error("a closed link adopted a connection")
+	}
+	if _, _, err := cl.SendRequest("keepalive@openssh.com", true, nil); err == nil {
+		t.Error("the late connection was left open")
+	}
+}
+
+// A target that stays unavailable fails that one local connection; the
+// forward itself keeps running for the next.
+func TestForward_UnavailableTargetFailsOneConnection(t *testing.T) {
+	fastRedial(t)
+	prev := redialWait
+	redialWait = 100 * time.Millisecond
+	t.Cleanup(func() { redialWait = prev })
+	g := startGateway(t, func(string, ssh.Channel) uint32 { return 0 })
+	g.mu.Lock()
+	g.busy = 1000
+	g.mu.Unlock()
+	cfg, _ := clientConfig(t, g, nil)
+	c, _ := NewSSHClient(cfg, quietLogger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	addrs := make(chan net.Addr, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.ForwardKube(ctx, "alice", "prod-eu", "127.0.0.1:0", func(a net.Addr) { addrs <- a })
+	}()
+	addr := <-addrs
+	if got := echoThrough(t, addr, "x"); got != "" {
+		t.Errorf("unavailable target answered %q", got)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("forward ended on a transient failure: %v", err)
+	default:
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("ForwardKube = %v", err)
 	}
 }
