@@ -47,6 +47,10 @@ type Agent struct {
 	connMu  sync.Mutex
 	stopped bool          // set by Stop; no reconnecting after it
 	dropped chan struct{} // signalled when the current connection ends
+
+	configPath string       // the file reload reads again
+	cfgMu      sync.RWMutex // guards config.Agent, which reload replaces
+	work       work         // running sessions, for drain
 }
 
 // New creates a new agent
@@ -84,7 +88,7 @@ func (a *Agent) Start() error {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 
-	if a.config.Agent.Kubernetes.Enabled {
+	if a.agentConfig().Kubernetes.Enabled {
 		go a.runKubeSweep(context.Background())
 	}
 
@@ -304,7 +308,7 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 	ctx, span := tracing.Start(ctx, "agent.session", trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
 	tracing.SetAttributes(span,
-		attribute.String("orion.agent.name", a.config.Agent.Name),
+		attribute.String("orion.agent.name", a.agentConfig().Name),
 		// Distinguishes a trace stitched to the gateway from one the agent
 		// rooted alone — the quickest way to spot a half-configured fleet.
 		attribute.Bool("orion.trace.linked_to_gateway", linked),
@@ -351,9 +355,15 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 			username := payload.User
 			a.logger.Info("Shell requested")
 
+			end, err := a.begin(channel)
+			if err != nil {
+				refuseDraining(req, channel)
+				return
+			}
 			req.Reply(true, nil)
 
 			a.startShell(ctx, channel, requests, username, ptyReq)
+			end()
 			channel.Close()
 			return
 
@@ -370,14 +380,23 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 
 			execCommand = payload.Command
 			a.logger.Info("Exec requested: %s", execCommand)
-			req.Reply(true, nil)
 
-			// Server control commands (orion:*) — do not execute as shell
+			// Server control commands (orion:*) — do not execute as shell.
+			// They run while draining: that is how a drain is ended.
 			if strings.HasPrefix(execCommand, "orion:") {
+				req.Reply(true, nil)
 				go gossh.DiscardRequests(requests)
 				a.handleControlCommand(ctx, channel, execCommand)
 				return
 			}
+
+			end, err := a.begin(channel)
+			if err != nil {
+				refuseDraining(req, channel)
+				return
+			}
+			defer end()
+			req.Reply(true, nil)
 
 			if ptyReq != nil {
 				a.executeCommandWithPTY(ctx, channel, requests, execCommand, payload.User, ptyReq)
@@ -403,6 +422,14 @@ func (a *Agent) handleSession(newChannel gossh.NewChannel) {
 	}
 
 	a.logger.Info("Session ended without exec or shell request")
+	channel.Close()
+}
+
+// refuseDraining turns down a shell or command while the agent drains, and
+// says why on stderr so the user does not see a bare failure.
+func refuseDraining(req *gossh.Request, channel gossh.Channel) {
+	req.Reply(false, nil)
+	fmt.Fprintf(channel.Stderr(), "%s\n", errDraining)
 	channel.Close()
 }
 
@@ -931,7 +958,8 @@ func (a *Agent) sendExitStatus(channel gossh.Channel, status int) {
 }
 
 // handleControlCommand processes server→agent management commands.
-// Supported: orion:status, orion:health, orion:info, orion:ping, orion:restart
+// Supported: orion:status, orion:health, orion:info, orion:ping, orion:restart,
+// and the management commands in manage.go (reload, drain, undrain, update).
 func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel, command string) {
 	_, span := tracing.Start(ctx, "agent.control")
 	defer span.End()
@@ -955,10 +983,17 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 		}
 	case "orion:health", "orion:status":
 		controlVerb = cmd
+		draining, active := a.workStatus()
+		status := "healthy"
+		if draining {
+			status = "draining"
+		}
 		result = map[string]interface{}{
 			"ok":          true,
-			"status":      "healthy",
-			"agent":       a.config.Agent.Name,
+			"status":      status,
+			"draining":    draining,
+			"active":      active,
+			"agent":       a.agentConfig().Name,
 			"machine_id":  a.machineID,
 			"connected":   a.conn() != nil,
 			"hostname":    hostnameOrEmpty(),
@@ -971,8 +1006,8 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 		controlVerb = "orion:info"
 		result = map[string]interface{}{
 			"ok":         true,
-			"agent":      a.config.Agent.Name,
-			"tags":       a.config.Agent.Tags,
+			"agent":      a.agentConfig().Name,
+			"tags":       a.agentConfig().Tags,
 			"machine_id": a.machineID,
 			"version":    version.String(),
 			"goos":       runtime.GOOS,
@@ -987,12 +1022,21 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 			"message": "restart scheduled",
 		}
 	default:
+		if r, verb, ok := a.manageCommand(cmd); ok {
+			controlVerb = verb
+			result = r
+			if r["ok"] != true {
+				exitStatus = 1
+			}
+			break
+		}
 		result = map[string]interface{}{
 			"ok":      false,
 			"error":   "unknown control command",
 			"command": cmd,
 			"supported": []string{
 				"orion:ping", "orion:health", "orion:status", "orion:info", "orion:restart",
+				"orion:reload", "orion:drain [seconds]", "orion:undrain", "orion:update <https-url> <sha256> [drain-seconds]",
 			},
 		}
 		exitStatus = 1
