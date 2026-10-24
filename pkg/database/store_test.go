@@ -1268,3 +1268,53 @@ func TestNullableString(t *testing.T) {
 		t.Error("nullableString should map only the empty string to NULL")
 	}
 }
+
+func TestSearchPermissions(t *testing.T) {
+	f := newFixture(t)
+	db := f.machineNamed(t, "db-payments")
+	bob := f.user(t, "bob", false)
+	past := time.Now().Add(-time.Hour)
+	for _, p := range []*common.Permission{
+		common.NewPermission(f.alice.ID, f.machine.ID, "ssh", []string{"deploy"}, f.admin.ID, nil),
+		common.NewPermission(f.alice.ID, db.ID, "k8s", []string{"payments/edit"}, f.admin.ID, nil),
+		common.NewPermission(bob.ID, db.ID, "rdp", nil, f.admin.ID, nil),
+		common.NewPermission(bob.ID, f.machine.ID, "ssh", []string{"100%_root"}, f.admin.ID, nil),
+		common.NewPermission(f.admin.ID, f.machine.ID, "ssh", []string{"root"}, f.admin.ID, &past), // expired
+	} {
+		if err := f.pg.CreatePermission(f.ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		name  string
+		f     PermissionFilter
+		total int
+	}{
+		{"everything active", PermissionFilter{}, 4},
+		{"by username", PermissionFilter{Query: "ALI"}, 2},
+		{"by machine name", PermissionFilter{Query: "payments"}, 2},
+		{"by remote user", PermissionFilter{Query: "deploy"}, 1},
+		{"by k8s scope", PermissionFilter{Query: "payments/edit"}, 1},
+		{"wildcards are literal", PermissionFilter{Query: "100%_"}, 1},
+		{"a lone % matches only a literal %", PermissionFilter{Query: "%"}, 1},
+		{"access type", PermissionFilter{AccessType: "ssh"}, 2},
+		{"user and machine", PermissionFilter{UserID: bob.ID, MachineID: db.ID}, 1},
+		{"no match", PermissionFilter{Query: "nobody"}, 0},
+	}
+	for _, tc := range cases {
+		got, total, err := f.pg.SearchPermissions(f.ctx, tc.f)
+		if err != nil || total != tc.total || len(got) != tc.total {
+			t.Errorf("%s: %d rows, total %d, %v; want %d", tc.name, len(got), total, err, tc.total)
+		}
+	}
+
+	// Paging: the total stays the full count; pages do not overlap.
+	first, total, _ := f.pg.SearchPermissions(f.ctx, PermissionFilter{Limit: 3})
+	second, _, _ := f.pg.SearchPermissions(f.ctx, PermissionFilter{Limit: 3, Offset: 3})
+	if total != 4 || len(first) != 3 || len(second) != 1 || second[0].ID == first[0].ID {
+		t.Errorf("paging: total %d, pages %d+%d", total, len(first), len(second))
+	}
+	if rows, _, _ := f.pg.SearchPermissions(f.ctx, PermissionFilter{Limit: 5000} /* capped at 2000 */); len(rows) != 4 {
+		t.Errorf("large limit = %d rows", len(rows))
+	}
+}
