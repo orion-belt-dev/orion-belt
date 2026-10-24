@@ -58,46 +58,9 @@ func (c *SSHClient) Connect(target string, username string) error {
 
 	c.logger.Info("Connecting to %s@%s through Orion-Belt server", targetSSHUser, targetMachine)
 
-	// Uses a short-lived SSH cert when the server has SSH CA enabled,
-	// transparently falling back to the raw static key otherwise.
-	signer, err := LoadSigner(c.config, "", c.logger)
+	client, err := c.dialGateway(targetUser)
 	if err != nil {
 		return err
-	}
-
-	// Configure SSH client
-	// Get username from parameter, environment, or use root as fallback
-	if targetUser == "" {
-		targetUser = os.Getenv("USER")
-		if targetUser == "" {
-			targetUser = "root"
-		}
-	}
-
-	hostKeyCallback, err := common.NewHostKeyCallback(common.HostKeyConfig{
-		KnownHosts:            c.config.Auth.KnownHosts,
-		StrictHostKeyChecking: c.config.Auth.StrictHostKeyChecking,
-		HostCAPublicKey:       c.config.Auth.HostCAPublicKey,
-	}, c.logger)
-	if err != nil {
-		return fmt.Errorf("host key verification setup: %w", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User: targetUser,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-		HostKeyCallback: hostKeyCallback,
-	}
-
-	c.logger.Info("Authenticating as user: %s", targetUser)
-
-	// Connect to Orion-Belt server
-	serverAddr := fmt.Sprintf("%s:%d", c.config.Server.Host, c.config.Server.Port)
-	client, err := ssh.Dial("tcp", serverAddr, config)
-	if err != nil {
-		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 	defer client.Close()
 
@@ -171,6 +134,53 @@ func (c *SSHClient) Connect(target string, username string) error {
 	return nil
 }
 
+// dialGateway opens an SSH connection to the gateway as targetUser, falling
+// back to $USER and then root when it is empty.
+func (c *SSHClient) dialGateway(targetUser string) (*ssh.Client, error) {
+	// Uses a short-lived SSH cert when the server has SSH CA enabled,
+	// transparently falling back to the raw static key otherwise.
+	signer, err := LoadSigner(c.config, "", c.logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure SSH client
+	// Get username from parameter, environment, or use root as fallback
+	if targetUser == "" {
+		targetUser = os.Getenv("USER")
+		if targetUser == "" {
+			targetUser = "root"
+		}
+	}
+
+	hostKeyCallback, err := common.NewHostKeyCallback(common.HostKeyConfig{
+		KnownHosts:            c.config.Auth.KnownHosts,
+		StrictHostKeyChecking: c.config.Auth.StrictHostKeyChecking,
+		HostCAPublicKey:       c.config.Auth.HostCAPublicKey,
+	}, c.logger)
+	if err != nil {
+		return nil, fmt.Errorf("host key verification setup: %w", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User: targetUser,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		},
+		HostKeyCallback: hostKeyCallback,
+	}
+
+	c.logger.Info("Authenticating as user: %s", targetUser)
+
+	// Connect to Orion-Belt server
+	serverAddr := fmt.Sprintf("%s:%d", c.config.Server.Host, c.config.Server.Port)
+	client, err := ssh.Dial("tcp", serverAddr, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to server: %w", err)
+	}
+	return client, nil
+}
+
 // missingRemoteUser reports whether the agent rejected the session because
 // user has no account on the target (agent: `unknown user "<name>"`).
 func missingRemoteUser(output []byte, user string) bool {
@@ -207,6 +217,12 @@ func (w *rawModeWriter) Write(p []byte) (n int, err error) {
 
 // RequestAccess requests temporary access to a machine
 func (c *SSHClient) RequestAccess(target, reason string, duration int) error {
+	return c.RequestAccessType(target, "", reason, duration)
+}
+
+// RequestAccessType is RequestAccess for a given access type; "" lets the
+// server default it. Tunnel types (rdp, vnc) name no remote user.
+func (c *SSHClient) RequestAccessType(target, accessType, reason string, duration int) error {
 	// Parse target for machine name
 	targetMachine := target
 	var remoteUsers []string
@@ -219,7 +235,7 @@ func (c *SSHClient) RequestAccess(target, reason string, duration int) error {
 		}
 	}
 
-	if len(remoteUsers) == 0 {
+	if len(remoteUsers) == 0 && !common.IsTunnelAccessType(accessType) {
 		defaultUser := os.Getenv("USER")
 		if defaultUser == "" {
 			defaultUser = "root"
@@ -249,6 +265,9 @@ func (c *SSHClient) RequestAccess(target, reason string, duration int) error {
 	}
 	if len(remoteUsers) > 0 {
 		request["remote_users"] = remoteUsers
+	}
+	if accessType != "" {
+		request["access_type"] = accessType
 	}
 
 	accessReq, err := apiClient.CreateAccessRequest(request)

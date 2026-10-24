@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -26,6 +28,7 @@ type gatewayStub struct {
 	ptys      int
 	resizes   int
 	resizedCh chan struct{}
+	conns     []net.Conn
 }
 
 func startGateway(t *testing.T, handle func(cmd string, ch ssh.Channel) uint32) *gatewayStub {
@@ -74,12 +77,19 @@ func startGateway(t *testing.T, handle func(cmd string, ch ssh.Channel) uint32) 
 
 func (g *gatewayStub) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 	defer conn.Close()
+	g.mu.Lock()
+	g.conns = append(g.conns, conn)
+	g.mu.Unlock()
 	_, chans, reqs, err := ssh.NewServerConn(conn, cfg)
 	if err != nil {
 		return
 	}
 	go ssh.DiscardRequests(reqs)
 	for nc := range chans {
+		if nc.ChannelType() == "direct-tcpip" {
+			g.tunnel(nc)
+			continue
+		}
 		if nc.ChannelType() != "session" {
 			_ = nc.Reject(ssh.UnknownChannelType, "session only")
 			continue
@@ -144,4 +154,43 @@ func (g *gatewayStub) snapshot() (users, commands []string, ptys int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return append([]string(nil), g.users...), append([]string(nil), g.commands...), g.ptys
+}
+
+// tunnel echoes what a direct-tcpip channel sends, as an RDP or VNC service
+// behind the gateway would answer. Host "locked" is refused as the gateway
+// refuses a user without a grant.
+func (g *gatewayStub) tunnel(nc ssh.NewChannel) {
+	var req struct {
+		Host     string
+		Port     uint32
+		OrigHost string
+		OrigPort uint32
+	}
+	_ = ssh.Unmarshal(nc.ExtraData(), &req)
+	g.mu.Lock()
+	g.commands = append(g.commands, fmt.Sprintf("tunnel %s:%d", req.Host, req.Port))
+	g.mu.Unlock()
+	if req.Host == "locked" {
+		_ = nc.Reject(ssh.Prohibited, "permission denied: no rdp access to locked")
+		return
+	}
+	ch, reqs, err := nc.Accept()
+	if err != nil {
+		return
+	}
+	go ssh.DiscardRequests(reqs)
+	go func() {
+		defer ch.Close()
+		_, _ = io.Copy(ch, ch)
+		_ = ch.CloseWrite()
+	}()
+}
+
+// closeAll drops every client connection, as a gateway restart would.
+func (g *gatewayStub) closeAll() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, c := range g.conns {
+		c.Close()
+	}
 }

@@ -624,3 +624,29 @@ func TestPublicEndpoints(t *testing.T) {
 	}
 	e.expect(e.do("POST", "/api/v1/public/auth/challenge", "", `{`), 400)
 }
+
+func TestAccessRequests_TunnelTypesNeedNoRemoteUser(t *testing.T) {
+	e := newEnv(t, nil)
+	// An admin grant for rdp names no remote user either.
+	e.expect(e.do("POST", "/api/v1/admin/permissions", e.adminKey, map[string]any{
+		"user_id": e.bob.ID, "machine_id": e.machine.ID, "access_type": "rdp",
+	}), 201)
+	e.expect(e.do("POST", "/api/v1/access-requests", e.aliceKey, map[string]any{
+		"machine_id": e.machine.ID, "reason": "x",
+	}), 400)
+	r := e.do("POST", "/api/v1/access-requests", e.aliceKey, map[string]any{
+		"machine_id": e.machine.ID, "reason": "patching", "access_type": "vnc",
+	})
+	e.expect(r, 201)
+	req := r.obj(t)
+	e.expect(e.do("POST", "/api/v1/admin/access-requests/"+req["id"].(string)+"/approve", e.adminKey, nil), 200)
+
+	// Approval grants exactly vnc, which opens neither ssh nor rdp.
+	ctx := context.Background()
+	for access, want := range map[string]bool{"vnc": true, "rdp": false, "ssh": false} {
+		got, err := e.store.HasPermission(ctx, e.alice.ID, e.machine.ID, access)
+		if err != nil || got != want {
+			t.Errorf("after vnc approval HasPermission(%s) = %v, %v; want %v", access, got, err, want)
+		}
+	}
+}

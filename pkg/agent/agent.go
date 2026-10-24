@@ -181,9 +181,13 @@ func (a *Agent) handleChannels(chans <-chan gossh.NewChannel) {
 	for newChannel := range chans {
 		a.logger.Info("Received channel type: %s", newChannel.ChannelType())
 
+		if newChannel.ChannelType() == common.TunnelChannelType {
+			go a.handleTunnel(newChannel)
+			continue
+		}
 		if newChannel.ChannelType() != "session" {
 			a.logger.Warn("Rejecting non-session channel: %s", newChannel.ChannelType())
-			newChannel.Reject(gossh.UnknownChannelType, "only session channels supported")
+			newChannel.Reject(gossh.UnknownChannelType, "only session and tunnel channels supported")
 			continue
 		}
 

@@ -1071,7 +1071,7 @@ func (s *PostgresStore) CreateAccessRequest(ctx context.Context, request *common
 	query := `INSERT INTO access_requests (id, user_id, machine_id, remote_users, access_type, reason, duration, status, requested_at, reviewed_at, reviewed_by, expires_at, risk_signals, risk_decision)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
-	remoteUsers := pq.Array(request.RemoteUsers)
+	remoteUsers := remoteUsersArray(request.RemoteUsers)
 	signals, err := jsonOrNull(request.RiskSignals)
 	if err != nil {
 		return fmt.Errorf("failed to encode risk signals: %w", err)
@@ -1247,8 +1247,7 @@ func (s *PostgresStore) CreatePermission(ctx context.Context, permission *common
 	query := `INSERT INTO permissions (id, user_id, machine_id, access_type, remote_users, granted_by, granted_at, expires_at)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
-	// Convert []string to PostgreSQL array
-	remoteUsers := pq.Array(permission.RemoteUsers)
+	remoteUsers := remoteUsersArray(permission.RemoteUsers)
 
 	_, err := s.db.ExecContext(ctx, query,
 		permission.ID, permission.UserID, permission.MachineID,
@@ -1289,7 +1288,7 @@ func (s *PostgresStore) GetPermission(ctx context.Context, id string) (*common.P
 func (s *PostgresStore) HasPermissionWithRemoteUser(ctx context.Context, userID, machineID, accessType, remoteUser string) (bool, error) {
 	query := `SELECT COUNT(*) FROM permissions
 			  WHERE user_id = $1 AND machine_id = $2 AND
-			  (access_type = $3 OR access_type = 'both') AND
+			  (access_type = $3 OR (access_type = 'both' AND $3 IN ('ssh', 'scp'))) AND
 			  $4 = ANY(remote_users) AND
 			  (expires_at IS NULL OR expires_at > NOW())`
 
@@ -1301,6 +1300,16 @@ func (s *PostgresStore) HasPermissionWithRemoteUser(ctx context.Context, userID,
 	}
 
 	return count > 0, nil
+}
+
+// remoteUsersArray converts remote users to a PostgreSQL array. Nil becomes
+// empty rather than NULL: tunnel grants (rdp, vnc) name no remote user, and
+// the column is NOT NULL.
+func remoteUsersArray(users []string) interface{} {
+	if users == nil {
+		users = []string{}
+	}
+	return pq.Array(users)
 }
 
 // archivePermissionsSQL wraps a DELETE ... RETURNING * on permissions so the
@@ -1428,7 +1437,7 @@ func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common
 		)
 		UPDATE permissions SET access_type=$1, remote_users=$2, expires_at=$3, granted_by=$4, granted_at=$5
 		WHERE id=$6`,
-		permission.AccessType, pq.Array(permission.RemoteUsers), permission.ExpiresAt,
+		permission.AccessType, remoteUsersArray(permission.RemoteUsers), permission.ExpiresAt,
 		nullableString(permission.GrantedBy), permission.GrantedAt, permission.ID, time.Now(), common.PermissionEndUpdated)
 	if err != nil {
 		return fmt.Errorf("failed to update permission: %w", err)
@@ -1528,7 +1537,7 @@ func (s *PostgresStore) FindActivePermission(ctx context.Context, userID, machin
 func (s *PostgresStore) HasPermission(ctx context.Context, userID, machineID, accessType string) (bool, error) {
 	query := `SELECT COUNT(*) FROM permissions
 			  WHERE user_id = $1 AND machine_id = $2 AND
-			  (access_type = $3 OR access_type = 'both') AND
+			  (access_type = $3 OR (access_type = 'both' AND $3 IN ('ssh', 'scp'))) AND
 			  (expires_at IS NULL OR expires_at > NOW())`
 
 	var count int

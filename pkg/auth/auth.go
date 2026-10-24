@@ -198,6 +198,42 @@ func (a *AuthService) CheckPermissionWithRemoteUser(ctx context.Context, userID,
 	return nil
 }
 
+// CheckTunnelPermission checks that a user may relay protocol (rdp, vnc) to a
+// machine. A local grant of exactly that type is always required, even when
+// OpenFGA allows the machine: its model does not distinguish access types, so
+// on its own an SSH grant would open RDP too.
+func (a *AuthService) CheckTunnelPermission(ctx context.Context, userID, machineID, protocol string) error {
+	if !common.IsTunnelAccessType(protocol) {
+		return fmt.Errorf("%q is not a tunnel protocol", protocol)
+	}
+	user, err := a.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+	if privilegedAccess(user) {
+		return nil
+	}
+
+	if a.authorizer != nil {
+		allowed, err := a.authorizer.Check(ctx, userID, machineID, protocol)
+		if err != nil {
+			a.logger.Warn("OpenFGA check failed, falling back to ReBAC: %v", err)
+		} else if !allowed {
+			return database.ErrPermissionDenied
+		}
+	}
+
+	hasPermission, err := a.store.HasPermission(ctx, userID, machineID, protocol)
+	if err != nil {
+		return fmt.Errorf("failed to check permission: %w", err)
+	}
+	if !hasPermission {
+		a.logger.Warn("Permission denied for user %s: %s to machine %s", userID, protocol, machineID)
+		return database.ErrPermissionDenied
+	}
+	return nil
+}
+
 // GrantPermission grants a user permission to access a machine
 func (a *AuthService) GrantPermission(ctx context.Context, userID, machineID, accessType string, remoteUsers []string, grantedBy string, duration *time.Duration) error {
 	var expiresAt *time.Time

@@ -42,6 +42,7 @@ oadmin.`,
   osh -r root@web-01 --reason "incident 42" -d 1800
                                   request temporary access and wait for approval
   osh login                       sign in to the web console
+  osh rdp win-01                  local port relayed to RDP on win-01 (osh vnc for VNC)
 
 Logs are written to ~/.orion-belt/logs/osh.log (change with --log-file);
 -v also prints them to the terminal.`,
@@ -84,6 +85,8 @@ func init() {
 	rootCmd.AddCommand(newPasswordCmd())
 	rootCmd.AddCommand(newWebAuthnCmd())
 	rootCmd.AddCommand(newNotificationsCmd())
+	rootCmd.AddCommand(newTunnelCmd("rdp", "RDP client (mstsc, Remmina, FreeRDP)"))
+	rootCmd.AddCommand(newTunnelCmd("vnc", "VNC viewer"))
 }
 
 // api returns an authenticated SDK client, exiting with a readable message

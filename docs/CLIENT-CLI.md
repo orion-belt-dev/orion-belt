@@ -68,6 +68,7 @@ Every listing command accepts `--json`.
 | `osh [user@]machine` | Open a session through the gateway |
 | `osh --list` | List machines you can reach |
 | `osh --request-access [user@]machine --reason … [--duration secs]` | Raise a JIT access request |
+| `osh rdp machine` / `osh vnc machine [--listen addr] [-r --reason …]` | Open a local port to RDP or VNC on a machine ([RDP_VNC.md](RDP_VNC.md)) |
 | `osh explain [user@]machine [--for user]` | Explain why you (or, for admins and auditors, someone else) can or cannot reach a machine as an account |
 | `osh login` | Sign in to the web console (see above) |
 | `osh whoami` | Show the identity and role the gateway resolved |
