@@ -1,0 +1,104 @@
+---
+sidebar_position: 4
+title: Client Setup
+---
+
+# Client setup
+
+Operators reach machines through the **gateway** — never by SSHing straight to the agent (that bypasses recording and policy).
+
+You can use:
+
+1. **Web terminal** in `/ui` (fastest after admin login)
+2. **Vanilla OpenSSH** (`user+machine@gateway`)
+3. **`osh` / `ocp` / `oadmin`** CLIs
+
+```mermaid
+flowchart LR
+  User["Operator"] --> GW["Gateway :2222"]
+  GW -->|reverse tunnel| Agent["Agent"]
+```
+
+## Web console
+
+1. Sign in at `http://<gateway>:8080/ui` with your Orion username + SSH **public** key (or password+TOTP / WebAuthn if configured)
+2. Open **Terminal** (or the machine’s connect action)
+3. Sessions appear under **Sessions** for playback / live watch
+
+## OpenSSH (no `osh` required)
+
+Username format: `gatewayUser+machine` or `gatewayUser+remoteUser%machine`
+(`gatewayUser+remoteUser@machine` also works). The remote user defaults to `root`.
+
+```bash
+ssh -i ~/.ssh/id_ed25519 -p 2222 alice+web-01@orion.example.com
+ssh -p 2222 'alice+bob%web-01@orion.example.com'
+```
+
+One-shot commands run on the machine named in the username, exactly as typed
+(quotes and pipes included). Add `-t` for a terminal, e.g. for `sudo`:
+
+```bash
+ssh -p 2222 'alice+bob%web-01@orion.example.com' uptime
+ssh -t -p 2222 alice+web-01@orion.example.com sudo -i
+```
+
+Without a machine in the username, the first word of the command is the target:
+
+```bash
+ssh -p 2222 alice@orion.example.com 'bob@web-01 uptime'
+```
+
+:::note
+In `ssh_config` (`User ...`) and tools that pass the user as `-o User=`, such as
+Ansible, use `@` between the remote user and machine. Recent OpenSSH releases
+expand `%` tokens there.
+:::
+
+Full details: main repo [`docs/openssh-clients.md`](https://github.com/orion-belt-dev/orion-belt/blob/master/docs/openssh-clients.md).
+
+## `osh` CLI
+
+Build or install client packages from the main repo, then configure the gateway + key:
+
+```yaml
+# example ~/.orion-belt/client.yaml
+server:
+  host: "orion.example.com"
+  port: 2222
+  api_endpoint: "https://orion.example.com"
+
+auth:
+  key_file: "~/.ssh/id_ed25519"
+  user: "alice"
+```
+
+Typical usage:
+
+```bash
+osh web-01
+osh --request-access web-01 --duration 1h --reason "Emergency deploy"
+```
+
+(`ocp` for SCP-style copy; `oadmin` for admin operations — see main repo CLI docs.)
+
+## Grants
+
+Before connecting, an admin must grant your user access to the machine (and which **remote users** are allowed), via **Users** / **Permissions** in the UI or:
+
+```bash
+orion-belt-server permission grant \
+  --user alice --machine web-01 --type both --remote-users root
+```
+
+## FAQ
+
+**Auth failed** — public key registered on the user? Correct private key locally? Agent online?
+
+**Permission denied / no machines** — missing grant or wrong remote user.
+
+**Direct SSH to the host works but isn’t recorded** — expected; point people at the gateway only.
+
+## Next
+
+[Initial connection checklist](./initial-connection) · [Sessions guide](../guides/sessions)
