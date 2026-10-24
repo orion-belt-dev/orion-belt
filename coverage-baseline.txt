@@ -3,6 +3,7 @@
 # A package may never drop below its recorded value; raising it is the goal (~80%).
 pkg/agent	90.5
 pkg/anomaly	98.1
+pkg/apperr	100.0
 pkg/api	91.2
 pkg/auth	96.3
 pkg/authz	95.6
