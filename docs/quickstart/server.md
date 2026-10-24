@@ -50,7 +50,7 @@ origin settings, `ORION_RECORDING_ENCRYPTION_KEY`, `ORION_MFA_REQUIRED`.
 ```bash
 cp .env.prod.example .env.prod
 # POSTGRES_PASSWORD, ORION_JWT_SECRET, public URL (ORION_PUBLIC_URL / host+origin)
-# optional: ORION_IMAGE_TAG=1.3.0  (default :latest)
+# optional: ORION_IMAGE_TAG=1.4.0  (default :latest)
 make docker-prod-up
 # or: docker compose -f docker-compose.prod.yml --env-file .env.prod pull && up -d
 ```

@@ -9,9 +9,9 @@ title: Introduction
 
 Teleport-like SSH access control — without opening inbound ports or adopting a large platform. Agents dial **out** over reverse SSH; you get session recording, live watch, JIT approvals, MFA/WebAuthn, ReBAC, and optional SSH CA.
 
-:::tip[v1.3.0]
+:::tip[v1.4.0]
 Stable and public. Fastest path: **[Try Orion Belt in 10 minutes](./quickstart/try-in-10-minutes)** (Docker with GHCR images or build-from-source). Linux servers can also use the **curl|bash** installer — see [Installation](./quickstart/installation).
-New in 1.3.0: run [Ansible and AWX through the gateway](./automation/ansible-awx) with no wrapper script, and `ssh -t` for one-shot commands.
+New in 1.4.0: [RDP and VNC](./guides/rdp-vnc) and [just-in-time Kubernetes access](./guides/kubernetes) through the same outbound agents, [compliance reports](./guides/compliance-reports), and [risk signals, access explain and anomaly flags](./guides/risk-and-anomalies).
 :::
 
 > Free to self-host and use internally under [Apache 2.0 + Commons Clause](https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE). You cannot sell Orion Belt as a product or hosted service.

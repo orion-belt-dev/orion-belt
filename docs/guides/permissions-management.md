@@ -19,8 +19,21 @@ orion-belt-server permission grant \
   --duration 3600
 ```
 
-* `--type` → `ssh`, `scp`, or `both`
+* `--type` → `ssh`, `scp`, `both`, `rdp`, `vnc` or `k8s`
 * `--duration` → Optional, in seconds
+
+| Access type | Covers | Remote users |
+| --- | --- | --- |
+| `ssh`, `scp` | That protocol | Target accounts, e.g. `root` |
+| `both` | `ssh` and `scp` only | Target accounts |
+| `rdp`, `vnc` (1.4.0) | That protocol, through the agent tunnel — see [RDP and VNC](./rdp-vnc) | None: the target handles the login |
+| `k8s` (1.4.0) | Kubernetes, through an in-cluster agent — see [Kubernetes](./kubernetes) | Scopes, `namespace/role` or `*/role` |
+
+:::warning[Changed in 1.4.0]
+Before 1.4.0 the permission check matched a `both` grant for any access type.
+`both` now covers `ssh` and `scp` only, so existing grants never widen to
+RDP, VNC or Kubernetes. Nothing changes for SSH or SCP.
+:::
 
 ---
 

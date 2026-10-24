@@ -59,16 +59,21 @@ const config = {
         docs: {
           sidebarPath: './sidebars.js',
           routeBasePath: 'docs',
-          lastVersion: '1.3.0',
+          lastVersion: '1.4.0',
           versions: {
             current: {
               label: 'Next',
               path: 'next',
               banner: 'unreleased',
             },
+            '1.4.0': {
+              label: '1.4.0',
+              path: '',
+              banner: 'none',
+            },
             '1.3.0': {
               label: '1.3.0',
-              path: '',
+              path: '1.3.0',
               banner: 'none',
             },
             '1.2.0': {
