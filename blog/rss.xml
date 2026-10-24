@@ -4,10 +4,60 @@
         <title>Orion Belt Blog</title>
         <link>https://orion-belt.dev/blog</link>
         <description>Orion Belt Blog</description>
-        <lastBuildDate>Thu, 16 Jul 2026 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 24 Oct 2026 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Orion Belt v1.4 — RDP, VNC and just-in-time Kubernetes access]]></title>
+            <link>https://orion-belt.dev/blog/orion-belt-v1-4</link>
+            <guid>https://orion-belt.dev/blog/orion-belt-v1-4</guid>
+            <pubDate>Sat, 24 Oct 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[Orion Belt 1.4.0 adds RDP and VNC through the reverse agent tunnel, just-in-time Kubernetes RoleBindings through an in-cluster agent, compliance reports, and risk signals with access explain and anomaly flags.]]></description>
+            <content:encoded><![CDATA[<p><strong>Orion Belt 1.4.0</strong> takes the outbound-agent model beyond SSH. RDP, VNC and
+<code>kubectl</code> now go through the same agents that dial out to the gateway, with
+the same request, approve and expire flow and the same audit trail.</p>
+<!-- -->
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="rdp-and-vnc">RDP and VNC<a href="https://orion-belt.dev/blog/orion-belt-v1-4#rdp-and-vnc" class="hash-link" aria-label="Direct link to RDP and VNC" title="Direct link to RDP and VNC" translate="no">​</a></h2>
+<p><code>osh rdp win-01</code> and <code>osh vnc lab-02</code> open a local port relayed to the
+machine through its agent; point any RDP or VNC client at it. Plain
+<code>ssh -N -L 13389:win-01:3389 alice@gateway</code> works too. Grants use the new
+<code>rdp</code> and <code>vnc</code> access types, and the agent decides where each protocol goes,
+so the gateway can never steer it at an arbitrary host. See
+<a class="" href="https://orion-belt.dev/docs/guides/rdp-vnc">RDP and VNC</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="just-in-time-kubernetes-access">Just-in-time Kubernetes access<a href="https://orion-belt.dev/blog/orion-belt-v1-4#just-in-time-kubernetes-access" class="hash-link" aria-label="Direct link to Just-in-time Kubernetes access" title="Direct link to Just-in-time Kubernetes access" translate="no">​</a></h2>
+<p>An approved <code>k8s</code> grant, scoped as <code>payments/edit</code> or <code>*/view</code>, becomes a
+real RoleBinding or ClusterRoleBinding for <code>orion:&lt;user&gt;</code>, issued by an agent
+running inside the cluster. <code>osh kube prod-eu</code> writes a credential-free
+kubeconfig and relays kubectl as that user, so Kubernetes RBAC enforces
+exactly the grant. Bindings are reconciled against grants continuously,
+survive gateway restarts, and are deleted by the agent itself when they
+expire, even if the gateway is unreachable. See
+<a class="" href="https://orion-belt.dev/docs/guides/kubernetes">Kubernetes</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="compliance-and-access-intelligence">Compliance and access intelligence<a href="https://orion-belt.dev/blog/orion-belt-v1-4#compliance-and-access-intelligence" class="hash-link" aria-label="Direct link to Compliance and access intelligence" title="Direct link to Compliance and access intelligence" translate="no">​</a></h2>
+<ul>
+<li class=""><a class="" href="https://orion-belt.dev/docs/guides/compliance-reports">Compliance reports</a>: SOC 2 access,
+ISO 27001 access review and PCI admin activity, as CSV, PDF or JSON. They
+include RDP, VNC and kubectl connections.</li>
+<li class=""><a class="" href="https://orion-belt.dev/docs/guides/risk-and-anomalies">Risk signals, access explain and anomaly flags</a>:
+every request records who, from where and how; a risk policy can escalate
+or auto-approve; <code>osh explain</code> says why access is allowed or denied; and
+unusual sessions are flagged for review.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="upgrade-notes">Upgrade notes<a href="https://orion-belt.dev/blog/orion-belt-v1-4#upgrade-notes" class="hash-link" aria-label="Direct link to Upgrade notes" title="Direct link to Upgrade notes" translate="no">​</a></h2>
+<ul>
+<li class=""><code>both</code> grants now cover <code>ssh</code> and <code>scp</code> only. Before 1.4.0 the permission
+check matched <code>both</code> for any access type; with tunnel and Kubernetes types
+added, that would have widened every existing SSH grant.</li>
+<li class="">Agents must be on 1.4.0 for RDP, VNC and Kubernetes. Older agents keep
+working for SSH and are told to upgrade if a tunnel is requested.</li>
+</ul>
+<p>Full notes are on the
+<a href="https://github.com/orion-belt-dev/orion-belt/releases/tag/v1.4.0" target="_blank" rel="noopener noreferrer" class="">v1.4.0 release</a>.</p>]]></content:encoded>
+            <category>PAM</category>
+            <category>Self-hosted</category>
+            <category>Security</category>
+        </item>
         <item>
             <title><![CDATA[Orion Belt vs Teleport — a practical Teleport alternative for SSH PAM]]></title>
             <link>https://orion-belt.dev/blog/orion-belt-vs-teleport</link>
