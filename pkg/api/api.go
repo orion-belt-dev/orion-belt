@@ -35,6 +35,7 @@ type APIServer struct {
 	rateLimiter     *rateLimiter
 	publicLimiter   *rateLimiter
 	agentCommander  AgentCommander
+	kubeReconciler  KubeReconciler
 	mfaRequired     bool
 	recordingCrypt  *recording.Crypto
 	recorder        *recording.Recorder
@@ -295,6 +296,8 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		admin.POST("/machines", s.createMachine)
 		admin.PUT("/machines/:id", s.updateMachine)
 		admin.DELETE("/machines/:id", s.deleteMachine)
+		admin.GET("/machines/:id/kubernetes/reconcile", s.kubeReconcile)
+		admin.POST("/machines/:id/kubernetes/reconcile", s.kubeReconcile)
 
 		// Notification policy (bounds for per-user preferences)
 		admin.GET("/risk-policy", s.getRiskPolicy)
@@ -650,8 +653,8 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if len(req.RemoteUsers) == 0 && !common.IsTunnelAccessType(req.AccessType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "remote_users is required (the target accounts to request, e.g. [\"root\"])"})
+	if err := validateGrantTargets(req.AccessType, req.RemoteUsers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -704,8 +707,10 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 	s.logger.Info("Access request created: request_id=%s, user_id=%s, machine_id=%s",
 		accessReq.ID, userID, req.MachineID)
 	s.recordAudit(c, "access.request", "access_request:"+accessReq.ID, map[string]interface{}{
-		"machine_id": req.MachineID,
-		"duration":   duration,
+		"machine_id":   req.MachineID,
+		"duration":     duration,
+		"access_type":  accessReq.AccessType,
+		"remote_users": accessReq.RemoteUsers,
 	})
 
 	c.JSON(http.StatusCreated, s.applyRiskPolicy(c, accessReq))
@@ -802,10 +807,13 @@ func (s *APIServer) approveAccessRequest(c *gin.Context) {
 
 	s.logger.Info("Access request approved: request_id=%s, reviewer_id=%s", requestID, reviewerID)
 	s.recordAudit(c, "access.approve", "access_request:"+requestID, map[string]interface{}{
-		"user_id":    accessReq.UserID,
-		"machine_id": accessReq.MachineID,
-		"duration":   accessReq.Duration,
+		"user_id":      accessReq.UserID,
+		"machine_id":   accessReq.MachineID,
+		"duration":     accessReq.Duration,
+		"access_type":  accessReq.AccessType,
+		"remote_users": accessReq.RemoteUsers,
 	})
+	s.kubeGrantChanged(accessReq.MachineID, accessReq.AccessType)
 
 	s.notifyAccessRequestApproved(ctx, accessReq)
 
@@ -1300,9 +1308,10 @@ func (s *APIServer) grantPermission(c *gin.Context) {
 		return
 	}
 	// SSH access is always checked for a specific remote account, so a grant
-	// without one could never be used. RDP and VNC targets do their own login.
-	if len(req.RemoteUsers) == 0 && !common.IsTunnelAccessType(req.AccessType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "remote_users is required (the target accounts the grant allows, e.g. [\"root\"])"})
+	// without one could never be used. RDP and VNC targets do their own login;
+	// k8s grants name namespace/role scopes instead.
+	if err := validateGrantTargets(req.AccessType, req.RemoteUsers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -1335,9 +1344,11 @@ func (s *APIServer) grantPermission(c *gin.Context) {
 	}
 
 	s.recordAudit(c, "permission.grant", "machine:"+req.MachineID, map[string]interface{}{
-		"user_id":     req.UserID,
-		"access_type": req.AccessType,
+		"user_id":      req.UserID,
+		"access_type":  req.AccessType,
+		"remote_users": req.RemoteUsers,
 	})
+	s.kubeGrantChanged(req.MachineID, req.AccessType)
 
 	// Return the latest permission for this pair (best-effort).
 	perms, err := s.store.ListUserPermissions(ctx, req.UserID)
@@ -1415,6 +1426,10 @@ func (s *APIServer) updatePermission(c *gin.Context) {
 			perm.ExpiresAt = &t
 		}
 	}
+	if err := validateGrantTargets(perm.AccessType, perm.RemoteUsers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	adminID, _ := c.Get("user_id")
 	if g, ok := adminID.(string); ok && g != "" {
 		perm.GrantedBy = g
@@ -1425,19 +1440,27 @@ func (s *APIServer) updatePermission(c *gin.Context) {
 		return
 	}
 	s.recordAudit(c, "permission.update", "permission:"+id, map[string]interface{}{
-		"access_type": perm.AccessType,
+		"access_type":  perm.AccessType,
+		"remote_users": perm.RemoteUsers,
 	})
+	// A k8s grant that changed type is reconciled away all the same: the
+	// reconciler only keeps bindings active k8s grants call for.
+	s.kubeGrantChanged(perm.MachineID, common.AccessTypeK8s)
 	c.JSON(http.StatusOK, perm)
 }
 
 func (s *APIServer) revokePermission(c *gin.Context) {
 	ctx := c.Request.Context()
 	id := c.Param("id")
+	revoked, _ := s.store.GetPermission(ctx, id)
 	if err := s.authService.RevokePermission(ctx, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	s.recordAudit(c, "permission.revoke", "permission:"+id, nil)
+	if revoked != nil {
+		s.kubeGrantChanged(revoked.MachineID, revoked.AccessType)
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "permission revoked"})
 }
 

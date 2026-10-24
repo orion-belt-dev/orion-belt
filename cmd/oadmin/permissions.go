@@ -94,8 +94,8 @@ records a reason and leaves an approval trail.`,
 	}
 	grant.Flags().StringVar(&grantUser, "user", "", "username or user ID to grant access to (required)")
 	grant.Flags().StringVar(&grantMachine, "machine", "", "machine name or ID to grant access on (required)")
-	grant.Flags().StringVar(&accessType, "access-type", "ssh", "access type: ssh | scp | both")
-	grant.Flags().StringArrayVar(&remoteUsers, "remote-user", nil, "UNIX user on the target the grant allows (repeatable)")
+	grant.Flags().StringVar(&accessType, "access-type", "ssh", "access type: ssh | scp | both (ssh+scp) | rdp | vnc | k8s")
+	grant.Flags().StringArrayVar(&remoteUsers, "remote-user", nil, "UNIX user on the target the grant allows, or for k8s a namespace/role scope such as payments/edit or */view; none for rdp/vnc (repeatable)")
 	grant.Flags().IntVar(&duration, "duration", 0, "grant lifetime in seconds (0 = permanent)")
 	grant.Flags().StringVar(&expiresAt, "expires-at", "", "explicit expiry as an RFC3339 timestamp")
 	_ = grant.MarkFlagRequired("user")
@@ -142,7 +142,7 @@ records a reason and leaves an approval trail.`,
 			cliflags.Print("✓ Permission %s updated", permission.ID)
 		},
 	}
-	update.Flags().StringVar(&newAccessType, "access-type", "ssh", "access type: ssh | scp | both")
+	update.Flags().StringVar(&newAccessType, "access-type", "ssh", "access type: ssh | scp | both (ssh+scp) | rdp | vnc | k8s")
 	update.Flags().StringArrayVar(&newRemoteUsers, "remote-user", nil, "replacement remote user (repeatable)")
 	update.Flags().IntVar(&newDuration, "duration", 0, "new lifetime in seconds from now")
 	update.Flags().StringVar(&newExpiresAt, "expires-at", "", "new expiry as an RFC3339 timestamp")

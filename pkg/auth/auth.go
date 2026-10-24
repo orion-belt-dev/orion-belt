@@ -199,13 +199,19 @@ func (a *AuthService) CheckPermissionWithRemoteUser(ctx context.Context, userID,
 }
 
 // CheckTunnelPermission checks that a user may relay protocol (rdp, vnc) to a
-// machine. A local grant of exactly that type is always required, even when
-// OpenFGA allows the machine: its model does not distinguish access types, so
-// on its own an SSH grant would open RDP too.
+// machine.
 func (a *AuthService) CheckTunnelPermission(ctx context.Context, userID, machineID, protocol string) error {
 	if !common.IsTunnelAccessType(protocol) {
 		return fmt.Errorf("%q is not a tunnel protocol", protocol)
 	}
+	return a.CheckExactAccess(ctx, userID, machineID, protocol)
+}
+
+// CheckExactAccess checks for a grant of exactly accessType, for the access
+// types that are not SSH sessions (rdp, vnc, k8s). A local grant is always
+// required, even when OpenFGA allows the machine: its model does not
+// distinguish access types, so on its own an SSH grant would open them too.
+func (a *AuthService) CheckExactAccess(ctx context.Context, userID, machineID, accessType string) error {
 	user, err := a.store.GetUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get user: %w", err)
@@ -215,7 +221,7 @@ func (a *AuthService) CheckTunnelPermission(ctx context.Context, userID, machine
 	}
 
 	if a.authorizer != nil {
-		allowed, err := a.authorizer.Check(ctx, userID, machineID, protocol)
+		allowed, err := a.authorizer.Check(ctx, userID, machineID, accessType)
 		if err != nil {
 			a.logger.Warn("OpenFGA check failed, falling back to ReBAC: %v", err)
 		} else if !allowed {
@@ -223,12 +229,12 @@ func (a *AuthService) CheckTunnelPermission(ctx context.Context, userID, machine
 		}
 	}
 
-	hasPermission, err := a.store.HasPermission(ctx, userID, machineID, protocol)
+	hasPermission, err := a.store.HasPermission(ctx, userID, machineID, accessType)
 	if err != nil {
 		return fmt.Errorf("failed to check permission: %w", err)
 	}
 	if !hasPermission {
-		a.logger.Warn("Permission denied for user %s: %s to machine %s", userID, protocol, machineID)
+		a.logger.Warn("Permission denied for user %s: %s to machine %s", userID, accessType, machineID)
 		return database.ErrPermissionDenied
 	}
 	return nil

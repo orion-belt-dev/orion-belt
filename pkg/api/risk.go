@@ -51,11 +51,14 @@ func (s *APIServer) applyRiskPolicy(c *gin.Context, req *common.AccessRequest) *
 			return req
 		}
 		s.recordAudit(c, "access.auto_approve", "access_request:"+req.ID, map[string]interface{}{
-			"user_id":    approved.UserID,
-			"machine_id": approved.MachineID,
-			"duration":   approved.Duration,
-			"reasons":    decision.Reasons,
+			"user_id":      approved.UserID,
+			"machine_id":   approved.MachineID,
+			"duration":     approved.Duration,
+			"access_type":  approved.AccessType,
+			"remote_users": approved.RemoteUsers,
+			"reasons":      decision.Reasons,
 		})
+		s.kubeGrantChanged(approved.MachineID, approved.AccessType)
 		s.notifyAccessRequestApproved(ctx, approved)
 		if s.pluginManager != nil {
 			_ = s.pluginManager.TriggerHook(ctx, plugin.HookAccessGranted, &plugin.HookContext{
