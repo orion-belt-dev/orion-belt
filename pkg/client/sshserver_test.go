@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/orion-belt-dev/orion-belt/pkg/kube"
 )
 
 // gatewayStub is an in-process SSH server standing in for the Orion Belt
@@ -88,6 +90,10 @@ func (g *gatewayStub) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 	for nc := range chans {
 		if nc.ChannelType() == "direct-tcpip" {
 			g.tunnel(nc)
+			continue
+		}
+		if nc.ChannelType() == kube.ClientChannelType {
+			g.kube(nc)
 			continue
 		}
 		if nc.ChannelType() != "session" {
@@ -193,4 +199,28 @@ func (g *gatewayStub) closeAll() {
 	for _, c := range g.conns {
 		c.Close()
 	}
+}
+
+// kube echoes a kubectl relay channel, as the cluster's agent would answer.
+// Cluster "locked" is refused as for a user without a k8s grant.
+func (g *gatewayStub) kube(nc ssh.NewChannel) {
+	var req kube.ClientChannelData
+	_ = ssh.Unmarshal(nc.ExtraData(), &req)
+	g.mu.Lock()
+	g.commands = append(g.commands, "kube "+req.Cluster)
+	g.mu.Unlock()
+	if req.Cluster == "locked" {
+		_ = nc.Reject(ssh.Prohibited, "permission denied: no k8s access to locked")
+		return
+	}
+	ch, reqs, err := nc.Accept()
+	if err != nil {
+		return
+	}
+	go ssh.DiscardRequests(reqs)
+	go func() {
+		defer ch.Close()
+		_, _ = io.Copy(ch, ch)
+		_ = ch.CloseWrite()
+	}()
 }

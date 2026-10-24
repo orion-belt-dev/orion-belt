@@ -43,6 +43,7 @@ oadmin.`,
                                   request temporary access and wait for approval
   osh login                       sign in to the web console
   osh rdp win-01                  local port relayed to RDP on win-01 (osh vnc for VNC)
+  osh kube prod-eu                kubectl access to a cluster, as your k8s grants allow
 
 Logs are written to ~/.orion-belt/logs/osh.log (change with --log-file);
 -v also prints them to the terminal.`,
@@ -87,6 +88,7 @@ func init() {
 	rootCmd.AddCommand(newNotificationsCmd())
 	rootCmd.AddCommand(newTunnelCmd("rdp", "RDP client (mstsc, Remmina, FreeRDP)"))
 	rootCmd.AddCommand(newTunnelCmd("vnc", "VNC viewer"))
+	rootCmd.AddCommand(newKubeCmd())
 }
 
 // api returns an authenticated SDK client, exiting with a readable message

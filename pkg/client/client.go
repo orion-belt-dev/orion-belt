@@ -242,7 +242,18 @@ func (c *SSHClient) RequestAccessType(target, accessType, reason string, duratio
 		}
 		remoteUsers = []string{defaultUser}
 	}
+	return c.requestAccess(target, targetMachine, accessType, remoteUsers, reason, duration)
+}
 
+// RequestKubeAccess requests k8s access to cluster for namespace/role scopes
+// and waits for approval.
+func (c *SSHClient) RequestKubeAccess(cluster string, scopes []string, reason string, duration int) error {
+	return c.requestAccess(strings.Join(scopes, ",")+"@"+cluster, cluster, common.AccessTypeK8s, scopes, reason, duration)
+}
+
+// requestAccess raises an access request and waits for a reviewer. target is
+// how the request is shown to the user.
+func (c *SSHClient) requestAccess(target, targetMachine, accessType string, remoteUsers []string, reason string, duration int) error {
 	c.logger.Info("Requesting access to %s for %d seconds", target, duration)
 
 	// Get the API client
