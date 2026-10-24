@@ -66,6 +66,7 @@ type apiStub struct {
 	paths     []string
 	totpSeen  string
 	lastBody  map[string]any
+	created   map[string]any // body of the last access request created
 }
 
 func newAPIStub(t *testing.T) *apiStub {
@@ -77,6 +78,9 @@ func newAPIStub(t *testing.T) *apiStub {
 		a.mu.Lock()
 		a.paths = append(a.paths, r.Method+" "+r.URL.RequestURI())
 		a.lastBody = body
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/access-requests" {
+			a.created = body
+		}
 		code := a.fail[r.URL.Path]
 		a.mu.Unlock()
 		if code != 0 {
