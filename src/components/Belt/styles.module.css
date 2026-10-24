@@ -1,0 +1,291 @@
+/* Always on Night: the hero is dark in both colour modes. */
+.belt {
+  margin: 0;
+  width: 100%;
+  max-width: 34rem;
+}
+
+.tabs {
+  border-bottom: 1px solid var(--ob-hairline);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ob-nebula);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  margin-bottom: -1px;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.875rem;
+}
+
+.tab:hover {
+  color: var(--ob-starlight);
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--ob-rigel);
+  color: var(--ob-starlight);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--ob-starlight);
+  outline-offset: -2px;
+}
+
+.panel {
+  padding-top: 1.25rem;
+}
+
+.stage {
+  aspect-ratio: 1;
+  margin: 0 auto;
+  max-width: 26rem;
+  position: relative;
+}
+
+.svg {
+  display: block;
+  height: 100%;
+  overflow: visible;
+  width: 100%;
+}
+
+.track {
+  stroke: var(--ob-nebula);
+  stroke-dasharray: 1 1.5;
+  stroke-width: 0.5;
+}
+
+/* At hero size the mark's 8-unit stroke would swamp the path, so the ring
+   is drawn as a diagram: same arcs and gaps, lighter line. */
+.ring {
+  fill: none;
+  stroke: var(--ob-starlight);
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.star {
+  fill: var(--ob-starlight);
+}
+
+.gateway {
+  fill: var(--ob-rigel);
+}
+
+.agent {
+  animation: arrive 0.35s ease-out 0.85s both;
+  fill: var(--ob-starlight);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* The one motion on the page, replayed whenever a protocol is chosen: a
+   packet crosses the belt and the path behind it lights up, from you
+   through the gateway to the agent, which answers when it arrives. */
+.lit {
+  animation: draw 0.9s cubic-bezier(0.45, 0, 0.2, 1) both;
+  fill: none;
+  stroke: var(--ob-rigel);
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+
+.packet {
+  animation: travel 0.9s cubic-bezier(0.45, 0, 0.2, 1) both;
+  fill: var(--ob-starlight);
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* LAPTOP (20,62) to AGENT (76,34), in viewBox units. */
+@keyframes travel {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(56px, -28px);
+  }
+}
+
+@keyframes arrive {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes swap {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lit,
+  .agent,
+  .labelAgent,
+  .terminal {
+    animation: none;
+  }
+
+  .packet {
+    display: none;
+  }
+}
+
+.label {
+  color: var(--ob-nebula);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8125rem;
+  gap: 0.125rem;
+  line-height: 1.35;
+  max-width: 11rem;
+  position: absolute;
+}
+
+.label strong {
+  color: var(--ob-starlight);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Positions follow the stars: (20,62), (48,48), (76,34) of 96. */
+.labelLaptop {
+  left: 0;
+  top: 74%;
+}
+
+.labelGateway {
+  left: 50%;
+  text-align: center;
+  top: 86%;
+  transform: translateX(-50%);
+}
+
+.labelGateway {
+  align-items: center;
+}
+
+.labelAgent {
+  animation: swap 0.3s ease-out both;
+  align-items: flex-end;
+  right: 0;
+  text-align: right;
+  top: 10%;
+}
+
+/* What osh prints for the chosen protocol. Fixed height, so switching never
+   moves the page. */
+.terminal {
+  animation: swap 0.3s ease-out both;
+  background: var(--ob-deep-space);
+  border: 1px solid var(--ob-hairline);
+  border-radius: 8px;
+  color: var(--ob-nebula);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  margin-top: 2.75rem;
+  min-height: 7.5rem;
+  padding: 0.875rem 1rem;
+}
+
+.cmd code {
+  background: none;
+  border: 0;
+  color: var(--ob-starlight);
+  font-size: inherit;
+  padding: 0;
+}
+
+.prompt {
+  color: var(--ob-rigel);
+}
+
+.out {
+  overflow-wrap: anywhere;
+}
+
+.caption {
+  align-items: baseline;
+  color: var(--ob-nebula);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+  gap: 0.5rem 0.75rem;
+  margin-top: 1rem;
+  min-height: 3rem;
+}
+
+/* Betelgeuse means live or recording, and nothing else. */
+.recording {
+  align-items: center;
+  color: var(--ob-betelgeuse);
+  display: inline-flex;
+  font-weight: 500;
+  gap: 0.375rem;
+}
+
+.recDot {
+  background: var(--ob-betelgeuse);
+  border-radius: 50%;
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+.audited {
+  color: var(--ob-starlight);
+  font-weight: 500;
+}
+
+@media screen and (max-width: 996px) {
+  .belt {
+    max-width: 30rem;
+  }
+
+  .stage {
+    max-width: 21rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .label {
+    font-size: 0.75rem;
+  }
+
+  .labelGateway {
+    display: none;
+  }
+}

@@ -95,6 +95,9 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 
 /* The footer is always Night, so its links use the dark-ground colours. */
 .footer--dark {
+  /* Infima's .footer--dark sets its own grey (#303846), on which Nebula
+     links fall to 3.86:1. Night keeps them at 6.27:1. */
+  --ifm-footer-background-color: var(--ob-night);
   --ifm-footer-link-color: var(--ob-nebula);
   --ifm-footer-link-hover-color: var(--ob-starlight);
   --ifm-footer-title-color: var(--ob-starlight);
