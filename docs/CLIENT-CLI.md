@@ -69,6 +69,7 @@ Every listing command accepts `--json`.
 | `osh --list` | List machines you can reach |
 | `osh --request-access [user@]machine --reason … [--duration secs]` | Raise a JIT access request |
 | `osh rdp machine` / `osh vnc machine [--listen addr] [-r --reason …]` | Open a local port to RDP or VNC on a machine ([RDP_VNC.md](RDP_VNC.md)) |
+| `osh kube cluster [-r --scope ns/role --reason …]` | kubectl access to a cluster through its in-cluster agent ([KUBERNETES.md](KUBERNETES.md)) |
 | `osh explain [user@]machine [--for user]` | Explain why you (or, for admins and auditors, someone else) can or cannot reach a machine as an account |
 | `osh login` | Sign in to the web console (see above) |
 | `osh whoami` | Show the identity and role the gateway resolved |
@@ -99,6 +100,7 @@ prints backup codes once, for the same reason.
 | `oadmin requests list` / `approve <id>` / `reject <id>` | Review pending access requests |
 | `oadmin users list` / `get` / `create` / `update` / `delete` | Manage accounts |
 | `oadmin machines list` / `get` / `create` / `update` / `delete` | Manage target machines |
+| `oadmin machines kube-reconcile <cluster> [--apply]` | Check (or fix) a cluster's Kubernetes bindings against its k8s grants |
 | `oadmin permissions list [--user\|--machine]` / `grant` / `update` / `revoke` | Manage standing access |
 | `oadmin sessions list [--active]` / `get <id>` / `content <id>` | Inspect sessions, download recordings |
 | `oadmin audit list [--limit N] [--action …]` | Read the audit log |

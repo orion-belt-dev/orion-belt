@@ -34,6 +34,13 @@ approver. Each session also says what authorised it:
   without a grant.
 - `unresolved`: nothing on record explains the session. Investigate these.
 
+RDP, VNC and kubectl connections are listed beside sessions as `rdp_session`,
+`vnc_session` and `k8s_session` rows, one per connection the gateway audited
+(`tunnel.open`, `k8s.access.open`). They have no remote user, so they are
+matched to a request or grant of their own access type instead: an ssh+scp
+(`both`) grant never explains an RDP connection. Access requests of every type
+are listed; a k8s request shows its namespace/role scopes as the remote user.
+
 ## iso27001-access-review
 
 Every grant in force at `as_of`: user, machine, access type, remote users,
@@ -62,6 +69,11 @@ session through the gateway is privileged access to the target. The
 `privileged` column also flags sessions as an administrative account (`root`,
 `admin`, `administrator`). `recording_available` says whether a recording can
 be played back for the commands that were run.
+
+RDP, VNC and kubectl connections to tagged machines are listed too, with the
+protocol as `source`. They are never recorded, and `privileged` is false
+because there is no target account to judge; for Kubernetes, what the user
+could do is the grant's scope, in `iso27001-access-review`.
 
 ## Limits
 

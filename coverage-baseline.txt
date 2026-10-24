@@ -13,6 +13,7 @@ pkg/cliparity	98.3
 pkg/common	99.3
 pkg/cryptutil	90.2
 pkg/database	95.4
+pkg/kube	95.3
 pkg/metrics	100.0
 pkg/notify	91.7
 pkg/plugin	100.0
