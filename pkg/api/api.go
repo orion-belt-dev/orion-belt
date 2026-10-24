@@ -795,7 +795,7 @@ func (s *APIServer) approveAccessRequest(c *gin.Context) {
 
 	if err := s.authService.ApproveAccessRequestWithTTL(ctx, requestID, reviewerID, req.Duration); err != nil {
 		s.logger.Error("Failed to approve access request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 
@@ -854,7 +854,7 @@ func (s *APIServer) rejectAccessRequest(c *gin.Context) {
 
 	if err := s.authService.RejectAccessRequest(ctx, requestID, reviewerID); err != nil {
 		s.logger.Error("Failed to reject access request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 
@@ -906,7 +906,7 @@ func (s *APIServer) listAccessRequests(c *gin.Context) {
 		requests, err = s.store.ListUserAccessRequests(ctx, uid, 200, 0)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if requests == nil {
@@ -932,7 +932,7 @@ func (s *APIServer) listUsers(c *gin.Context) {
 	}
 	users, err := s.store.ListUsers(ctx, 100, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, users)
@@ -1006,7 +1006,7 @@ func (s *APIServer) updateUser(c *gin.Context) {
 	}
 
 	if err := s.store.UpdateUser(ctx, user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	s.recordAudit(c, "user.update", "user:"+user.ID, map[string]interface{}{
@@ -1025,7 +1025,7 @@ func (s *APIServer) deleteUser(c *gin.Context) {
 		return
 	}
 	if err := s.store.DeleteUser(ctx, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	meta := map[string]interface{}{}
@@ -1040,7 +1040,7 @@ func (s *APIServer) listMachines(c *gin.Context) {
 	ctx := context.Background()
 	machines, err := s.store.ListMachines(ctx, 100, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, machines)
@@ -1064,7 +1064,7 @@ func (s *APIServer) getUserPermissions(c *gin.Context) {
 	}
 	permissions, err := s.store.ListUserPermissions(ctx, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, permissions)
@@ -1074,7 +1074,7 @@ func (s *APIServer) getMachinePermissions(c *gin.Context) {
 	ctx := c.Request.Context()
 	permissions, err := s.store.ListMachinePermissions(ctx, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if !isPrivilegedViewer(c) {
@@ -1228,7 +1228,7 @@ func (s *APIServer) updateMachine(c *gin.Context) {
 	}
 
 	if err := s.store.UpdateMachine(ctx, machine); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 
@@ -1251,7 +1251,7 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 	if archive {
 		machine.IsActive = false
 		if err := s.store.UpdateMachine(ctx, machine); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			s.fail(c, err)
 			return
 		}
 		s.recordAudit(c, "machine.archive", "machine:"+id, map[string]interface{}{"name": machine.Name})
@@ -1269,7 +1269,7 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 	agentUserID := machine.AgentID
 
 	if err := s.store.DeleteMachine(ctx, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if agentUserID != "" {
@@ -1374,7 +1374,7 @@ func (s *APIServer) listAllPermissions(c *gin.Context) {
 	}
 	perms, err := s.store.ListAllPermissions(c.Request.Context(), limit, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if perms == nil {
@@ -1454,7 +1454,7 @@ func (s *APIServer) revokePermission(c *gin.Context) {
 	id := c.Param("id")
 	revoked, _ := s.store.GetPermission(ctx, id)
 	if err := s.authService.RevokePermission(ctx, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	s.recordAudit(c, "permission.revoke", "permission:"+id, nil)
@@ -1507,7 +1507,7 @@ func (s *APIServer) listSessions(c *gin.Context) {
 		}
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if !privileged {
@@ -1523,7 +1523,7 @@ func (s *APIServer) listActiveSessions(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessions, err := s.store.ListActiveSessions(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if !isPrivilegedViewer(c) {
@@ -1626,7 +1626,7 @@ func (s *APIServer) listAuditLogs(c *gin.Context) {
 	}
 	logs, err := s.store.ListAuditLogs(ctx, limit, 0, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, logs)

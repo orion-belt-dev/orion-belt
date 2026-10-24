@@ -55,12 +55,12 @@ func (s *APIServer) usageDashboard(c *gin.Context) {
 
 	sessions, err := s.store.ListSessions(ctx, 10000, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	requests, err := s.store.ListAllAccessRequests(ctx, 10000, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	machines, _ := s.store.ListMachines(ctx, 5000, 0)

@@ -81,14 +81,14 @@ func (s *APIServer) exportReport(c *gin.Context) {
 	case reportTypeSessions:
 		records, err := s.buildSessionReportRows(c)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			s.fail(c, err)
 			return
 		}
 		s.writeSessionReport(c, format, records, filters, generatedAt)
 	case reportTypeAudit:
 		records, err := s.buildAuditReportRows(c)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			s.fail(c, err)
 			return
 		}
 		s.writeAuditReport(c, format, records, filters, generatedAt)

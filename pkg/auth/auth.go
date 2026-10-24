@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/orion-belt-dev/orion-belt/pkg/apperr"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/database"
 	"golang.org/x/crypto/ssh"
@@ -175,11 +176,11 @@ func (a *AuthService) CheckPermissionWithRemoteUser(ctx context.Context, userID,
 			if !hasLocal {
 				// OpenFGA allowed machine access; remote user restriction from local store
 				a.logger.Warn("Permission denied for remote user %s on machine %s", remoteUser, machineID)
-				return fmt.Errorf("permission denied: %s not allowed to access %s", remoteUser, machineID)
+				return apperr.Forbiddenf(fmt.Sprintf("permission denied: %s not allowed to access %s", remoteUser, machineID))
 			}
 			return nil
 		} else {
-			return fmt.Errorf("permission denied: %s not allowed to access %s", remoteUser, machineID)
+			return apperr.Forbiddenf(fmt.Sprintf("permission denied: %s not allowed to access %s", remoteUser, machineID))
 		}
 	}
 
@@ -191,7 +192,7 @@ func (a *AuthService) CheckPermissionWithRemoteUser(ctx context.Context, userID,
 
 	if !hasPermission {
 		a.logger.Warn("Permission denied for user %s on machine %s as remote user %s", userID, machineID, remoteUser)
-		return fmt.Errorf("permission denied: %s not allowed to access %s", remoteUser, machineID)
+		return apperr.Forbiddenf(fmt.Sprintf("permission denied: %s not allowed to access %s", remoteUser, machineID))
 	}
 
 	a.logger.Debug("Permission granted for user %s on machine %s as remote user %s", userID, machineID, remoteUser)
@@ -202,7 +203,7 @@ func (a *AuthService) CheckPermissionWithRemoteUser(ctx context.Context, userID,
 // machine.
 func (a *AuthService) CheckTunnelPermission(ctx context.Context, userID, machineID, protocol string) error {
 	if !common.IsTunnelAccessType(protocol) {
-		return fmt.Errorf("%q is not a tunnel protocol", protocol)
+		return apperr.Invalidf(fmt.Sprintf("%q is not a tunnel protocol", protocol))
 	}
 	return a.CheckExactAccess(ctx, userID, machineID, protocol)
 }
@@ -331,7 +332,7 @@ func (a *AuthService) ApproveAccessRequestWithTTL(ctx context.Context, requestID
 	}
 
 	if request.Status != "pending" {
-		return fmt.Errorf("request is not pending")
+		return apperr.Conflictf("request is not pending")
 	}
 
 	durationSeconds := request.Duration
@@ -386,7 +387,7 @@ func (a *AuthService) RejectAccessRequest(ctx context.Context, requestID, review
 	}
 
 	if request.Status != "pending" {
-		return fmt.Errorf("request is not pending")
+		return apperr.Conflictf("request is not pending")
 	}
 
 	now := time.Now()
