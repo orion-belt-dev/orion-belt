@@ -77,6 +77,16 @@ agent:
     ca_file: /etc/orion-belt/k8s-ca.crt
 ```
 
+## Network interruptions
+
+`osh kube` behaves like `osh rdp` when the network drops: the local relay
+stays up, the gateway connection is redialled with backoff, and the next
+`kubectl` command goes through once it is back. A `kubectl` command in flight,
+such as a `logs -f` or `exec`, ends and can be rerun. Bindings are unaffected:
+they follow grants on the gateway and the agent, not the client's connection.
+See [RDP_VNC.md](RDP_VNC.md#network-interruptions) for the keepalive, limit
+and timeout details shared by all relays.
+
 ## Grant and use access
 
 Ask for access and wait for approval, then open the relay:

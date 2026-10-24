@@ -45,7 +45,7 @@ func (h *harness) tunnelEcho(t *testing.T, addr, msg string) (string, error) {
 
 func (h *harness) auditActions(t *testing.T, prefix string) []string {
 	t.Helper()
-	logs, err := h.srv.store.ListAuditLogs(context.Background(), 50, 0, map[string]interface{}{"action_prefix": prefix})
+	logs, err := h.srv.store.ListAuditLogs(context.Background(), 1000, 0, map[string]interface{}{"action_prefix": prefix})
 	if err != nil {
 		t.Fatal(err)
 	}

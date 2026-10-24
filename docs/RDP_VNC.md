@@ -65,6 +65,34 @@ The agent does not yet build for Windows. To reach a Windows host today, run
 the agent on a Linux machine on the same network and point `tunnels.rdp` at
 the Windows host.
 
+## Network interruptions
+
+Tunnels are built to ride out flaky networks:
+
+- **`osh` keeps the local port open.** If the gateway connection drops
+  (sleep, Wi-Fi change, gateway restart), `osh` prints that it is
+  reconnecting and redials with backoff (1 s up to 30 s). Your RDP or VNC
+  client's own reconnect, or a new connection, goes through as soon as the
+  gateway is back. A new connection waits up to a minute for it. A refused
+  grant or a rejected key ends `osh` with the reason, since retrying cannot
+  fix those.
+- **Dead links are noticed in seconds, not minutes.** The gateway, agents and
+  `osh` exchange keepalives every 15 seconds and close a connection that has
+  not answered within 10, so a half-open link no longer hangs sessions until
+  TCP gives up.
+- **Agents reconnect at once.** An agent redials as soon as its connection
+  drops, with jittered backoff. Its new connection replaces the old one on the
+  gateway, so the machine is back online the moment the agent is.
+- **Bursts of short connections are bounded.** One client connection can hold
+  at most 128 tunnels and one agent 256 (extra ones are refused as a resource
+  shortage). A relay whose peer stops sending but never closes is shut 30
+  seconds after the other side finished. A permission check is reused for 5
+  seconds on the same connection, so a revoked grant can take that long to
+  stop new connections; open ones end when they close.
+
+The RDP or VNC session itself does not survive the drop: the TCP stream to the
+target is cut and the client reconnects, as it would on any network change.
+
 ## Audit
 
 Each connection writes `tunnel.open` and `tunnel.close` audit entries
