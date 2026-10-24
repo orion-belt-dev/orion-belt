@@ -8,6 +8,9 @@ agent:
     environment: "production"
     role: "web"
     datacenter: "us-east-1"
+  # Let the gateway replace this agent's binary (oadmin agents update). On
+  # unless set to false. See docs/AGENT_MANAGEMENT.md.
+  # remote_update: false
 
 auth:
   key_file: "/etc/orion-belt/agent_key"
