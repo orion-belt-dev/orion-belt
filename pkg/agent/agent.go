@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -40,15 +41,39 @@ type Agent struct {
 	hostCert  *gossh.Certificate
 	certPath  string
 	kube      kubeAgent
+
+	// connMu guards sshConn, which the reconnect path replaces while
+	// sessions and the heartbeat use it.
+	connMu  sync.Mutex
+	stopped bool          // set by Stop; no reconnecting after it
+	dropped chan struct{} // signalled when the current connection ends
 }
 
 // New creates a new agent
 func New(config *common.Config, logger *common.Logger) (*Agent, error) {
 	return &Agent{
-		config: config,
-		logger: logger,
+		config:  config,
+		logger:  logger,
+		dropped: make(chan struct{}, 1),
 	}, nil
 }
+
+// conn returns the current gateway connection, or nil.
+func (a *Agent) conn() gossh.Conn {
+	a.connMu.Lock()
+	defer a.connMu.Unlock()
+	return a.sshConn
+}
+
+// Connection maintenance timings. Variables so tests can shrink them.
+var (
+	heartbeatInterval = 15 * time.Second
+	// heartbeatTimeout bounds a heartbeat. On a half-open link the request
+	// would otherwise wait until TCP gives up, minutes later.
+	heartbeatTimeout = 10 * time.Second
+	reconnectMin     = time.Second
+	reconnectMax     = 30 * time.Second
+)
 
 // Start starts the agent
 func (a *Agent) Start() error {
@@ -63,28 +88,67 @@ func (a *Agent) Start() error {
 		go a.runKubeSweep(context.Background())
 	}
 
-	// Keep connection alive
-	ticker := time.NewTicker(30 * time.Second)
+	// Keep connection alive, and reconnect as soon as it drops.
+	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 
 	for {
-		<-ticker.C
-		a.keepAlive()
+		select {
+		case <-ticker.C:
+			a.keepAlive()
+		case <-a.dropped:
+			a.connMu.Lock()
+			stopped := a.stopped
+			a.connMu.Unlock()
+			if stopped {
+				return nil
+			}
+			a.reconnect()
+		}
 	}
 }
 
 // keepAlive is one tick of the connection maintenance loop: renew the host
-// cert when due, then heartbeat, reconnecting if the heartbeat fails.
+// cert when due, then heartbeat. A failed heartbeat closes the connection,
+// which the loop sees as a drop and reconnects.
 func (a *Agent) keepAlive() {
 	if err := a.maybeRenewHostCert(); err != nil {
 		a.logger.Warn("Host cert renewal: %v", err)
 	}
 	if err := a.sendHeartbeat(); err != nil {
 		a.logger.Error("Heartbeat failed: %v", err)
-		// Attempt to reconnect
-		if err := a.connectToServer(); err != nil {
-			a.logger.Error("Failed to reconnect: %v", err)
+		if conn := a.conn(); conn != nil {
+			conn.Close()
+		} else {
+			a.signalDropped()
 		}
+	}
+}
+
+// signalDropped wakes the maintenance loop to reconnect. Signals coalesce.
+func (a *Agent) signalDropped() {
+	select {
+	case a.dropped <- struct{}{}:
+	default:
+	}
+}
+
+// reconnect dials the gateway until it succeeds, backing off from
+// reconnectMin to reconnectMax with jitter, so a gateway restart is not met
+// by every agent at the same instant.
+func (a *Agent) reconnect() {
+	wait := reconnectMin
+	for attempt := 1; ; attempt++ {
+		err := a.connectToServer()
+		if err == nil {
+			if attempt > 1 {
+				a.logger.Info("Reconnected to gateway after %d attempts", attempt)
+			}
+			return
+		}
+		a.logger.Warn("Reconnect attempt %d failed: %v (retrying in %s)", attempt, err, wait)
+		time.Sleep(wait/2 + time.Duration(rand.Int64N(int64(wait/2)+1)))
+		wait = min(wait*2, reconnectMax)
 	}
 }
 
@@ -161,9 +225,28 @@ func (a *Agent) connectToServer() error {
 		return fmt.Errorf("failed to establish SSH connection: %w", err)
 	}
 
-	// Store the connection
+	// Store the connection, closing any previous one: after a network
+	// change it may still look open, holding sessions that cannot finish.
+	a.connMu.Lock()
+	previous := a.sshConn
 	a.sshConn = sshConn
+	a.connMu.Unlock()
+	if previous != nil {
+		previous.Close()
+	}
 	a.logger.Info("Connected to server: %s", serverAddr)
+
+	// Reconnect as soon as this connection ends, not at the next heartbeat.
+	go func() {
+		sshConn.Wait()
+		a.connMu.Lock()
+		lost := a.sshConn == sshConn && !a.stopped
+		a.connMu.Unlock()
+		if lost {
+			a.logger.Warn("Connection to gateway lost")
+			a.signalDropped()
+		}
+	}()
 
 	a.logger.Debug("Setting up channel handlers...")
 
@@ -877,7 +960,7 @@ func (a *Agent) handleControlCommand(ctx context.Context, channel gossh.Channel,
 			"status":      "healthy",
 			"agent":       a.config.Agent.Name,
 			"machine_id":  a.machineID,
-			"connected":   a.sshConn != nil,
+			"connected":   a.conn() != nil,
 			"hostname":    hostnameOrEmpty(),
 			"goos":        runtime.GOOS,
 			"goarch":      runtime.GOARCH,
@@ -951,12 +1034,24 @@ func hostnameOrEmpty() string {
 }
 
 func (a *Agent) sendHeartbeat() error {
-	if a.sshConn == nil {
+	conn := a.conn()
+	if conn == nil {
 		return fmt.Errorf("not connected to server")
 	}
+	result := make(chan error, 1)
+	go func() { result <- a.heartbeat(conn) }()
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(heartbeatTimeout):
+		return fmt.Errorf("no heartbeat reply within %s", heartbeatTimeout)
+	}
+}
 
+// heartbeat sends one heartbeat on conn and waits for the gateway's reply.
+func (a *Agent) heartbeat(conn gossh.Conn) error {
 	// Open a session channel for the heartbeat
-	channel, reqs, err := a.sshConn.OpenChannel("session", nil)
+	channel, reqs, err := conn.OpenChannel("session", nil)
 	if err != nil {
 		return fmt.Errorf("failed to open session channel: %w", err)
 	}
@@ -980,7 +1075,8 @@ func (a *Agent) sendHeartbeat() error {
 // cached one is inside the renewal window. The new cert is written atomically
 // next to the private key and used on the next reconnect.
 func (a *Agent) maybeRenewHostCert() error {
-	if a.sshConn == nil || a.privKey == nil || a.hostCert == nil || a.certPath == "" {
+	conn := a.conn()
+	if conn == nil || a.privKey == nil || a.hostCert == nil || a.certPath == "" {
 		return nil
 	}
 	ttl := time.Duration(a.hostCert.ValidBefore-a.hostCert.ValidAfter) * time.Second
@@ -990,7 +1086,7 @@ func (a *Agent) maybeRenewHostCert() error {
 	}
 
 	pubLine := gossh.MarshalAuthorizedKey(a.privKey.PublicKey())
-	ok, payload, err := a.sshConn.SendRequest(ca.AgentCertRenewRequest, true, pubLine)
+	ok, payload, err := conn.SendRequest(ca.AgentCertRenewRequest, true, pubLine)
 	if err != nil {
 		return fmt.Errorf("renew request: %w", err)
 	}
@@ -1029,9 +1125,14 @@ func (a *Agent) maybeRenewHostCert() error {
 func (a *Agent) Stop(ctx context.Context) error {
 	a.logger.Info("Stopping agent...")
 
-	if a.sshConn != nil {
-		a.sshConn.Close()
+	a.connMu.Lock()
+	a.stopped = true
+	conn := a.sshConn
+	a.connMu.Unlock()
+	if conn != nil {
+		conn.Close()
 	}
+	a.signalDropped() // wake the maintenance loop so Start returns
 
 	return nil
 }

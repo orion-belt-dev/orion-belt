@@ -210,17 +210,99 @@ func TestKeepAlive(t *testing.T) {
 		t.Fatalf("heartbeats = %d, want 1", beats)
 	}
 
-	// A dropped connection is re-established on the next tick.
-	_ = a.Stop(context.Background())
+	// A failed heartbeat closes the connection, which the loop then sees as
+	// a drop; renewal failures along the way are logged, not fatal.
+	g.mu.Lock()
+	g.heartbeatOK = false
+	g.mu.Unlock()
+	a.hostCert = hostCert(t, a.privKey, time.Now().Add(-9*time.Hour), time.Now().Add(time.Hour))
 	a.keepAlive()
+	select {
+	case <-a.dropped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a failed heartbeat did not signal a drop")
+	}
+}
+
+// The gateway side vanishing is noticed at once, not at the next heartbeat,
+// and reconnect brings the agent back.
+func TestReconnectAfterDrop(t *testing.T) {
+	prevMin := reconnectMin
+	reconnectMin = 10 * time.Millisecond
+	t.Cleanup(func() { reconnectMin = prevMin })
+
+	a, conn, g := connected(t)
+	first := a.conn()
+	conn.Close()
+	select {
+	case <-a.dropped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("drop not signalled")
+	}
+	a.reconnect()
 	g.waitConn(t)
+	if a.conn() == first {
+		t.Fatal("still on the old connection")
+	}
 	if err := a.sendHeartbeat(); err != nil {
 		t.Errorf("heartbeat after reconnect = %v", err)
 	}
+}
 
-	// Renewal and reconnect failures are logged, not fatal.
-	a.hostCert = hostCert(t, a.privKey, time.Now().Add(-9*time.Hour), time.Now().Add(time.Hour))
+// reconnect keeps trying with backoff until the gateway accepts.
+func TestReconnectRetriesUntilGatewayAnswers(t *testing.T) {
+	prevMin, prevMax := reconnectMin, reconnectMax
+	reconnectMin, reconnectMax = 5*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { reconnectMin, reconnectMax = prevMin, prevMax })
+
+	a, _, g := connected(t)
+	g.mu.Lock()
+	g.reject = true
+	g.mu.Unlock()
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		g.mu.Lock()
+		g.reject = false
+		g.mu.Unlock()
+	}()
+	a.reconnect()
+	g.waitConn(t)
+}
+
+// A heartbeat that gets no reply is a failure after heartbeatTimeout, not a
+// hang: that is what a half-open link looks like.
+func TestHeartbeatTimesOut(t *testing.T) {
+	prev := heartbeatTimeout
+	heartbeatTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { heartbeatTimeout = prev })
+
+	a, _, g := connected(t)
+	g.mu.Lock()
+	g.heartbeatHang = true
+	g.mu.Unlock()
+	start := time.Now()
+	if err := a.sendHeartbeat(); err == nil {
+		t.Fatal("unanswered heartbeat succeeded")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Errorf("heartbeat took %s", time.Since(start))
+	}
+}
+
+// Start returns after Stop instead of reconnecting.
+func TestStartReturnsAfterStop(t *testing.T) {
+	g := startGateway(t)
+	a, _ := agentFixture(t, g)
+	done := make(chan error, 1)
+	go func() { done <- a.Start() }()
+	g.waitConn(t)
 	_ = a.Stop(context.Background())
-	a.config.Server.Port = 1
-	a.keepAlive()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Start = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start kept running after Stop")
+	}
 }
