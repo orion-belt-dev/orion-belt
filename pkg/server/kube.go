@@ -261,12 +261,19 @@ func (s *Server) markKubernetes(machineID string) {
 // handleClientKube relays one kubectl connection to a cluster's API server
 // through its in-cluster agent, which acts as the user. Kubernetes RBAC then
 // enforces exactly the bindings the user's grants issued.
-func (s *Server) handleClientKube(newChannel ssh.NewChannel, remoteAddr net.Addr, userID, username string) {
+func (s *Server) handleClientKube(newChannel ssh.NewChannel, cc *clientConn) {
+	userID, username := cc.userID, cc.username
 	var req kube.ClientChannelData
 	if err := ssh.Unmarshal(newChannel.ExtraData(), &req); err != nil {
 		newChannel.Reject(ssh.ConnectionFailed, "malformed kubernetes request")
 		return
 	}
+	if !cc.acquire() {
+		newChannel.Reject(ssh.ResourceShortage, fmt.Sprintf("too many open tunnels on this connection (limit %d)", cc.limit))
+		return
+	}
+	defer cc.release()
+
 	ctx, span := tracing.Start(context.Background(), "gateway.kube",
 		trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
@@ -281,8 +288,8 @@ func (s *Server) handleClientKube(newChannel ssh.NewChannel, remoteAddr net.Addr
 		return
 	}
 	ip := ""
-	if remoteAddr != nil {
-		ip, _, _ = net.SplitHostPort(remoteAddr.String())
+	if cc.remote != nil {
+		ip, _, _ = net.SplitHostPort(cc.remote.String())
 	}
 	audit := func(action string, meta map[string]interface{}) {
 		meta["machine"] = machine.Name
@@ -291,11 +298,16 @@ func (s *Server) handleClientKube(newChannel ssh.NewChannel, remoteAddr net.Addr
 		}
 	}
 
-	if err := s.authService.CheckExactAccess(ctx, userID, machine.ID, common.AccessTypeK8s); err != nil {
-		tracing.RecordError(span, err)
-		audit("k8s.access.denied", map[string]interface{}{})
-		newChannel.Reject(ssh.Prohibited, fmt.Sprintf("permission denied: no k8s access to %s; request it with access_type \"k8s\" and a namespace/role scope", machine.Name))
-		return
+	grantKey := machine.ID + "|" + common.AccessTypeK8s
+	// Skip the lookup when this connection passed it moments ago (grantCacheTTL).
+	if !cc.allowed(grantKey) {
+		if err := s.authService.CheckExactAccess(ctx, userID, machine.ID, common.AccessTypeK8s); err != nil {
+			tracing.RecordError(span, err)
+			audit("k8s.access.denied", map[string]interface{}{})
+			newChannel.Reject(ssh.Prohibited, fmt.Sprintf("permission denied: no k8s access to %s; request it with access_type \"k8s\" and a namespace/role scope", machine.Name))
+			return
+		}
+		cc.remember(grantKey)
 	}
 	conn, err := s.kubeAgent(machine.ID)
 	if err != nil {
@@ -318,7 +330,7 @@ func (s *Server) handleClientKube(newChannel ssh.NewChannel, remoteAddr net.Addr
 
 	audit("k8s.access.open", map[string]interface{}{"subject": kube.Subject(username)})
 	started := time.Now()
-	sent, received := relayChannels(clientChannel, agentChannel)
+	sent, received := relayChannels(clientChannel, agentChannel, s.timing.drain)
 	audit("k8s.access.close", map[string]interface{}{
 		"subject":          kube.Subject(username),
 		"bytes_sent":       sent,
