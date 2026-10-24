@@ -1,45 +1,66 @@
-/* Hero sits on Night in both colour modes; the mark is its one bold element. */
-.hero {
+/* Landing page. Hero and closing sit on Night in both colour modes; the
+   sections between follow the theme. Structure is carried by rules and
+   tables rather than cards, and the belt diagram is the one bold element. */
+
+.hero,
+.closing {
   background: var(--ob-night);
-  border-bottom: 1px solid var(--ob-hairline);
   color: var(--ob-starlight);
-  padding: 6rem 0 5.5rem;
+}
+
+.hero {
+  border-bottom: 1px solid var(--ob-hairline);
+  padding: 5.5rem 0 5rem;
 }
 
 .heroInner {
   align-items: center;
   display: grid;
-  gap: 3rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4rem;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
 }
 
 .heroText {
   max-width: 38rem;
 }
 
+.heroTitle,
+.h2,
+.closingTitle {
+  text-wrap: balance;
+}
+
 .heroTitle {
   color: var(--ob-starlight);
-  font-size: 4rem;
+  font-size: clamp(2.25rem, 4.6vw, 3.75rem);
   font-weight: 600;
   letter-spacing: -0.035em;
   line-height: 1.05;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-.heroSubtitle {
-  color: var(--ob-starlight);
-  font-size: 1.5rem;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  margin-bottom: 1.25rem;
-}
-
-.heroDescription {
+.heroLead {
   color: var(--ob-nebula);
-  font-size: 1.125rem;
+  font-size: 1.1875rem;
   line-height: 1.6;
   margin-bottom: 2rem;
+  max-width: 34rem;
+}
+
+.heroMeta {
+  color: var(--ob-nebula);
+  font-size: 0.9375rem;
+  margin: 1.5rem 0 0;
+}
+
+.heroLink {
+  color: var(--ob-starlight);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.heroLink:hover {
+  color: var(--ob-starlight);
 }
 
 .buttons {
@@ -54,7 +75,6 @@
   text-decoration: none !important;
 }
 
-/* Infima's .button reads these, so they win whatever the stylesheet order. */
 /* Night text on Rigel: 4.99:1. */
 .ctaPrimary {
   --ifm-button-background-color: var(--ob-rigel);
@@ -63,12 +83,12 @@
 }
 
 .ctaPrimary:hover {
-  --ifm-button-background-color: #5B8FFF;
-  --ifm-button-border-color: #5B8FFF;
+  --ifm-button-background-color: #5b8fff;
+  --ifm-button-border-color: #5b8fff;
   color: var(--ob-night);
 }
 
-/* Nebula outline on Night: 6.27:1, above the 3:1 needed for a boundary. */
+/* Nebula outline on Night: 6.27:1. */
 .ctaSecondary {
   --ifm-button-background-color: transparent;
   --ifm-button-border-color: var(--ob-nebula);
@@ -81,49 +101,402 @@
 }
 
 .ctaPrimary:focus-visible,
-.ctaSecondary:focus-visible {
+.ctaSecondary:focus-visible,
+.heroLink:focus-visible {
   outline-color: var(--ob-starlight);
 }
 
-.heroMark {
-  height: auto;
-  width: clamp(12rem, 24vw, 20rem);
+/* --- Sections ------------------------------------------------------------ */
+
+.section {
+  border-bottom: 1px solid var(--ob-border);
+  padding: 5rem 0;
 }
+
+.sectionAlt {
+  background: var(--ob-surface);
+}
+
+.h2 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin-bottom: 1rem;
+  max-width: 36rem;
+}
+
+.intro {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  max-width: 38rem;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+}
+
+.split {
+  align-items: start;
+  display: grid;
+  gap: 3rem;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+/* Tables: hairline rules only; the content is the structure. */
+.changes,
+.protocols {
+  border-collapse: collapse;
+  display: table;
+  margin: 0;
+  width: 100%;
+}
+
+.changes th,
+.changes td,
+.protocols th,
+.protocols td {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--ob-border);
+  padding: 1rem 1.25rem 1rem 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Infima paints thead and alternate rows; these tables are ruled instead. */
+.changes thead,
+.protocols thead,
+.changes tr,
+.protocols tr {
+  background: none !important;
+  border: 0;
+}
+
+.changes thead th,
+.protocols thead th {
+  border-bottom: 2px solid var(--ifm-font-color-base);
+  color: var(--ifm-font-color-base);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding-bottom: 0.75rem;
+  padding-top: 0;
+}
+
+.changes {
+  margin-top: 2rem;
+}
+
+.changes td {
+  font-size: 1rem;
+  line-height: 1.55;
+  width: 50%;
+}
+
+.changes td:first-child {
+  color: var(--ifm-color-emphasis-600);
+}
+
+.changes td:last-child {
+  font-weight: 500;
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.protocols tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.protocols td {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.recDot {
+  background: var(--ob-betelgeuse);
+  border-radius: 50%;
+  display: inline-block;
+  height: 0.5rem;
+  margin-right: 0.5rem;
+  vertical-align: 0.1em;
+  width: 0.5rem;
+}
+
+/* The flow is a real sequence, so it is numbered, and joined by one rule. */
+.flow {
+  counter-reset: step;
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 2.5rem 0 0;
+  padding: 0;
+}
+
+.step {
+  border-top: 2px solid var(--ob-border);
+  counter-increment: step;
+  padding-top: 1.25rem;
+  position: relative;
+}
+
+.step::before {
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-color-primary);
+  content: counter(step);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  left: 0;
+  padding-right: 0.5rem;
+  position: absolute;
+  top: -0.8rem;
+}
+
+.stepTitle {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.step p {
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.55;
+  margin-bottom: 0.75rem;
+}
+
+.stepCode {
+  display: inline-block;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+/* Assurance: a definition list in two columns, divided by rules. */
+.assurance {
+  display: grid;
+  gap: 0 3rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 2rem 0 0;
+}
+
+.assurance > div {
+  border-top: 1px solid var(--ob-border);
+  padding: 1.25rem 0 1.5rem;
+}
+
+.assurance dt {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.assurance dd {
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.assurance dd code {
+  color: var(--ifm-font-color-base);
+}
+
+/* Links inside running text are underlined, not told apart by colour alone. */
+.assurance dd a,
+.intro a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Copyable command. */
+.command {
+  background: var(--ob-night);
+  border: 1px solid var(--ob-hairline);
+  border-radius: 8px;
+  position: relative;
+}
+
+.commandCode {
+  background: none;
+  color: var(--ob-starlight);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  margin: 0;
+  overflow-x: auto;
+  padding: 1.5rem 5.5rem 1.5rem 1.5rem;
+}
+
+.commandCode:focus-visible {
+  outline: 2px solid var(--ob-starlight);
+  outline-offset: -2px;
+}
+
+.commandCode code {
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 0;
+}
+
+.copy {
+  background: transparent;
+  border: 1px solid var(--ob-nebula);
+  border-radius: 999px;
+  color: var(--ob-starlight);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  min-height: 2.25rem;
+  padding: 0 1rem;
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+}
+
+.copy:hover {
+  border-color: var(--ob-starlight);
+}
+
+.copy:focus-visible {
+  outline: 2px solid var(--ob-starlight);
+  outline-offset: 2px;
+}
+
+/* FAQ */
+.faqWrap {
+  display: grid;
+  gap: 3rem;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.faq {
+  border-top: 1px solid var(--ob-border);
+}
+
+.faqItem {
+  border-bottom: 1px solid var(--ob-border);
+}
+
+.faqItem summary {
+  cursor: pointer;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  list-style: none;
+  padding: 1.125rem 2rem 1.125rem 0;
+  position: relative;
+}
+
+.faqItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.faqItem summary::after {
+  color: var(--ifm-color-emphasis-600);
+  content: '+';
+  font-size: 1.25rem;
+  position: absolute;
+  right: 0.25rem;
+  top: 0.95rem;
+}
+
+.faqItem[open] summary::after {
+  content: '−';
+}
+
+.faqItem summary:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.faqItem p {
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+  max-width: 40rem;
+}
+
+/* Closing */
+.closing {
+  padding: 5rem 0;
+}
+
+.closingInner {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem 3rem;
+  justify-content: space-between;
+}
+
+.closingTitle {
+  color: var(--ob-starlight);
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0;
+  max-width: 36rem;
+}
+
+/* --- Breakpoints --------------------------------------------------------- */
 
 @media screen and (max-width: 996px) {
   .hero {
     padding: 4rem 0 3.5rem;
   }
 
-  .heroInner {
-    gap: 2rem;
+  .heroInner,
+  .split,
+  .faqWrap {
+    gap: 2.5rem;
+    /* minmax(0, …): a long command line must not widen the column. */
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .heroTitle {
-    font-size: 3rem;
+  .flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .heroSubtitle {
-    font-size: 1.25rem;
+  .section {
+    padding: 3.5rem 0;
   }
 }
 
-@media screen and (max-width: 768px) {
-  .heroInner {
+@media screen and (max-width: 600px) {
+  .flow,
+  .assurance {
     grid-template-columns: 1fr;
   }
 
-  /* On narrow screens the mark leads, small, above the title. */
-  .heroMark {
-    grid-row: 1;
-    width: 4.5rem;
+  .heroLead {
+    font-size: 1.0625rem;
   }
 
-  .heroTitle {
-    font-size: 2.5rem;
+  /* The before/after table becomes stacked pairs. */
+  .changes thead {
+    display: none;
   }
 
-  .heroDescription {
-    font-size: 1rem;
+  .changes td {
+    display: block;
+    padding-right: 0;
+    width: 100%;
+  }
+
+  .changes td:first-child {
+    border-bottom: 0;
+    padding-bottom: 0.25rem;
+  }
+
+  .changes td:first-child::before {
+    content: 'Without it: ';
+    font-weight: 500;
+  }
+
+  .changes td:last-child::before {
+    color: var(--ifm-color-primary);
+    content: 'With Orion Belt: ';
   }
 }

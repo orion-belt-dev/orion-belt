@@ -129,7 +129,8 @@ const config = {
       navbar: {
         title: 'Orion Belt',
         logo: {
-          alt: 'Orion Belt',
+          // The title beside it already names the site.
+          alt: '',
           src: 'img/orion-belt-mark-color-on-light-small.svg',
           srcDark: 'img/orion-belt-mark-color-on-dark-small.svg',
           width: 28,
