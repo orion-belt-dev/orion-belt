@@ -105,12 +105,15 @@ var Coverage = map[string]Cover{
 	"DELETE /api/v1/admin/users/:id": {Command: "oadmin users delete"},
 
 	// --- Permissions -------------------------------------------------------
-	"GET /api/v1/permissions/user/:id":     {Command: "oadmin permissions list --user"},
-	"GET /api/v1/permissions/machine/:id":  {Command: "oadmin permissions list --machine"},
-	"GET /api/v1/admin/permissions":        {Command: "oadmin permissions list"},
-	"POST /api/v1/admin/permissions":       {Command: "oadmin permissions grant"},
-	"PATCH /api/v1/admin/permissions/:id":  {Command: "oadmin permissions update"},
-	"DELETE /api/v1/admin/permissions/:id": {Command: "oadmin permissions revoke"},
+	"GET /api/v1/permissions/user/:id":           {Command: "oadmin permissions list --user"},
+	"GET /api/v1/permissions/machine/:id":        {Command: "oadmin permissions list --machine"},
+	"GET /api/v1/admin/permissions":              {Command: "oadmin permissions list"},
+	"POST /api/v1/admin/permissions":             {Command: "oadmin permissions grant"},
+	"PATCH /api/v1/admin/permissions/:id":        {Command: "oadmin permissions update"},
+	"DELETE /api/v1/admin/permissions/:id":       {Command: "oadmin permissions revoke"},
+	"POST /api/v1/admin/permissions/bulk":        {Command: "oadmin permissions bulk-grant"},
+	"POST /api/v1/admin/permissions/bulk-revoke": {Command: "oadmin permissions bulk-revoke"},
+	"GET /api/v1/admin/permissions/effective":    {Command: "oadmin permissions effective"},
 
 	// --- Access requests ---------------------------------------------------
 	"POST /api/v1/access-requests":                   {Command: "osh --request-access"},

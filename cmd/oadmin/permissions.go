@@ -159,6 +159,9 @@ records a reason and leaves an approval trail.`,
 			cliflags.Print("✓ Permission %s revoked", args[0])
 		},
 	})
+	permissions.AddCommand(newBulkGrantCmd())
+	permissions.AddCommand(newBulkRevokeCmd())
+	permissions.AddCommand(newEffectiveCmd())
 
 	return permissions
 }

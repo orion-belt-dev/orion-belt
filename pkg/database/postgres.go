@@ -1423,6 +1423,72 @@ func (s *PostgresStore) ListAllPermissions(ctx context.Context, limit, offset in
 	return permissions, nil
 }
 
+// PermissionFilter narrows SearchPermissions. Empty fields match anything.
+type PermissionFilter struct {
+	// Query matches, case-insensitively, part of the username, the machine
+	// name, or any remote user or scope.
+	Query      string
+	AccessType string
+	UserID     string
+	MachineID  string
+	Limit      int // default 100, at most 2000
+	Offset     int
+}
+
+// SearchPermissions pages through active grants matching filter, newest
+// first, and returns the total that match. Filtering happens in the database,
+// so large grant sets are never loaded whole.
+func (s *PostgresStore) SearchPermissions(ctx context.Context, f PermissionFilter) ([]*common.Permission, int, error) {
+	limit := f.Limit
+	switch {
+	case limit <= 0:
+		limit = 100
+	case limit > 2000:
+		limit = 2000
+	}
+	conds := []string{"(p.expires_at IS NULL OR p.expires_at > NOW())"}
+	var args []interface{}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		args = append(args, "%"+escapeLike(q)+"%")
+		n := len(args)
+		conds = append(conds, fmt.Sprintf(`(u.username ILIKE $%[1]d ESCAPE '\' OR m.name ILIKE $%[1]d ESCAPE '\'
+			OR array_to_string(p.remote_users, ' ') ILIKE $%[1]d ESCAPE '\')`, n))
+	}
+	for col, v := range map[string]string{"p.access_type": f.AccessType, "p.user_id": f.UserID, "p.machine_id": f.MachineID} {
+		if v != "" {
+			args = append(args, v)
+			conds = append(conds, fmt.Sprintf("%s = $%d", col, len(args)))
+		}
+	}
+	from := ` FROM permissions p JOIN users u ON u.id = p.user_id JOIN machines m ON m.id = p.machine_id WHERE ` +
+		strings.Join(conds, " AND ")
+
+	var total int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*)`+from, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count permissions: %w", err)
+	}
+	args = append(args, limit, f.Offset)
+	rows, err := s.db.QueryContext(ctx, `SELECT p.id, p.user_id, p.machine_id, p.access_type, p.remote_users,
+		COALESCE(p.granted_by, ''), p.granted_at, p.expires_at`+from+
+		fmt.Sprintf(` ORDER BY p.granted_at DESC, p.id LIMIT $%d OFFSET $%d`, len(args)-1, len(args)), args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("search permissions: %w", err)
+	}
+	defer rows.Close()
+	perms := []*common.Permission{}
+	for rows.Next() {
+		p := &common.Permission{}
+		var remoteUsers pq.StringArray
+		if err := rows.Scan(&p.ID, &p.UserID, &p.MachineID, &p.AccessType, &remoteUsers,
+			&p.GrantedBy, &p.GrantedAt, &p.ExpiresAt); err != nil {
+			return nil, 0, fmt.Errorf("scan permission: %w", err)
+		}
+		p.RemoteUsers = []string(remoteUsers)
+		perms = append(perms, p)
+	}
+	return perms, total, rows.Err()
+}
+
 // UpdatePermission updates mutable grant fields.
 func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common.Permission) error {
 	// The CTE reads the row as it was before this statement, so the version

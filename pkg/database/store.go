@@ -59,6 +59,9 @@ type Store interface {
 	ListUserPermissions(ctx context.Context, userID string) ([]*common.Permission, error)
 	ListMachinePermissions(ctx context.Context, machineID string) ([]*common.Permission, error)
 	ListAllPermissions(ctx context.Context, limit, offset int) ([]*common.Permission, error)
+	// SearchPermissions pages through active grants matching filter and
+	// reports how many match in total.
+	SearchPermissions(ctx context.Context, filter PermissionFilter) ([]*common.Permission, int, error)
 	FindActivePermission(ctx context.Context, userID, machineID, accessType string) (*common.Permission, error)
 	HasPermission(ctx context.Context, userID, machineID, accessType string) (bool, error)
 	HasPermissionWithRemoteUser(ctx context.Context, userID, machineID, accessType, remoteUser string) (bool, error)

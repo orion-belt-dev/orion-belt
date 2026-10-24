@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -313,6 +314,9 @@ func (s *APIServer) setupRoutes(metricsEnabled bool) {
 		// Permission management
 		admin.GET("/permissions", s.listAllPermissions)
 		admin.POST("/permissions", s.grantPermission)
+		admin.POST("/permissions/bulk", s.bulkGrantPermissions)
+		admin.POST("/permissions/bulk-revoke", s.bulkRevokePermissions)
+		admin.GET("/permissions/effective", s.effectivePermissions)
 		admin.PATCH("/permissions/:id", s.updatePermission)
 		admin.DELETE("/permissions/:id", s.revokePermission)
 
@@ -1363,23 +1367,16 @@ func (s *APIServer) grantPermission(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "permission granted"})
 }
 
+// listAllPermissions lists active grants, filtered and paged in the
+// database (q, access_type, user_id, machine_id, limit, offset). The body is
+// the page; X-Total-Count is how many match.
 func (s *APIServer) listAllPermissions(c *gin.Context) {
-	limit := 500
-	if v := c.Query("limit"); v != "" {
-		if n, err := fmt.Sscanf(v, "%d", &limit); n == 1 && err == nil && limit > 0 {
-			if limit > 2000 {
-				limit = 2000
-			}
-		}
-	}
-	perms, err := s.store.ListAllPermissions(c.Request.Context(), limit, 0)
+	perms, total, err := s.store.SearchPermissions(c.Request.Context(), permissionFilter(c, 500))
 	if err != nil {
 		s.fail(c, err)
 		return
 	}
-	if perms == nil {
-		perms = []*common.Permission{}
-	}
+	c.Header("X-Total-Count", strconv.Itoa(total))
 	c.JSON(http.StatusOK, perms)
 }
 
