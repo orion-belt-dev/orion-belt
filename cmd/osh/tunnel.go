@@ -76,6 +76,8 @@ func runTunnel(protocol, viewer, machine, listen string, request bool, reason st
 		}
 	}
 
+	// Network drops are survived, not fatal: say so while it happens.
+	sshClient.Status = func(msg string) { cliflags.Print("%s", msg) }
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return sshClient.Forward(ctx, user, machine, protocol, listen, func(addr net.Addr) {

@@ -100,6 +100,8 @@ func runKube(cluster, listen, kubeconfig, namespace string, request bool, scopes
 		}
 	}
 
+	// Network drops are survived, not fatal: say so while it happens.
+	sshClient.Status = func(msg string) { cliflags.Print("%s", msg) }
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var writeErr error
