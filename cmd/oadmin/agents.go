@@ -135,6 +135,7 @@ channel you trust.`,
 	installScript.Flags().StringVarP(&output, "output", "o", "", "write the script to this file instead of stdout")
 	_ = installScript.MarkFlagRequired("gateway-host")
 	agents.AddCommand(installScript)
+	agents.AddCommand(newAgentManageCmds()...)
 
 	return agents
 }
