@@ -97,9 +97,9 @@ func (a *AuthService) grantLink(ctx context.Context, g *common.Permission, acces
 	switch {
 	case link.ExpiresAt != nil && !link.ExpiresAt.After(now):
 		link.Detail = fmt.Sprintf("grant expired at %s", link.ExpiresAt.Format(time.RFC3339))
-	case g.AccessType != accessType && g.AccessType != "both":
+	case !common.AccessTypeCovers(g.AccessType, accessType):
 		link.Detail = fmt.Sprintf("grant is for %s, not %s", g.AccessType, accessType)
-	case !slices.Contains(g.RemoteUsers, remoteUser):
+	case !common.IsTunnelAccessType(accessType) && !slices.Contains(g.RemoteUsers, remoteUser):
 		link.Detail = fmt.Sprintf("grant allows %s, not %s", listOrNone(g.RemoteUsers), remoteUser)
 	default:
 		link.Holds = true

@@ -207,6 +207,24 @@ type OpenFGAConfig struct {
 type AgentConfig struct {
 	Name string            `yaml:"name"`
 	Tags map[string]string `yaml:"tags,omitempty"`
+	// Tunnels maps a tunnel protocol (rdp, vnc) to the host:port the agent
+	// relays it to. Unset protocols use DefaultAgentTunnels; "off" disables
+	// one. Pointing at another host lets an agent front a machine on its
+	// network that cannot run one, such as a Windows desktop.
+	Tunnels map[string]string `yaml:"tunnels,omitempty"`
+}
+
+// TunnelAddress returns where the agent relays protocol, or "" when it does
+// not relay it.
+func (c AgentConfig) TunnelAddress(protocol string) string {
+	addr, set := c.Tunnels[protocol]
+	if !set {
+		return DefaultAgentTunnels[protocol]
+	}
+	if addr == "off" {
+		return ""
+	}
+	return addr
 }
 
 // RecordingConfig contains session recording configuration

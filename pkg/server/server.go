@@ -710,6 +710,10 @@ func (s *Server) handleClientConnection(sshConn *ssh.ServerConn, chans <-chan ss
 
 	// Handle each channel
 	for newChannel := range chans {
+		if newChannel.ChannelType() == "direct-tcpip" {
+			go s.handleClientTunnel(newChannel, sshConn.RemoteAddr(), userID, username)
+			continue
+		}
 		if newChannel.ChannelType() != "session" {
 			newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
 			continue

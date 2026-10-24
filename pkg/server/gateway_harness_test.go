@@ -272,11 +272,14 @@ func (h *harness) runClient(t *testing.T, user, command, stdin string) clientRes
 type stubAgent struct {
 	conn      ssh.Conn
 	refusePTY bool
+	// oldVersion rejects tunnel channels as agents before tunnels did.
+	oldVersion bool
 
 	mu      sync.Mutex
 	execs   []string
 	ptys    int
 	resizes int
+	tunnels []string
 }
 
 func (h *harness) connectAgent(t *testing.T) *stubAgent {
@@ -315,12 +318,40 @@ func (h *harness) connectAgent(t *testing.T) *stubAgent {
 
 func (a *stubAgent) serve(chans <-chan ssh.NewChannel) {
 	for nc := range chans {
+		if nc.ChannelType() == common.TunnelChannelType {
+			a.tunnel(nc)
+			continue
+		}
 		ch, reqs, err := nc.Accept()
 		if err != nil {
 			continue
 		}
 		go a.session(ch, reqs)
 	}
+}
+
+// tunnel echoes the relayed bytes back, standing in for the RDP or VNC
+// service behind the agent.
+func (a *stubAgent) tunnel(nc ssh.NewChannel) {
+	if a.oldVersion {
+		_ = nc.Reject(ssh.UnknownChannelType, "only session channels supported")
+		return
+	}
+	var data common.TunnelChannelData
+	_ = ssh.Unmarshal(nc.ExtraData(), &data)
+	a.mu.Lock()
+	a.tunnels = append(a.tunnels, data.Protocol)
+	a.mu.Unlock()
+	ch, reqs, err := nc.Accept()
+	if err != nil {
+		return
+	}
+	go ssh.DiscardRequests(reqs)
+	go func() {
+		defer ch.Close()
+		_, _ = io.Copy(ch, ch)
+		_ = ch.CloseWrite()
+	}()
 }
 
 func exitStatus(n uint32) []byte {

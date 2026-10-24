@@ -498,6 +498,8 @@ func normalizeAccessType(accessType string) string {
 		return "ssh"
 	case "scp":
 		return "scp"
+	case common.AccessTypeRDP, common.AccessTypeVNC:
+		return strings.ToLower(strings.TrimSpace(accessType))
 	default:
 		return "both"
 	}
@@ -505,7 +507,7 @@ func normalizeAccessType(accessType string) string {
 
 // accessTypeCovers reports whether holding a makes asking for b pointless.
 func accessTypeCovers(a, b string) bool {
-	return a == "both" || a == b
+	return common.AccessTypeCovers(a, b)
 }
 
 func sortedTagKeys(tags map[string]string) []string {

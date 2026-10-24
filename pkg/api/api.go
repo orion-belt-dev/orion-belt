@@ -636,9 +636,9 @@ const DefaultAccessRequestTTLSeconds = 30 * 60
 // CreateAccessRequestRequest represents an access request creation
 type CreateAccessRequestRequest struct {
 	MachineID   string   `json:"machine_id" binding:"required"`
-	RemoteUsers []string `json:"remote_users" binding:"required"`
+	RemoteUsers []string `json:"remote_users"` // required unless access_type is rdp or vnc
 	Reason      string   `json:"reason" binding:"required"`
-	AccessType  string   `json:"access_type"` // ssh, scp, both (default both)
+	AccessType  string   `json:"access_type"` // ssh, scp, both (default both), rdp, vnc
 	// Duration in seconds. Omitted -> DefaultAccessRequestTTLSeconds (30m). 0 -> unlimited.
 	Duration *int `json:"duration"`
 }
@@ -648,6 +648,10 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 	var req CreateAccessRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.RemoteUsers) == 0 && !common.IsTunnelAccessType(req.AccessType) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "remote_users is required (the target accounts to request, e.g. [\"root\"])"})
 		return
 	}
 
@@ -1285,7 +1289,7 @@ func (s *APIServer) grantPermission(c *gin.Context) {
 	var req struct {
 		UserID      string   `json:"user_id" binding:"required"`
 		MachineID   string   `json:"machine_id" binding:"required"`
-		AccessType  string   `json:"access_type" binding:"required"` // ssh, scp, or both
+		AccessType  string   `json:"access_type" binding:"required"` // ssh, scp, both, rdp or vnc
 		RemoteUsers []string `json:"remote_users"`
 		ExpiresAt   string   `json:"expires_at"`
 		DurationSec *int     `json:"duration_seconds"`
@@ -1295,9 +1299,9 @@ func (s *APIServer) grantPermission(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Access is always checked for a specific remote account, so a grant
-	// without one could never be used.
-	if len(req.RemoteUsers) == 0 {
+	// SSH access is always checked for a specific remote account, so a grant
+	// without one could never be used. RDP and VNC targets do their own login.
+	if len(req.RemoteUsers) == 0 && !common.IsTunnelAccessType(req.AccessType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "remote_users is required (the target accounts the grant allows, e.g. [\"root\"])"})
 		return
 	}

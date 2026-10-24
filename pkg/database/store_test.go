@@ -527,6 +527,38 @@ func TestAccessRequests_Lifecycle(t *testing.T) {
 
 // --- permissions -----------------------------------------------------------------------------
 
+func TestPermissions_TunnelTypes(t *testing.T) {
+	f := newFixture(t)
+	db := f.machineNamed(t, "db-01")
+	// Tunnel grants name no remote user; nil must store as an empty array.
+	for _, p := range []*common.Permission{
+		common.NewPermission(f.alice.ID, db.ID, "both", []string{"root"}, f.admin.ID, nil),
+		common.NewPermission(f.admin.ID, db.ID, "rdp", nil, f.admin.ID, nil),
+	} {
+		if err := f.pg.CreatePermission(f.ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// "both" predates the tunnel protocols and never covers them; an rdp
+	// grant covers rdp only.
+	tunnelChecks := []struct {
+		user, machine, access string
+		want                  bool
+	}{
+		{f.alice.ID, db.ID, "rdp", false},
+		{f.alice.ID, db.ID, "vnc", false},
+		{f.admin.ID, db.ID, "rdp", true},
+		{f.admin.ID, db.ID, "vnc", false},
+		{f.admin.ID, db.ID, "ssh", false},
+	}
+	for _, c := range tunnelChecks {
+		if got, err := f.pg.HasPermission(f.ctx, c.user, c.machine, c.access); err != nil || got != c.want {
+			t.Errorf("HasPermission(%s,%s) = %v, %v; want %v", c.machine, c.access, got, err, c.want)
+		}
+	}
+}
+
 func TestPermissions_ChecksAndExpiry(t *testing.T) {
 	f := newFixture(t)
 	db := f.machineNamed(t, "db-01")
@@ -548,7 +580,7 @@ func TestPermissions_ChecksAndExpiry(t *testing.T) {
 		{f.alice.ID, f.machine.ID, "ssh", "deploy", true},
 		{f.alice.ID, f.machine.ID, "ssh", "root", false},
 		{f.alice.ID, f.machine.ID, "scp", "deploy", false},
-		{f.alice.ID, db.ID, "scp", "root", true}, // "both" covers any type
+		{f.alice.ID, db.ID, "scp", "root", true}, // "both" covers ssh and scp
 		{f.admin.ID, f.machine.ID, "ssh", "root", false},
 	}
 	for _, c := range checks {
