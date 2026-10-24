@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -277,6 +278,12 @@ type stubAgent struct {
 	oldVersion bool
 	// cluster, when set, makes this an in-cluster Kubernetes agent.
 	cluster *stubCluster
+	// muted stops answering global requests (keepalives), as an agent
+	// behind a half-open link.
+	muted atomic.Bool
+	// silentTunnels accept and read but never answer or close, as a peer
+	// that half-closes and goes quiet.
+	silentTunnels atomic.Bool
 
 	mu      sync.Mutex
 	execs   []string
@@ -301,7 +308,7 @@ func (h *harness) connectAgent(t *testing.T) *stubAgent {
 		t.Fatalf("agent handshake: %v", err)
 	}
 	a := &stubAgent{conn: conn}
-	go ssh.DiscardRequests(reqs)
+	go a.globalRequests(reqs)
 	go a.serve(chans)
 	t.Cleanup(func() { conn.Close() })
 
@@ -354,11 +361,26 @@ func (a *stubAgent) tunnel(nc ssh.NewChannel) {
 		return
 	}
 	go ssh.DiscardRequests(reqs)
+	if a.silentTunnels.Load() {
+		go func() { _, _ = io.Copy(io.Discard, ch) }()
+		return
+	}
 	go func() {
 		defer ch.Close()
 		_, _ = io.Copy(ch, ch)
 		_ = ch.CloseWrite()
 	}()
+}
+
+func (a *stubAgent) globalRequests(reqs <-chan *ssh.Request) {
+	for req := range reqs {
+		if a.muted.Load() {
+			continue
+		}
+		if req.WantReply {
+			_ = req.Reply(false, nil)
+		}
+	}
 }
 
 func exitStatus(n uint32) []byte {

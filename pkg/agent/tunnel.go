@@ -3,7 +3,6 @@ package agent
 import (
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
@@ -11,8 +10,19 @@ import (
 )
 
 // tunnelDialTimeout bounds how long the agent waits for the local RDP or VNC
-// service to accept before refusing the channel.
-var tunnelDialTimeout = 10 * time.Second
+// service to accept before refusing the channel. tunnelDrain is how long a
+// relay waits for the other side once one direction has ended, so a peer
+// that half-closes and never closes cannot hold the socket forever.
+var (
+	tunnelDialTimeout = 10 * time.Second
+	tunnelDrain       = 30 * time.Second
+)
+
+// maxTunnels caps relayed connections open at once on this agent, so a burst
+// of short connections cannot exhaust its file descriptors.
+const maxTunnels = 256
+
+var tunnelSlots = make(chan struct{}, maxTunnels)
 
 // handleTunnel relays one gateway tunnel channel to the address this agent's
 // config gives its protocol. The gateway has already checked the user's
@@ -23,6 +33,14 @@ func (a *Agent) handleTunnel(newChannel gossh.NewChannel) {
 		newChannel.Reject(gossh.ConnectionFailed, "malformed tunnel request")
 		return
 	}
+	select {
+	case tunnelSlots <- struct{}{}:
+		defer func() { <-tunnelSlots }()
+	default:
+		newChannel.Reject(gossh.ResourceShortage, "too many open tunnels on this agent")
+		return
+	}
+
 	addr := a.config.Agent.TunnelAddress(data.Protocol)
 	if addr == "" {
 		a.logger.Warn("Refusing %q tunnel: not enabled on this agent", data.Protocol)
@@ -46,20 +64,23 @@ func (a *Agent) handleTunnel(newChannel gossh.NewChannel) {
 	go gossh.DiscardRequests(reqs)
 
 	a.logger.Info("Tunnel %s relaying to %s", data.Protocol, addr)
-	var wg sync.WaitGroup
-	wg.Add(2)
+	done := make(chan struct{}, 2)
 	go func() {
-		defer wg.Done()
 		io.Copy(conn, channel)
 		if tc, ok := conn.(*net.TCPConn); ok {
 			tc.CloseWrite()
 		}
+		done <- struct{}{}
 	}()
 	go func() {
-		defer wg.Done()
 		io.Copy(channel, conn)
 		channel.CloseWrite()
+		done <- struct{}{}
 	}()
-	wg.Wait()
+	<-done
+	select {
+	case <-done:
+	case <-time.After(tunnelDrain):
+	}
 	a.logger.Info("Tunnel %s to %s closed", data.Protocol, addr)
 }

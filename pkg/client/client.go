@@ -19,6 +19,16 @@ import (
 type SSHClient struct {
 	config *common.Config
 	logger *common.Logger
+	// Status, when set, receives messages the user should see while a
+	// forward runs, such as losing and regaining the gateway connection.
+	Status func(msg string)
+}
+
+func (c *SSHClient) status(msg string) {
+	c.logger.Info("%s", msg)
+	if c.Status != nil {
+		c.Status(msg)
+	}
 }
 
 // NewSSHClient creates a new SSH client

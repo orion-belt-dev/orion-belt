@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,7 +28,8 @@ type directTCPIPData struct {
 // RDP or VNC service through its agent. The client names the machine as the
 // host and the protocol by its well-known port, which is what plain OpenSSH
 // sends for `ssh -L 13389:web-01:3389 alice@gateway`.
-func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, remoteAddr net.Addr, userID, username string) {
+func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, cc *clientConn) {
+	userID, username := cc.userID, cc.username
 	var req directTCPIPData
 	if err := ssh.Unmarshal(newChannel.ExtraData(), &req); err != nil {
 		newChannel.Reject(ssh.ConnectionFailed, "malformed direct-tcpip request")
@@ -40,6 +40,12 @@ func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, remoteAddr net.Ad
 		newChannel.Reject(ssh.Prohibited, fmt.Sprintf("port %d is not relayed; use 3389 (RDP) or 5900 (VNC)", req.PortToConnect))
 		return
 	}
+
+	if !cc.acquire() {
+		newChannel.Reject(ssh.ResourceShortage, fmt.Sprintf("too many open tunnels on this connection (limit %d)", cc.limit))
+		return
+	}
+	defer cc.release()
 
 	ctx, span := tracing.Start(context.Background(), "gateway.tunnel",
 		trace.WithSpanKind(trace.SpanKindServer))
@@ -52,8 +58,8 @@ func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, remoteAddr net.Ad
 	)
 
 	ip := ""
-	if remoteAddr != nil {
-		ip, _, _ = net.SplitHostPort(remoteAddr.String())
+	if cc.remote != nil {
+		ip, _, _ = net.SplitHostPort(cc.remote.String())
 	}
 	audit := func(action, resource string, metadata map[string]interface{}) {
 		metadata["protocol"] = protocol
@@ -72,12 +78,17 @@ func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, remoteAddr net.Ad
 	resource := "machine:" + machine.ID
 	tracing.SetAttributes(span, attribute.String("orion.target.machine_id", machine.ID))
 
-	if err := s.authService.CheckTunnelPermission(ctx, userID, machine.ID, protocol); err != nil {
-		s.logger.Warn("Permission denied: %s cannot open %s to %s", username, protocol, machine.Name)
-		tracing.RecordError(span, err)
-		audit("tunnel.denied", resource, map[string]interface{}{})
-		newChannel.Reject(ssh.Prohibited, fmt.Sprintf("permission denied: no %s access to %s; request it with access_type %q", protocol, machine.Name, protocol))
-		return
+	grantKey := machine.ID + "|" + protocol
+	// Skip the lookup when this connection passed it moments ago (grantCacheTTL).
+	if !cc.allowed(grantKey) {
+		if err := s.authService.CheckTunnelPermission(ctx, userID, machine.ID, protocol); err != nil {
+			s.logger.Warn("Permission denied: %s cannot open %s to %s", username, protocol, machine.Name)
+			tracing.RecordError(span, err)
+			audit("tunnel.denied", resource, map[string]interface{}{})
+			newChannel.Reject(ssh.Prohibited, fmt.Sprintf("permission denied: no %s access to %s; request it with access_type %q", protocol, machine.Name, protocol))
+			return
+		}
+		cc.remember(grantKey)
 	}
 
 	s.agentsMu.RLock()
@@ -113,7 +124,7 @@ func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, remoteAddr net.Ad
 	audit("tunnel.open", resource, map[string]interface{}{})
 	started := time.Now()
 
-	sent, received := relayChannels(clientChannel, agentChannel)
+	sent, received := relayChannels(clientChannel, agentChannel, s.timing.drain)
 
 	audit("tunnel.close", resource, map[string]interface{}{
 		"bytes_sent":       sent,
@@ -123,22 +134,27 @@ func (s *Server) handleClientTunnel(newChannel ssh.NewChannel, remoteAddr net.Ad
 	s.logger.Info("Tunnel closed: %s %s to %s (%d bytes up, %d down)", username, protocol, machine.Name, sent, received)
 }
 
-// relayChannels copies a and b into each other until both directions end,
-// passing each EOF on, then closes both. It returns the bytes copied a->b and
+// relayChannels copies a and b into each other, passing each EOF on, then
+// closes both. Once one direction ends, the other gets drain to finish:
+// a peer that half-closes and never closes would otherwise hold both channels
+// and the agent's socket open for good. It returns the bytes copied a->b and
 // b->a.
-func relayChannels(a, b ssh.Channel) (aToB, bToA int64) {
+func relayChannels(a, b ssh.Channel, drain time.Duration) (aToB, bToA int64) {
 	var up, down atomic.Int64
-	var wg sync.WaitGroup
+	done := make(chan struct{}, 2)
 	copyHalf := func(dst, src ssh.Channel, n *atomic.Int64) {
-		defer wg.Done()
 		copied, _ := io.Copy(dst, src)
 		n.Store(copied)
 		dst.CloseWrite()
+		done <- struct{}{}
 	}
-	wg.Add(2)
 	go copyHalf(b, a, &up)
 	go copyHalf(a, b, &down)
-	wg.Wait()
+	<-done
+	select {
+	case <-done:
+	case <-time.After(drain):
+	}
 	a.Close()
 	b.Close()
 	return up.Load(), down.Load()

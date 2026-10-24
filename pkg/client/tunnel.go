@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/kube"
@@ -58,13 +59,22 @@ func (c *SSHClient) ForwardKube(ctx context.Context, username, cluster, listenAd
 // forward runs a local listener whose connections each get a stream from
 // open. The first stream is opened, and closed, before listening, so a
 // refusal fails at once with the gateway's reason.
+//
+// The listener outlives the gateway connection: when the network drops, the
+// connection is redialled in the background and later local connections use
+// the new one, so an RDP client's own reconnect, or the next kubectl command,
+// just works. Refusals that retrying cannot fix (permission denied, a key the
+// gateway no longer accepts) end the forward with the reason.
 func (c *SSHClient) forward(ctx context.Context, username, listenAddr string, ready func(net.Addr), what string, open func(*ssh.Client) (stream, error)) error {
-	client, err := c.dialGateway(username)
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	link := newGatewayLink(ctx, c, username)
+	defer link.close()
+
+	client, err := link.get(ctx, false)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
-
 	probe, err := open(client)
 	if err != nil {
 		return tunnelError(err)
@@ -79,14 +89,8 @@ func (c *SSHClient) forward(ctx context.Context, username, listenAddr string, re
 	if ready != nil {
 		ready(ln.Addr())
 	}
-
 	go func() {
 		<-ctx.Done()
-		ln.Close()
-	}()
-	// The gateway connection ending ends the tunnel too.
-	go func() {
-		client.Wait()
 		ln.Close()
 	}()
 
@@ -95,6 +99,9 @@ func (c *SSHClient) forward(ctx context.Context, username, listenAddr string, re
 	for {
 		local, err := ln.Accept()
 		if err != nil {
+			if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, context.Canceled) {
+				return cause
+			}
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -104,8 +111,12 @@ func (c *SSHClient) forward(ctx context.Context, username, listenAddr string, re
 		go func() {
 			defer wg.Done()
 			defer local.Close()
-			remote, err := open(client)
+			remote, err := link.openStream(ctx, open)
 			if err != nil {
+				if isPermanent(err) {
+					cancel(tunnelError(err))
+					return
+				}
 				c.logger.Warn("%s failed: %v", what, tunnelError(err))
 				return
 			}
@@ -124,17 +135,27 @@ func tunnelError(err error) error {
 	return err
 }
 
+// pipeDrain is how long pipe waits for the other direction once one has
+// ended, so a peer that half-closes and never closes cannot hold the local
+// socket and the gateway channel open forever.
+var pipeDrain = 30 * time.Second
+
 // pipe copies a and b into each other, passing each EOF on, until both
-// directions end.
+// directions end or one has ended pipeDrain ago.
 func pipe(a, b stream) {
-	var wg sync.WaitGroup
-	wg.Add(2)
+	done := make(chan struct{}, 2)
 	half := func(dst, src stream) {
-		defer wg.Done()
 		io.Copy(dst, src)
 		dst.CloseWrite()
+		done <- struct{}{}
 	}
 	go half(a, b)
 	go half(b, a)
-	wg.Wait()
+	<-done
+	select {
+	case <-done:
+	case <-time.After(pipeDrain):
+	}
+	a.Close()
+	b.Close()
 }
