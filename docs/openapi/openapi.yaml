@@ -2732,7 +2732,11 @@ components:
     Error:
       type: object
       properties:
-        error: { type: string }
+        error: { type: string, description: "Message for the caller. Internal failures always read \"internal error\"." }
+        code:
+          type: string
+          description: Error kind (docs/ERROR_HANDLING.md). Sent by handlers that use the standard error path.
+          enum: [invalid, unauthenticated, forbidden, not_found, conflict, unavailable, internal]
     Message:
       type: object
       properties:

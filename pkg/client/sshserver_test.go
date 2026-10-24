@@ -23,6 +23,17 @@ type gatewayStub struct {
 	addr   *net.TCPAddr
 	handle func(cmd string, ch ssh.Channel) uint32
 	reject bool // refuse every public key
+	// mute stops answering keepalives, as a gateway behind a dead link.
+	mute bool
+	// lockAll refuses every tunnel and kubectl channel as prohibited.
+	lockAll bool
+	// dropNew hangs up on new TCP connections before the handshake, as a
+	// gateway that is restarting.
+	dropNew bool
+	// busy refuses this many kubectl channels as "connection failed" (the
+	// cluster's agent reconnecting) after the first one succeeds.
+	busy      int
+	kubeOpens int
 
 	mu        sync.Mutex
 	users     []string
@@ -81,12 +92,16 @@ func (g *gatewayStub) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 	defer conn.Close()
 	g.mu.Lock()
 	g.conns = append(g.conns, conn)
+	drop := g.dropNew
 	g.mu.Unlock()
+	if drop {
+		return
+	}
 	_, chans, reqs, err := ssh.NewServerConn(conn, cfg)
 	if err != nil {
 		return
 	}
-	go ssh.DiscardRequests(reqs)
+	go g.globalRequests(reqs)
 	for nc := range chans {
 		if nc.ChannelType() == "direct-tcpip" {
 			g.tunnel(nc)
@@ -209,7 +224,16 @@ func (g *gatewayStub) kube(nc ssh.NewChannel) {
 	g.mu.Lock()
 	g.commands = append(g.commands, "kube "+req.Cluster)
 	g.mu.Unlock()
-	if req.Cluster == "locked" {
+	g.mu.Lock()
+	lockAll := g.lockAll
+	g.kubeOpens++
+	busy := g.kubeOpens > 1 && g.kubeOpens <= 1+g.busy
+	g.mu.Unlock()
+	if busy {
+		_ = nc.Reject(ssh.ConnectionFailed, "prod-eu is not available")
+		return
+	}
+	if req.Cluster == "locked" || lockAll {
 		_ = nc.Reject(ssh.Prohibited, "permission denied: no k8s access to locked")
 		return
 	}
@@ -223,4 +247,18 @@ func (g *gatewayStub) kube(nc ssh.NewChannel) {
 		_, _ = io.Copy(ch, ch)
 		_ = ch.CloseWrite()
 	}()
+}
+
+func (g *gatewayStub) globalRequests(reqs <-chan *ssh.Request) {
+	for req := range reqs {
+		g.mu.Lock()
+		mute := g.mute
+		g.mu.Unlock()
+		if mute {
+			continue
+		}
+		if req.WantReply {
+			_ = req.Reply(false, nil)
+		}
+	}
 }

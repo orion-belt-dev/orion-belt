@@ -50,6 +50,7 @@ type Server struct {
 	ca            *ca.Authority
 	kubeLocks     kubeLocks
 	kubeInterval  time.Duration // kubeReconcileInterval, read once at New
+	timing        timings
 }
 
 // AgentConnection represents a connection from an agent
@@ -239,6 +240,7 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 		shutdown:      make(chan struct{}),
 		ca:            caAuthority,
 		kubeInterval:  kubeReconcileInterval,
+		timing:        currentTimings(),
 	}
 
 	apiServer.SetAgentCommander(server)
@@ -394,13 +396,16 @@ func (s *Server) Start() error {
 
 // handleConnection handles a new TCP connection
 func (s *Server) handleConnection(tcpConn net.Conn) {
-	// Perform SSH handshake
+	// Perform SSH handshake, bounded so a silent connection is dropped.
+	_ = tcpConn.SetDeadline(time.Now().Add(s.timing.handshake))
 	sshConn, chans, reqs, err := ssh.NewServerConn(tcpConn, s.currentSSHConfig())
 	if err != nil {
 		s.logger.Debug("SSH handshake failed: %v", err)
 		tcpConn.Close()
 		return
 	}
+	_ = tcpConn.SetDeadline(time.Time{})
+	go keepConnAlive(sshConn, s.timing.keepalive, s.timing.keepaliveTimeout)
 
 	// Host-CA-certified agents are identified by machine_id, set directly in
 	// handleAgentCertAuth — no synthetic "agent user" lookup needed for them.
@@ -599,10 +604,18 @@ func (s *Server) handleAgentConnection(sshConn *ssh.ServerConn, chans <-chan ssh
 		LastSeen:  time.Now(),
 	}
 
+	// A reconnecting agent replaces its previous connection, which may be
+	// half-open and not yet noticed. Close it, so its sessions end now rather
+	// than when TCP gives up.
 	s.agentsMu.Lock()
+	previous := s.agents[machine.ID]
 	s.agents[machine.ID] = agentConn
 	agentCount := len(s.agents)
 	s.agentsMu.Unlock()
+	if previous != nil {
+		s.logger.Info("Agent %s reconnected; closing its previous connection", machine.Name)
+		previous.SSHConn.Close()
+	}
 	metrics.Default.SetAgentsConnected(int64(agentCount))
 
 	// Update machine status
@@ -657,12 +670,21 @@ func (s *Server) handleAgentConnection(sshConn *ssh.ServerConn, chans <-chan ssh
 	// Wait for connection to close
 	sshConn.Wait()
 
-	// Unregister agent
+	// Unregister the agent, unless a newer connection has already replaced
+	// this one: then the machine is still connected and must stay active.
 	s.agentsMu.Lock()
-	delete(s.agents, machine.ID)
+	registered, ok := s.agents[machine.ID]
+	current := !ok || registered == agentConn // !ok: an admin disconnect removed it
+	if ok && current {
+		delete(s.agents, machine.ID)
+	}
 	agentCount = len(s.agents)
 	s.agentsMu.Unlock()
 	metrics.Default.SetAgentsConnected(int64(agentCount))
+	if !current {
+		s.logger.Info("Replaced connection of agent %s closed", machine.Name)
+		return
+	}
 
 	// Update machine status
 	machine.IsActive = false
@@ -724,14 +746,16 @@ func (s *Server) handleClientConnection(sshConn *ssh.ServerConn, chans <-chan ss
 	// Discard global requests
 	go ssh.DiscardRequests(reqs)
 
+	cc := newClientConn(sshConn.RemoteAddr(), userID, username, s.timing.grantTTL, s.timing.maxTunnels)
+
 	// Handle each channel
 	for newChannel := range chans {
 		if newChannel.ChannelType() == "direct-tcpip" {
-			go s.handleClientTunnel(newChannel, sshConn.RemoteAddr(), userID, username)
+			go s.handleClientTunnel(newChannel, cc)
 			continue
 		}
 		if newChannel.ChannelType() == kube.ClientChannelType {
-			go s.handleClientKube(newChannel, sshConn.RemoteAddr(), userID, username)
+			go s.handleClientKube(newChannel, cc)
 			continue
 		}
 		if newChannel.ChannelType() != "session" {

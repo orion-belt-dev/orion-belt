@@ -36,7 +36,7 @@ func (s *APIServer) listNotifications(c *gin.Context) {
 
 	notifications, err := s.store.ListUserNotifications(ctx, uid, limit, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if notifications == nil {
@@ -56,7 +56,7 @@ func (s *APIServer) unreadNotificationCount(c *gin.Context) {
 
 	count, err := s.store.CountUnreadNotifications(ctx, uid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"unread": count})
@@ -72,7 +72,7 @@ func (s *APIServer) markNotificationRead(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "notification not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "marked read"})
@@ -84,7 +84,7 @@ func (s *APIServer) markAllNotificationsRead(c *gin.Context) {
 	uid, _ := userID.(string)
 
 	if err := s.store.MarkAllNotificationsRead(ctx, uid); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "all marked read"})
@@ -126,12 +126,12 @@ func (s *APIServer) getNotificationPrefs(c *gin.Context) {
 	uid, _ := c.Get("user_id")
 	prefs, err := s.store.GetNotificationPrefs(ctx, uid.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	policy, err := s.store.GetNotificationPolicy(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	// Clamp on read as well as write: a policy tightened after these
@@ -153,7 +153,7 @@ func (s *APIServer) putNotificationPrefs(c *gin.Context) {
 
 	policy, err := s.store.GetNotificationPolicy(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	// Bring the submitted preferences inside the admin bounds before storing,
@@ -163,7 +163,7 @@ func (s *APIServer) putNotificationPrefs(c *gin.Context) {
 	adjusted := policy.ClampPrefs(&prefs)
 
 	if err := s.store.UpsertNotificationPrefs(ctx, &prefs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, s.newPrefsResponse(&prefs, policy, adjusted))
@@ -173,7 +173,7 @@ func (s *APIServer) putNotificationPrefs(c *gin.Context) {
 func (s *APIServer) getNotificationPolicy(c *gin.Context) {
 	policy, err := s.store.GetNotificationPolicy(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -202,7 +202,7 @@ func (s *APIServer) putNotificationPolicy(c *gin.Context) {
 	policy.Normalize()
 
 	if err := s.store.UpsertNotificationPolicy(c.Request.Context(), &policy); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, policy)
@@ -248,7 +248,7 @@ type templateEntry struct {
 func (s *APIServer) listNotificationTemplates(c *gin.Context) {
 	stored, err := s.store.ListNotificationTemplates(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	set := notify.NewTemplateSet(stored)
@@ -299,7 +299,7 @@ func (s *APIServer) putNotificationTemplate(c *gin.Context) {
 	}
 
 	if err := s.store.UpsertNotificationTemplate(c.Request.Context(), &tmpl); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	s.recordAudit(c, "notification_template.update", "notification_template:"+event, map[string]interface{}{
@@ -328,7 +328,7 @@ func (s *APIServer) deleteNotificationTemplate(c *gin.Context) {
 		return
 	}
 	if err := s.store.DeleteNotificationTemplate(c.Request.Context(), event); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	s.recordAudit(c, "notification_template.delete", "notification_template:"+event, nil)

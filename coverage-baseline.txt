@@ -1,13 +1,14 @@
 # Per-package statement coverage baseline for the coverage ratchet.
 # Regenerate with: scripts/coverage-check.sh --update
 # A package may never drop below its recorded value; raising it is the goal (~80%).
-pkg/agent	90.5
+pkg/agent	91.8
 pkg/anomaly	98.1
+pkg/apperr	100.0
 pkg/api	91.2
 pkg/auth	96.3
 pkg/authz	95.6
 pkg/ca	93.5
-pkg/client	96.7
+pkg/client	97.5
 pkg/cliflags	98.1
 pkg/cliparity	98.3
 pkg/common	99.3

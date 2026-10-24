@@ -90,7 +90,7 @@ func (s *APIServer) issueUserCert(c *gin.Context) {
 
 	cert, err := s.ca.IssueUserCert(c.Request.Context(), userID, username, pub, time.Duration(req.TTLHours)*time.Hour)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 

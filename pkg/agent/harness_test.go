@@ -28,14 +28,15 @@ import (
 type gateway struct {
 	addr *net.TCPAddr
 
-	mu           sync.Mutex
-	reject       bool
-	heartbeatOK  bool
-	heartbeats   int
-	renewOK      bool
-	renewPayload []byte
-	certKeyIDs   []string
-	kubeAnnounce int
+	mu            sync.Mutex
+	reject        bool
+	heartbeatOK   bool
+	heartbeatHang bool // never reply, as across a half-open link
+	heartbeats    int
+	renewOK       bool
+	renewPayload  []byte
+	certKeyIDs    []string
+	kubeAnnounce  int
 
 	conns chan *gossh.ServerConn
 }
@@ -119,8 +120,11 @@ func (g *gateway) agentChannels(chans <-chan gossh.NewChannel) {
 			for req := range reqs {
 				g.mu.Lock()
 				g.heartbeats++
-				ok := g.heartbeatOK
+				ok, hang := g.heartbeatOK, g.heartbeatHang
 				g.mu.Unlock()
+				if hang {
+					continue
+				}
 				_ = req.Reply(ok, nil)
 			}
 		}()

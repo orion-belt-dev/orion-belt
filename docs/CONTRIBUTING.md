@@ -175,6 +175,12 @@ Please follow these guidelines to keep the codebase consistent and maintainable:
 
 ---
 
+### Errors
+
+Follow [ERROR_HANDLING.md](ERROR_HANDLING.md): give errors the caller can act
+on an `apperr` kind, wrap the rest with context, and answer API failures with
+`s.fail(c, err)` so internal detail is logged, never returned.
+
 ## Commit Messages
 
 Use clear and descriptive commit messages.
