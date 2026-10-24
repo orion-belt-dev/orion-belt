@@ -212,6 +212,17 @@ type AgentConfig struct {
 	// one. Pointing at another host lets an agent front a machine on its
 	// network that cannot run one, such as a Windows desktop.
 	Tunnels map[string]string `yaml:"tunnels,omitempty"`
+	// Kubernetes turns the agent into a cluster's in-cluster agent.
+	Kubernetes KubernetesAgentConfig `yaml:"kubernetes,omitempty"`
+}
+
+// KubernetesAgentConfig configures an agent running inside a cluster. Empty
+// connection fields use the pod's service account.
+type KubernetesAgentConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	APIServer string `yaml:"api_server,omitempty"` // default https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT
+	TokenFile string `yaml:"token_file,omitempty"`
+	CAFile    string `yaml:"ca_file,omitempty"`
 }
 
 // TunnelAddress returns where the agent relays protocol, or "" when it does

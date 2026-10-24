@@ -18,6 +18,7 @@ import (
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"github.com/orion-belt-dev/orion-belt/pkg/kube"
 	"github.com/orion-belt-dev/orion-belt/pkg/metrics"
 	"github.com/orion-belt-dev/orion-belt/pkg/plugin"
 	"github.com/orion-belt-dev/orion-belt/pkg/recording"
@@ -47,6 +48,8 @@ type Server struct {
 	agentsMu      sync.RWMutex
 	shutdown      chan struct{}
 	ca            *ca.Authority
+	kubeLocks     kubeLocks
+	kubeInterval  time.Duration // kubeReconcileInterval, read once at New
 }
 
 // AgentConnection represents a connection from an agent
@@ -56,6 +59,8 @@ type AgentConnection struct {
 	Channels  <-chan ssh.NewChannel
 	Requests  <-chan *ssh.Request
 	LastSeen  time.Time
+	// Kubernetes is set when the agent announced it runs in a cluster.
+	Kubernetes bool
 }
 
 // New creates a new Orion-Belt server
@@ -233,9 +238,11 @@ func New(config *common.Config, logger *common.Logger) (*Server, error) {
 		agents:        make(map[string]*AgentConnection),
 		shutdown:      make(chan struct{}),
 		ca:            caAuthority,
+		kubeInterval:  kubeReconcileInterval,
 	}
 
 	apiServer.SetAgentCommander(server)
+	apiServer.SetKubeReconciler(server)
 	apiServer.SetTerminalBridge(server)
 
 	// Configure SSH server
@@ -355,6 +362,9 @@ func (s *Server) Start() error {
 
 	// Periodic expired HTTP session cleanup
 	go s.runSessionCleanupLoop()
+
+	// Kubernetes bindings follow their grants, including expiry
+	go s.runKubeReconcileLoop()
 
 	if s.ca != nil {
 		go s.runCARevocationRefreshLoop()
@@ -611,6 +621,12 @@ func (s *Server) handleAgentConnection(sshConn *ssh.ServerConn, chans <-chan ssh
 			switch req.Type {
 			case ca.AgentCertRenewRequest:
 				s.handleAgentCertRenewal(req, machine, sshConn)
+			case kube.CapabilityRequest:
+				s.logger.Info("Agent %s is an in-cluster Kubernetes agent", machine.Name)
+				s.markKubernetes(machine.ID)
+				if req.WantReply {
+					req.Reply(true, nil)
+				}
 			default:
 				if req.WantReply {
 					req.Reply(false, nil)
@@ -712,6 +728,10 @@ func (s *Server) handleClientConnection(sshConn *ssh.ServerConn, chans <-chan ss
 	for newChannel := range chans {
 		if newChannel.ChannelType() == "direct-tcpip" {
 			go s.handleClientTunnel(newChannel, sshConn.RemoteAddr(), userID, username)
+			continue
+		}
+		if newChannel.ChannelType() == kube.ClientChannelType {
+			go s.handleClientKube(newChannel, sshConn.RemoteAddr(), userID, username)
 			continue
 		}
 		if newChannel.ChannelType() != "session" {

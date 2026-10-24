@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { isTunnel } from "../lib/access";
+import { isTunnel, targetField } from "../lib/access";
 import type { Machine, Permission, User } from "../lib/types";
 import { fmtTime, shortId } from "../lib/format";
 import { useToast } from "../components/Toast";
@@ -171,16 +171,19 @@ export function PermissionsPage() {
               <option value="both">both (ssh + scp)</option>
               <option value="rdp">rdp</option>
               <option value="vnc">vnc</option>
+              <option value="k8s">k8s</option>
             </select>
           </div>
           <div>
-            <label className="field" htmlFor="grant-remote-users">Remote users (comma-separated)</label>
+            <label className="field" htmlFor="grant-remote-users">
+              {targetField(accessType, true).label}
+            </label>
             <input
               id="grant-remote-users"
               value={isTunnel(accessType) ? "" : remoteUsers}
               onChange={(e) => setRemoteUsers(e.target.value)}
               disabled={isTunnel(accessType)}
-              placeholder={isTunnel(accessType) ? "Not used for rdp/vnc" : "root,ubuntu"}
+              placeholder={targetField(accessType, true).placeholder}
             />
           </div>
           <div>

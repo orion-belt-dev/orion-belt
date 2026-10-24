@@ -1,0 +1,129 @@
+# Orion Belt in-cluster agent
+#
+# Runs one agent inside the cluster. It dials out to the gateway (no inbound
+# port, no exposed API server) and:
+#   - issues and removes RoleBindings / ClusterRoleBindings for k8s grants,
+#     and deletes expired ones itself even while the gateway is unreachable;
+#   - relays kubectl from `osh kube <cluster>`, impersonating orion:<user>.
+#
+# Before applying:
+#   1. Register a machine for the cluster on the gateway (Add agent in the
+#      console, or POST /api/v1/admin/agents/install-script) and keep its key.
+#   2. kubectl create namespace orion-belt
+#      kubectl -n orion-belt create secret generic orion-belt-agent-key \
+#        --from-file=agent_key=./agent-key
+#   3. Set ORION_SERVER_HOST and ORION_AGENT_NAME below (the name must match
+#      the registered machine), then kubectl apply -f this file.
+#
+# See docs/KUBERNETES.md.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orion-belt-agent
+  namespace: orion-belt
+---
+# What the agent may do in the cluster. This is the whole of its power:
+#   - manage RoleBindings and ClusterRoleBindings (it only touches its own,
+#     named orion-* and labelled app.kubernetes.io/managed-by=orion-belt);
+#   - bind ClusterRoles it does not hold itself, which is what lets a grant
+#     give a user "edit" or "cluster-admin";
+#   - impersonate users, to act as orion:<gateway user> for kubectl.
+# Narrow "bind" with resourceNames to the ClusterRoles you allow in grants.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orion-belt-agent
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings", "clusterrolebindings"]
+    verbs: ["get", "list", "create", "update", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    verbs: ["bind"]
+    # resourceNames: ["view", "edit", "admin", "cluster-admin"]
+  - apiGroups: [""]
+    resources: ["users"]
+    verbs: ["impersonate"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orion-belt-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orion-belt-agent
+subjects:
+  - kind: ServiceAccount
+    name: orion-belt-agent
+    namespace: orion-belt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orion-belt-agent
+  namespace: orion-belt
+spec:
+  # One agent per cluster: the gateway holds one connection per machine.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: orion-belt-agent
+  template:
+    metadata:
+      labels:
+        app: orion-belt-agent
+    spec:
+      serviceAccountName: orion-belt-agent
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532 # lets the non-root agent read the key secret
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/orion-belt-dev/orion-belt-agent:latest
+          env:
+            - name: ORION_SERVER_HOST
+              value: "orion-gateway.example.com"
+            - name: ORION_SERVER_PORT
+              value: "2222"
+            - name: ORION_AGENT_NAME
+              value: "prod-eu"
+            - name: ORION_KUBERNETES
+              value: "true"
+            - name: ORION_KEY_FILE
+              value: /var/run/orion-belt/agent_key
+            # "ask" trusts the gateway's key on first use. With the gateway's
+            # SSH CA enabled, prefer "yes" plus a host CA key in the config.
+            - name: ORION_STRICT_HOST_KEY_CHECKING
+              value: "ask"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: state
+              mountPath: /etc/orion-belt
+            - name: key
+              mountPath: /var/run/orion-belt
+              readOnly: true
+      volumes:
+        - name: state
+          emptyDir: {}
+        - name: key
+          secret:
+            secretName: orion-belt-agent-key
+            defaultMode: 0440

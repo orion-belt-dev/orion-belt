@@ -7,6 +7,9 @@ const (
 	AccessTypeBoth = "both" // ssh and scp; never a tunnel protocol
 	AccessTypeRDP  = "rdp"
 	AccessTypeVNC  = "vnc"
+	// AccessTypeK8s grants Kubernetes access through an in-cluster agent. Its
+	// remote_users are namespace/role scopes (see pkg/kube).
+	AccessTypeK8s = "k8s"
 )
 
 // AccessTypeCovers reports whether a grant of type granted allows access of

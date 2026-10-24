@@ -21,6 +21,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/kube"
 	"github.com/orion-belt-dev/orion-belt/pkg/tracing"
 	"github.com/orion-belt-dev/orion-belt/pkg/version"
 	"go.opentelemetry.io/otel/attribute"
@@ -38,6 +39,7 @@ type Agent struct {
 	privKey   gossh.Signer
 	hostCert  *gossh.Certificate
 	certPath  string
+	kube      kubeAgent
 }
 
 // New creates a new agent
@@ -55,6 +57,10 @@ func (a *Agent) Start() error {
 	// Connect to server
 	if err := a.connectToServer(); err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
+	}
+
+	if a.config.Agent.Kubernetes.Enabled {
+		go a.runKubeSweep(context.Background())
 	}
 
 	// Keep connection alive
@@ -170,6 +176,8 @@ func (a *Agent) connectToServer() error {
 
 	a.logger.Debug("Global request handler started")
 
+	a.announceKubernetes(sshConn)
+
 	a.logger.Debug("Agent fully initialized and ready")
 
 	return nil
@@ -183,6 +191,10 @@ func (a *Agent) handleChannels(chans <-chan gossh.NewChannel) {
 
 		if newChannel.ChannelType() == common.TunnelChannelType {
 			go a.handleTunnel(newChannel)
+			continue
+		}
+		if newChannel.ChannelType() == kube.AgentChannelType {
+			go a.handleKube(newChannel)
 			continue
 		}
 		if newChannel.ChannelType() != "session" {

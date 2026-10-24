@@ -74,7 +74,7 @@ type complianceEnvelope struct {
 // accessEventRow is one row of the SOC2 access report: who reached what,
 // when, why, and who approved it.
 type accessEventRow struct {
-	EventType     string `json:"event_type"` // session | access_request
+	EventType     string `json:"event_type"` // session | rdp_session | vnc_session | k8s_session | access_request
 	EventID       string `json:"event_id"`
 	Timestamp     string `json:"timestamp"`
 	ActorID       string `json:"actor_id"`
@@ -306,9 +306,60 @@ func formatOptionalTime(t *time.Time) string {
 type soc2Inputs struct {
 	From, To    time.Time
 	Sessions    []*common.Session
+	Connections []connection
 	Requests    []*common.AccessRequest
 	Permissions []*common.PermissionVersion
 	Names       *complianceNames
+}
+
+// connection is an RDP, VNC or kubectl connection. These are not sessions
+// (nothing is recorded); the gateway audits each one as it opens.
+type connection struct {
+	ID         string
+	UserID     string
+	MachineID  string
+	AccessType string // rdp | vnc | k8s
+	At         time.Time
+}
+
+// connectionActions are the audit actions that open a connection, and the
+// access type of each (tunnels name theirs in the protocol metadata).
+var connectionActions = map[string]string{
+	"tunnel.open":     "",
+	"k8s.access.open": common.AccessTypeK8s,
+}
+
+// listConnections reads every audited RDP, VNC and kubectl connection, and
+// reports whether any source hit the fetch limit inside [from, to].
+func (s *APIServer) listConnections(c *gin.Context, from, to time.Time) ([]connection, bool, error) {
+	var (
+		out       []connection
+		truncated bool
+	)
+	for action, accessType := range connectionActions {
+		logs, err := s.store.ListAuditLogs(c.Request.Context(), complianceFetchLimit, 0, map[string]interface{}{"action": action})
+		if err != nil {
+			return nil, false, fmt.Errorf("list %s: %w", action, err)
+		}
+		if len(logs) == complianceFetchLimit && inRange(dbInstant(logs[len(logs)-1].Timestamp), from, to) {
+			truncated = true
+		}
+		for _, l := range logs {
+			conn := connection{
+				ID:         l.ID,
+				UserID:     l.UserID,
+				MachineID:  strings.TrimPrefix(l.Resource, "machine:"),
+				AccessType: accessType,
+				At:         dbInstant(l.Timestamp),
+			}
+			if conn.AccessType == "" {
+				conn.AccessType, _ = l.Metadata["protocol"].(string)
+			}
+			out = append(out, conn)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	return out, truncated, nil
 }
 
 func (s *APIServer) buildSOC2Report(c *gin.Context, from, to time.Time) (*complianceReport, error) {
@@ -329,11 +380,15 @@ func (s *APIServer) buildSOC2Report(c *gin.Context, from, to time.Time) (*compli
 	if err != nil {
 		return nil, fmt.Errorf("list permission versions: %w", err)
 	}
+	conns, connsTruncated, err := s.listConnections(c, from, to)
+	if err != nil {
+		return nil, err
+	}
 	normalizeSessions(sessions)
 	normalizeRequests(requests)
 	normalizeVersions(perms)
 
-	rows := buildSOC2Rows(soc2Inputs{From: from, To: to, Sessions: sessions, Requests: requests, Permissions: perms, Names: names})
+	rows := buildSOC2Rows(soc2Inputs{From: from, To: to, Sessions: sessions, Connections: conns, Requests: requests, Permissions: perms, Names: names})
 	report := &complianceReport{
 		Type:    reportTypeSOC2Access,
 		Title:   "Orion Belt Access Report (SOC 2)",
@@ -343,7 +398,8 @@ func (s *APIServer) buildSOC2Report(c *gin.Context, from, to time.Time) (*compli
 		// Either source may have older events past the cap; say so when the
 		// oldest row read is still inside the range.
 		Truncated: (len(sessions) == complianceFetchLimit && inRange(sessions[len(sessions)-1].StartTime, from, to)) ||
-			(len(requests) == complianceFetchLimit && inRange(requests[len(requests)-1].RequestedAt, from, to)),
+			(len(requests) == complianceFetchLimit && inRange(requests[len(requests)-1].RequestedAt, from, to)) ||
+			connsTruncated,
 	}
 	for _, r := range rows {
 		report.Rows = append(report.Rows, []string{r.EventType, r.EventID, r.Timestamp, r.Actor, r.Target, r.RemoteUser, r.Status, r.Reason, r.Approver, r.Authorization, r.AuthorizedBy})
@@ -376,6 +432,24 @@ func buildSOC2Rows(in soc2Inputs) []accessEventRow {
 		explainSession(&row, sess, in)
 		rows = append(rows, row)
 	}
+	for _, conn := range in.Connections {
+		if !inRange(conn.At, in.From, in.To) {
+			continue
+		}
+		row := accessEventRow{
+			EventType: conn.AccessType + "_session",
+			EventID:   conn.ID,
+			Timestamp: conn.At.UTC().Format(time.RFC3339),
+			ActorID:   conn.UserID,
+			Actor:     in.Names.user(conn.UserID),
+			TargetID:  conn.MachineID,
+			Target:    in.Names.machine(conn.MachineID),
+			Source:    conn.AccessType,
+			Status:    "opened",
+		}
+		explainAccess(&row, conn.UserID, conn.MachineID, conn.AccessType, "", conn.At, in)
+		rows = append(rows, row)
+	}
 	for _, req := range in.Requests {
 		if !inRange(req.RequestedAt, in.From, in.To) {
 			continue
@@ -402,18 +476,35 @@ func buildSOC2Rows(in soc2Inputs) []accessEventRow {
 }
 
 func explainSession(row *accessEventRow, sess *common.Session, in soc2Inputs) {
-	start := sess.StartTime.UTC()
+	explainAccess(row, sess.UserID, sess.MachineID, "", sess.RemoteUser, sess.StartTime, in)
+}
+
+// explainAccess ties access by userID to machineID at start to what
+// authorised it. accessType "" (SSH sessions) matches on remoteUser alone, as
+// sessions always have; rdp, vnc and k8s connections match the grant's type,
+// since they have no remote user.
+func explainAccess(row *accessEventRow, userID, machineID, accessType, remoteUser string, start time.Time, in soc2Inputs) {
+	start = start.UTC()
+	covers := func(granted string, remoteUsers []string) bool {
+		if accessType == "" {
+			return slices.Contains(remoteUsers, remoteUser)
+		}
+		if granted == "" {
+			granted = common.AccessTypeBoth
+		}
+		return common.AccessTypeCovers(granted, accessType)
+	}
 
 	var best *common.AccessRequest
 	for _, req := range in.Requests {
 		if req.Status != "approved" || req.ReviewedAt == nil ||
-			req.UserID != sess.UserID || req.MachineID != sess.MachineID {
+			req.UserID != userID || req.MachineID != machineID {
 			continue
 		}
 		if req.ReviewedAt.UTC().After(start) || (req.ExpiresAt != nil && !req.ExpiresAt.UTC().After(start)) {
 			continue
 		}
-		if !slices.Contains(req.RemoteUsers, sess.RemoteUser) {
+		if !covers(req.AccessType, req.RemoteUsers) {
 			continue
 		}
 		if best == nil || req.ReviewedAt.After(*best.ReviewedAt) {
@@ -429,10 +520,10 @@ func explainSession(row *accessEventRow, sess *common.Session, in soc2Inputs) {
 	}
 
 	for _, p := range in.Permissions {
-		if p.UserID != sess.UserID || p.MachineID != sess.MachineID || !p.ActiveAt(start) {
+		if p.UserID != userID || p.MachineID != machineID || !p.ActiveAt(start) {
 			continue
 		}
-		if !slices.Contains(p.RemoteUsers, sess.RemoteUser) {
+		if !covers(p.AccessType, p.RemoteUsers) {
 			continue
 		}
 		row.Authorization = authzPermission
@@ -443,7 +534,7 @@ func explainSession(row *accessEventRow, sess *common.Session, in soc2Inputs) {
 		return
 	}
 
-	if u, ok := in.Names.users[sess.UserID]; ok && (u.IsAdmin || u.EffectiveRole() == common.RoleAdmin || u.EffectiveRole() == common.RoleOperator) {
+	if u, ok := in.Names.users[userID]; ok && (u.IsAdmin || u.EffectiveRole() == common.RoleAdmin || u.EffectiveRole() == common.RoleOperator) {
 		row.Authorization = authzRole
 		row.AuthorizedBy = "role:" + u.EffectiveRole()
 		row.Reason = "privileged role"
@@ -578,15 +669,19 @@ func (s *APIServer) buildPCIReport(c *gin.Context, from, to time.Time) (*complia
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
+	conns, connsTruncated, err := s.listConnections(c, from, to)
+	if err != nil {
+		return nil, err
+	}
 	normalizeSessions(sessions)
-	rows := buildPCIRows(sessions, from, to, names)
+	rows := buildPCIRows(sessions, conns, from, to, names)
 	report := &complianceReport{
 		Type:      reportTypePCIAdmin,
 		Title:     "Orion Belt Admin Activity on PCI Targets",
 		Filters:   rangeFilters(from, to),
 		Columns:   []string{"session_id", "actor", "target", "remote_user", "privileged", "source", "start_time", "end_time", "status", "recording_available"},
 		Records:   rows,
-		Truncated: len(sessions) == complianceFetchLimit && inRange(sessions[len(sessions)-1].StartTime, from, to),
+		Truncated: (len(sessions) == complianceFetchLimit && inRange(sessions[len(sessions)-1].StartTime, from, to)) || connsTruncated,
 	}
 	report.Filters["tag"] = common.PCITagKey + "=" + common.PCITagValue
 	for _, r := range rows {
@@ -595,11 +690,29 @@ func (s *APIServer) buildPCIReport(c *gin.Context, from, to time.Time) (*complia
 	return report, nil
 }
 
-// buildPCIRows keeps sessions in range whose target is tagged PCI-in-scope.
+// buildPCIRows keeps sessions and connections in range whose target is
+// tagged PCI-in-scope.
 // Every session through the gateway is privileged access to the target; the
 // privileged column additionally flags administrative target accounts.
-func buildPCIRows(sessions []*common.Session, from, to time.Time, names *complianceNames) []pciActivityRow {
+func buildPCIRows(sessions []*common.Session, conns []connection, from, to time.Time, names *complianceNames) []pciActivityRow {
 	rows := []pciActivityRow{}
+	// RDP, VNC and kubectl connections are privileged access too. They have
+	// no target account to flag and are not recorded.
+	for _, conn := range conns {
+		if !inRange(conn.At, from, to) || !common.IsPCIInScope(names.machines[conn.MachineID]) {
+			continue
+		}
+		rows = append(rows, pciActivityRow{
+			SessionID: conn.ID,
+			ActorID:   conn.UserID,
+			Actor:     names.user(conn.UserID),
+			TargetID:  conn.MachineID,
+			Target:    names.machine(conn.MachineID),
+			Source:    conn.AccessType,
+			StartTime: conn.At.UTC().Format(time.RFC3339),
+			Status:    "opened",
+		})
+	}
 	for _, sess := range sessions {
 		if !inRange(sess.StartTime, from, to) || !common.IsPCIInScope(names.machines[sess.MachineID]) {
 			continue

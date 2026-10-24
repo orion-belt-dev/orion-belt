@@ -498,7 +498,7 @@ func normalizeAccessType(accessType string) string {
 		return "ssh"
 	case "scp":
 		return "scp"
-	case common.AccessTypeRDP, common.AccessTypeVNC:
+	case common.AccessTypeRDP, common.AccessTypeVNC, common.AccessTypeK8s:
 		return strings.ToLower(strings.TrimSpace(accessType))
 	default:
 		return "both"

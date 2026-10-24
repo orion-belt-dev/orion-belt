@@ -23,6 +23,7 @@ import (
 
 	"github.com/orion-belt-dev/orion-belt/internal/pgtest"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/kube"
 )
 
 func TestMain(m *testing.M) {
@@ -274,6 +275,8 @@ type stubAgent struct {
 	refusePTY bool
 	// oldVersion rejects tunnel channels as agents before tunnels did.
 	oldVersion bool
+	// cluster, when set, makes this an in-cluster Kubernetes agent.
+	cluster *stubCluster
 
 	mu      sync.Mutex
 	execs   []string
@@ -320,6 +323,10 @@ func (a *stubAgent) serve(chans <-chan ssh.NewChannel) {
 	for nc := range chans {
 		if nc.ChannelType() == common.TunnelChannelType {
 			a.tunnel(nc)
+			continue
+		}
+		if nc.ChannelType() == kube.AgentChannelType {
+			a.kube(nc)
 			continue
 		}
 		ch, reqs, err := nc.Accept()

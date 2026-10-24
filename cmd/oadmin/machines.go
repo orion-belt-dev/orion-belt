@@ -190,6 +190,7 @@ already running.`,
 	}
 	del.Flags().BoolVar(&archive, "archive", false, "archive instead of deleting outright")
 	machines.AddCommand(del)
+	machines.AddCommand(newKubeReconcileCmd())
 
 	return machines
 }

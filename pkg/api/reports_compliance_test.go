@@ -133,7 +133,7 @@ func TestBuildPCIRowsOnlyTaggedTargets(t *testing.T) {
 		{ID: "s-pay", UserID: "u-bob", MachineID: "m-pay", RemoteUser: "root", StartTime: compNow.Add(-time.Hour), RecordingPath: "/r/s-pay.cast"},
 		{ID: "s-pay-app", UserID: "u-bob", MachineID: "m-pay", RemoteUser: "app", StartTime: compNow.Add(-2 * time.Hour)},
 		{ID: "s-web", UserID: "u-bob", MachineID: "m-web", RemoteUser: "root", StartTime: compNow.Add(-time.Hour)},
-	}, compNow.Add(-24*time.Hour), compNow, compNames())
+	}, nil, compNow.Add(-24*time.Hour), compNow, compNames())
 	if len(rows) != 2 || rows[0].SessionID != "s-pay-app" || rows[1].SessionID != "s-pay" {
 		t.Fatalf("rows = %+v", rows)
 	}
@@ -341,5 +341,92 @@ func TestBuildGrantReviewRowsKeepsOneVersionPerGrant(t *testing.T) {
 				t.Errorf("p2 should be the version that ended last: %+v", r)
 			}
 		}
+	}
+}
+
+// RDP, VNC and kubectl connections appear beside SSH sessions, tied to the
+// grant or request of their own access type: an ssh+scp grant never explains
+// an RDP connection.
+func TestBuildSOC2RowsIncludesNonSSHConnections(t *testing.T) {
+	reviewed := compNow.Add(-3 * time.Hour)
+	both := &common.PermissionVersion{Permission: common.Permission{
+		ID: "p-both", UserID: "u-bob", MachineID: "m-web", AccessType: "both", RemoteUsers: []string{"root"},
+		GrantedBy: "u-admin", GrantedAt: compNow.Add(-48 * time.Hour),
+	}}
+	rdp := &common.PermissionVersion{Permission: common.Permission{
+		ID: "p-rdp", UserID: "u-bob", MachineID: "m-web", AccessType: "rdp", RemoteUsers: []string{},
+		GrantedBy: "u-admin", GrantedAt: compNow.Add(-48 * time.Hour),
+	}}
+	rows := buildSOC2Rows(soc2Inputs{
+		From: compNow.Add(-24 * time.Hour), To: compNow,
+		Names:       compNames(),
+		Permissions: []*common.PermissionVersion{both, rdp},
+		Requests: []*common.AccessRequest{{
+			ID: "r-k8s", UserID: "u-alice", MachineID: "m-pay", AccessType: "k8s", RemoteUsers: []string{"payments/edit"},
+			Reason: "INC-7", Status: "approved", RequestedAt: compNow.Add(-4 * time.Hour),
+			ReviewedAt: &reviewed, ReviewedBy: ptrStr("u-admin"), ExpiresAt: ptrTime(compNow.Add(time.Hour)),
+		}},
+		Connections: []connection{
+			{ID: "a-rdp", UserID: "u-bob", MachineID: "m-web", AccessType: "rdp", At: compNow.Add(-2 * time.Hour)},
+			{ID: "a-vnc", UserID: "u-bob", MachineID: "m-web", AccessType: "vnc", At: compNow.Add(-90 * time.Minute)},
+			{ID: "a-k8s", UserID: "u-alice", MachineID: "m-pay", AccessType: "k8s", At: compNow.Add(-time.Hour)},
+			{ID: "a-old", UserID: "u-bob", MachineID: "m-web", AccessType: "rdp", At: compNow.Add(-48 * time.Hour)},
+		},
+	})
+	byID := map[string]accessEventRow{}
+	for _, r := range rows {
+		byID[r.EventID] = r
+	}
+	if _, ok := byID["a-old"]; ok {
+		t.Error("connection outside the range was included")
+	}
+	if r := byID["a-rdp"]; r.EventType != "rdp_session" || r.AuthorizedBy != "permission:p-rdp" {
+		t.Errorf("rdp row = %+v", r)
+	}
+	// Only the ssh+scp grant covers bob for vnc, and it must not.
+	if r := byID["a-vnc"]; r.EventType != "vnc_session" || r.Authorization != authzUnresolved {
+		t.Errorf("vnc row = %+v", r)
+	}
+	if r := byID["a-k8s"]; r.EventType != "k8s_session" || r.AuthorizedBy != "access_request:r-k8s" || r.Approver != "admin" {
+		t.Errorf("k8s row = %+v", r)
+	}
+	if r := byID["r-k8s"]; r.RemoteUser != "payments/edit" {
+		t.Errorf("k8s request should show its scope: %+v", r)
+	}
+}
+
+func TestBuildPCIRowsIncludesConnections(t *testing.T) {
+	rows := buildPCIRows(nil, []connection{
+		{ID: "c-pay", UserID: "u-bob", MachineID: "m-pay", AccessType: "rdp", At: compNow.Add(-time.Hour)},
+		{ID: "c-web", UserID: "u-bob", MachineID: "m-web", AccessType: "k8s", At: compNow.Add(-time.Hour)},
+	}, compNow.Add(-24*time.Hour), compNow, compNames())
+	if len(rows) != 1 || rows[0].SessionID != "c-pay" || rows[0].Source != "rdp" || rows[0].Recording {
+		t.Fatalf("rows = %+v", rows)
+	}
+}
+
+// Audited RDP and kubectl connections reach the exported report.
+func TestComplianceExportIncludesAuditedConnections(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	rdp := common.NewAuditLog(e.alice.ID, "tunnel.open", "machine:"+e.machine.ID, "10.0.0.9", map[string]interface{}{"protocol": "rdp"})
+	k8s := common.NewAuditLog(e.alice.ID, "k8s.access.open", "machine:"+e.machine.ID, "10.0.0.9", map[string]interface{}{})
+	for _, l := range []*common.AuditLog{rdp, k8s} {
+		if err := e.store.CreateAuditLog(ctx, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := e.do(http.MethodGet, "/api/v1/reports/soc2-access/export?format=json", e.auditorKey, nil)
+	e.expect(r, http.StatusOK)
+	var out struct {
+		Records []accessEventRow `json:"records"`
+	}
+	r.json(t, &out)
+	types := map[string]string{}
+	for _, row := range out.Records {
+		types[row.EventID] = row.EventType
+	}
+	if types[rdp.ID] != "rdp_session" || types[k8s.ID] != "k8s_session" {
+		t.Errorf("connection rows = %v", types)
 	}
 }

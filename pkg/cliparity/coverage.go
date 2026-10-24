@@ -89,11 +89,13 @@ var Coverage = map[string]Cover{
 	"POST /api/v1/public/webauthn/login/finish": {Exempt: "browser assertion ceremony; CLI logins use SSH keys or password+TOTP"},
 
 	// --- Machines ----------------------------------------------------------
-	"GET /api/v1/machines":              {Command: "osh --list", Note: "also oadmin machines list"},
-	"GET /api/v1/machines/:id":          {Command: "oadmin machines get"},
-	"POST /api/v1/admin/machines":       {Command: "oadmin machines create"},
-	"PUT /api/v1/admin/machines/:id":    {Command: "oadmin machines update"},
-	"DELETE /api/v1/admin/machines/:id": {Command: "oadmin machines delete"},
+	"GET /api/v1/machines":                                 {Command: "osh --list", Note: "also oadmin machines list"},
+	"GET /api/v1/machines/:id":                             {Command: "oadmin machines get"},
+	"POST /api/v1/admin/machines":                          {Command: "oadmin machines create"},
+	"PUT /api/v1/admin/machines/:id":                       {Command: "oadmin machines update"},
+	"DELETE /api/v1/admin/machines/:id":                    {Command: "oadmin machines delete"},
+	"GET /api/v1/admin/machines/:id/kubernetes/reconcile":  {Command: "oadmin machines kube-reconcile"},
+	"POST /api/v1/admin/machines/:id/kubernetes/reconcile": {Command: "oadmin machines kube-reconcile --apply"},
 
 	// --- Users -------------------------------------------------------------
 	"GET /api/v1/users":              {Command: "oadmin users list"},

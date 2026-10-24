@@ -889,6 +889,39 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /api/v1/admin/machines/{id}/kubernetes/reconcile:
+    get:
+      tags: [Machines]
+      summary: Report Kubernetes binding drift (dry run)
+      description: >-
+        Compares the RoleBindings and ClusterRoleBindings Orion Belt issued in
+        the cluster with its active k8s grants, through the in-cluster agent.
+        Bindings in plan.delete are expired, revoked or orphaned.
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubeReconcileResult" }
+        "409": { description: No connected in-cluster agent for the machine }
+        "502": { description: The agent or API server failed }
+    post:
+      tags: [Machines]
+      summary: Reconcile Kubernetes bindings now
+      description: Applies the plan and audits each change (k8s.binding.*). The gateway also does this every 30 seconds.
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Plan applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubeReconcileResult" }
+        "409": { description: No connected in-cluster agent for the machine }
+        "502": { description: Some changes failed; the plan is returned with the error }
+
   /api/v1/permissions/user/{id}:
     get:
       tags: [Permissions]
@@ -968,7 +1001,7 @@ paths:
             schema:
               type: object
               properties:
-                access_type: { type: string, enum: [ssh, scp, both, rdp, vnc] }
+                access_type: { type: string, enum: [ssh, scp, both, rdp, vnc, k8s] }
                 remote_users:
                   type: array
                   items: { type: string }
@@ -2527,7 +2560,7 @@ components:
           description: Login on the target machine; empty means any login.
         access_type:
           type: string
-          enum: [ssh, scp, both, rdp, vnc]
+          enum: [ssh, scp, both, rdp, vnc, k8s]
         status:
           type: string
           enum: [granted, pending, requestable]
@@ -2972,6 +3005,28 @@ components:
           additionalProperties: { type: string }
         agent_id: { type: string }
         is_active: { type: boolean }
+    KubeBinding:
+      type: object
+      properties:
+        name: { type: string }
+        namespace: { type: string, description: Empty for a ClusterRoleBinding }
+        cluster_role: { type: string }
+        subject: { type: string, example: "orion:alice" }
+        user: { type: string }
+        permission_id: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+    KubeReconcileResult:
+      type: object
+      properties:
+        machine_id: { type: string }
+        dry_run: { type: boolean }
+        in_sync: { type: boolean }
+        plan:
+          type: object
+          properties:
+            create: { type: array, items: { $ref: "#/components/schemas/KubeBinding" } }
+            update: { type: array, items: { $ref: "#/components/schemas/KubeBinding" } }
+            delete: { type: array, items: { $ref: "#/components/schemas/KubeBinding" } }
     Permission:
       type: object
       properties:
@@ -2980,7 +3035,7 @@ components:
         machine_id: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both, rdp, vnc]
+          enum: [ssh, scp, both, rdp, vnc, k8s]
         remote_users:
           type: array
           items: { type: string }
@@ -2993,18 +3048,19 @@ components:
     GrantPermissionRequest:
       type: object
       description: >-
-        "both" means ssh and scp; it never covers rdp or vnc. rdp and vnc
+        "both" means ssh and scp; it never covers rdp, vnc or k8s. rdp and vnc
         grants name no remote user, since the target authenticates the login.
+        k8s grants name namespace/role scopes ("payments/edit", "*/view").
       required: [user_id, machine_id, access_type]
       properties:
         user_id: { type: string }
         machine_id: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both, rdp, vnc]
+          enum: [ssh, scp, both, rdp, vnc, k8s]
         remote_users:
           type: array
-          description: Target accounts the grant allows, such as ["root"]. Required (at least one) unless access_type is rdp or vnc.
+          description: Target accounts the grant allows, such as ["root"]. Required (at least one) unless access_type is rdp or vnc. For k8s, namespace/role scopes such as ["payments/edit", "*/view"].
           items: { type: string }
         expires_at: { type: string, format: date-time }
         duration_seconds: { type: integer }
@@ -3019,7 +3075,7 @@ components:
           items: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both, rdp, vnc]
+          enum: [ssh, scp, both, rdp, vnc, k8s]
         reason: { type: string }
         duration: { type: integer, description: Seconds }
         status:
@@ -3158,11 +3214,11 @@ components:
         machine_id: { type: string }
         remote_users:
           type: array
-          description: Required unless access_type is rdp or vnc.
+          description: Required unless access_type is rdp or vnc. For k8s, namespace/role scopes.
           items: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both, rdp, vnc]
+          enum: [ssh, scp, both, rdp, vnc, k8s]
           default: both
         reason: { type: string }
         duration: { type: integer, description: Duration in seconds; omit for 30m default; 0 = unlimited }

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { isTunnel } from "../lib/access";
+import { isTunnel, targetField } from "../lib/access";
 import type { AccessRequest, Machine } from "../lib/types";
 import { Badge } from "../components/Badge";
 import { fmtTime, fmtTTL, shortId } from "../lib/format";
@@ -139,13 +139,15 @@ export function RequestsPage() {
             </select>
           </div>
           <div>
-            <label className="field" htmlFor="request-remote-user">Remote user</label>
+            <label className="field" htmlFor="request-remote-user">
+              {targetField(accessType, false).label}
+            </label>
             <input
               id="request-remote-user"
               value={isTunnel(accessType) ? "" : remote}
               onChange={(e) => setRemote(e.target.value)}
               disabled={isTunnel(accessType)}
-              placeholder={isTunnel(accessType) ? "Not used for rdp/vnc" : undefined}
+              placeholder={targetField(accessType, false).placeholder}
             />
           </div>
           <div>
@@ -156,6 +158,7 @@ export function RequestsPage() {
               <option value="both">both (ssh + scp)</option>
               <option value="rdp">rdp</option>
               <option value="vnc">vnc</option>
+              <option value="k8s">k8s</option>
             </select>
           </div>
           <div>

@@ -21,6 +21,14 @@ EOF
 fi
 chmod 600 "$KEY_FILE" 2>/dev/null || true
 
+# ORION_KUBERNETES=true in a pod makes this the cluster's in-cluster agent,
+# using the pod's service account (see deploy/kubernetes).
+KUBERNETES_BLOCK=""
+if [ "${ORION_KUBERNETES:-false}" = "true" ]; then
+  KUBERNETES_BLOCK="  kubernetes:
+    enabled: true"
+fi
+
 CFG=/etc/orion-belt/agent.yaml
 cat > "$CFG" <<EOF
 server:
@@ -31,6 +39,7 @@ agent:
   name: "${ORION_AGENT_NAME}"
   tags:
     environment: "${ORION_AGENT_ENV:-production}"
+${KUBERNETES_BLOCK}
 
 auth:
   key_file: "${KEY_FILE}"
