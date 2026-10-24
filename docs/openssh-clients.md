@@ -174,3 +174,9 @@ See [SSH_CA.md](SSH_CA.md).
 ## Lab verification
 
 To exercise these flows on a local QEMU gateway, follow [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md) cases **TC-QEMU-007** … **TC-QEMU-010** (`make lab-qemu-start`).
+
+## RDP and VNC port forwarding
+
+`ssh -N -L 13389:win-01:3389 alice@orion-gateway.example.com` relays RDP to
+win-01 (5900 for VNC) with an `rdp` or `vnc` grant. See
+[RDP_VNC.md](RDP_VNC.md).

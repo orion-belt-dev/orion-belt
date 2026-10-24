@@ -968,7 +968,7 @@ paths:
             schema:
               type: object
               properties:
-                access_type: { type: string, enum: [ssh, scp, both] }
+                access_type: { type: string, enum: [ssh, scp, both, rdp, vnc] }
                 remote_users:
                   type: array
                   items: { type: string }
@@ -2527,7 +2527,7 @@ components:
           description: Login on the target machine; empty means any login.
         access_type:
           type: string
-          enum: [ssh, scp, both]
+          enum: [ssh, scp, both, rdp, vnc]
         status:
           type: string
           enum: [granted, pending, requestable]
@@ -2980,7 +2980,7 @@ components:
         machine_id: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both]
+          enum: [ssh, scp, both, rdp, vnc]
         remote_users:
           type: array
           items: { type: string }
@@ -2992,17 +2992,19 @@ components:
           nullable: true
     GrantPermissionRequest:
       type: object
-      required: [user_id, machine_id, access_type, remote_users]
+      description: >-
+        "both" means ssh and scp; it never covers rdp or vnc. rdp and vnc
+        grants name no remote user, since the target authenticates the login.
+      required: [user_id, machine_id, access_type]
       properties:
         user_id: { type: string }
         machine_id: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both]
+          enum: [ssh, scp, both, rdp, vnc]
         remote_users:
           type: array
-          minItems: 1
-          description: Target accounts the grant allows, such as ["root"].
+          description: Target accounts the grant allows, such as ["root"]. Required (at least one) unless access_type is rdp or vnc.
           items: { type: string }
         expires_at: { type: string, format: date-time }
         duration_seconds: { type: integer }
@@ -3017,7 +3019,7 @@ components:
           items: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both]
+          enum: [ssh, scp, both, rdp, vnc]
         reason: { type: string }
         duration: { type: integer, description: Seconds }
         status:
@@ -3151,15 +3153,16 @@ components:
           format: date-time
     CreateAccessRequest:
       type: object
-      required: [machine_id, remote_users, reason]
+      required: [machine_id, reason]
       properties:
         machine_id: { type: string }
         remote_users:
           type: array
+          description: Required unless access_type is rdp or vnc.
           items: { type: string }
         access_type:
           type: string
-          enum: [ssh, scp, both]
+          enum: [ssh, scp, both, rdp, vnc]
           default: both
         reason: { type: string }
         duration: { type: integer, description: Duration in seconds; omit for 30m default; 0 = unlimited }

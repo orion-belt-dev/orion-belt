@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { isTunnel } from "../lib/access";
 import type { Machine, Permission, User } from "../lib/types";
 import { fmtTime, shortId } from "../lib/format";
 import { useToast } from "../components/Toast";
@@ -42,10 +43,12 @@ export function PermissionsPage() {
         user_id: userId,
         machine_id: machineId,
         access_type: accessType,
-        remote_users: remoteUsers
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        remote_users: isTunnel(accessType)
+          ? []
+          : remoteUsers
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
       };
       if (durationHours > 0) body.duration_seconds = Math.round(durationHours * 3600);
       return api("/admin/permissions", { method: "POST", body: JSON.stringify(body) });
@@ -165,12 +168,20 @@ export function PermissionsPage() {
             <select value={accessType} onChange={(e) => setAccessType(e.target.value)}>
               <option value="ssh">ssh</option>
               <option value="scp">scp</option>
-              <option value="both">both</option>
+              <option value="both">both (ssh + scp)</option>
+              <option value="rdp">rdp</option>
+              <option value="vnc">vnc</option>
             </select>
           </div>
           <div>
-            <label className="field">Remote users (comma-separated)</label>
-            <input value={remoteUsers} onChange={(e) => setRemoteUsers(e.target.value)} placeholder="root,ubuntu" />
+            <label className="field" htmlFor="grant-remote-users">Remote users (comma-separated)</label>
+            <input
+              id="grant-remote-users"
+              value={isTunnel(accessType) ? "" : remoteUsers}
+              onChange={(e) => setRemoteUsers(e.target.value)}
+              disabled={isTunnel(accessType)}
+              placeholder={isTunnel(accessType) ? "Not used for rdp/vnc" : "root,ubuntu"}
+            />
           </div>
           <div>
             <label className="field">TTL hours (0 = no expiry)</label>

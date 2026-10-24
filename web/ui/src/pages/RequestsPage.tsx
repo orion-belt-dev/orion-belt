@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { isTunnel } from "../lib/access";
 import type { AccessRequest, Machine } from "../lib/types";
 import { Badge } from "../components/Badge";
 import { fmtTime, fmtTTL, shortId } from "../lib/format";
@@ -46,7 +47,8 @@ export function RequestsPage() {
         method: "POST",
         body: JSON.stringify({
           machine_id: machineId,
-          remote_users: [remote],
+          // RDP and VNC targets do their own login; there is no remote user to name.
+          remote_users: isTunnel(accessType) ? [] : [remote],
           access_type: accessType,
           reason,
           duration,
@@ -137,15 +139,23 @@ export function RequestsPage() {
             </select>
           </div>
           <div>
-            <label className="field">Remote user</label>
-            <input value={remote} onChange={(e) => setRemote(e.target.value)} />
+            <label className="field" htmlFor="request-remote-user">Remote user</label>
+            <input
+              id="request-remote-user"
+              value={isTunnel(accessType) ? "" : remote}
+              onChange={(e) => setRemote(e.target.value)}
+              disabled={isTunnel(accessType)}
+              placeholder={isTunnel(accessType) ? "Not used for rdp/vnc" : undefined}
+            />
           </div>
           <div>
             <label className="field">Access type</label>
             <select value={accessType} onChange={(e) => setAccessType(e.target.value)}>
               <option value="ssh">ssh</option>
               <option value="scp">scp</option>
-              <option value="both">both</option>
+              <option value="both">both (ssh + scp)</option>
+              <option value="rdp">rdp</option>
+              <option value="vnc">vnc</option>
             </select>
           </div>
           <div>
