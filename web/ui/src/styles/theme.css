@@ -101,7 +101,9 @@ a { color: var(--accent); }
   color: var(--text);
 }
 .btn.secondary:hover { background: var(--bg-hover); }
-.btn.danger { background: var(--danger); color: #ffffff; }
+/* Darker than --danger so white text passes WCAG AA (5.9:1); --danger stays
+   bright for red text on dark grounds. */
+.btn.danger { background: #c81e1e; color: #ffffff; }
 .btn.sm { padding: 0.3rem 0.65rem; font-size: 0.85rem; font-weight: 500; }
 .btn.block { width: 100%; }
 
@@ -860,3 +862,48 @@ pre.code, pre.session {
   .app-shell.nav-collapsed .who { flex-direction: row; }
   .grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
 }
+
+/* Multi-select picker (permissions bulk grant). */
+.picker { border: 0; margin: 0; padding: 0; min-width: 0; }
+.picker legend { padding: 0; }
+.picker-actions { margin: 0.45rem 0; }
+.picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+}
+.picker-list li { padding: 0.15rem 0; }
+.picker-list label { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; min-height: 1.75rem; }
+.picker-list input[type="checkbox"] { width: auto; margin: 0; }
+
+/* Segmented view switch. */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 1rem; }
+.seg button {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  min-height: 2.25rem;
+}
+.seg button[aria-selected="true"] { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.check-col { width: 2rem; }
+.check-col input { width: auto; margin: 0; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Card section titles that sit at h2 in the outline, styled like card h3. */
+.card h2.card-title { margin: 0 0 0.75rem; font-size: 1rem; }
+/* Wide tables scroll inside their card on narrow screens. */
+.table-scroll { overflow-x: auto; position: relative; } /* contains .sr-only cells */
+.table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

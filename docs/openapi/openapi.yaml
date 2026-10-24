@@ -954,17 +954,102 @@ paths:
                 items:
                   $ref: "#/components/schemas/Permission"
 
+  /api/v1/admin/permissions/bulk:
+    post:
+      tags: [Permissions]
+      summary: Grant one access type to every user × machine pair (at most 500)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_ids, machine_ids, access_type]
+              properties:
+                user_ids: { type: array, items: { type: string } }
+                machine_ids: { type: array, items: { type: string } }
+                access_type: { type: string, enum: [ssh, scp, both, rdp, vnc, k8s] }
+                remote_users: { type: array, items: { type: string } }
+                duration_seconds: { type: integer }
+                expires_at: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Grants applied; failed lists pairs that could not be granted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+        "400": { description: Invalid selection or more than 500 pairs }
+  /api/v1/admin/permissions/bulk-revoke:
+    post:
+      tags: [Permissions]
+      summary: Revoke several grants (at most 500)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Grants revoked; failed lists ids that could not be
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+  /api/v1/admin/permissions/effective:
+    get:
+      tags: [Permissions]
+      summary: Effective access for a user (across machines) or a machine (across users)
+      description: >-
+        Resolves roles (admins and operators reach every machine, access_type "*")
+        and grants ("both" expands to ssh and scp), each with its source and expiry.
+      parameters:
+        - { name: user_id, in: query, schema: { type: string } }
+        - { name: machine_id, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Effective access
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EffectiveAccess" }
+        "400": { description: Pass exactly one of user_id or machine_id }
+        "404": { description: Unknown user or machine }
   /api/v1/admin/permissions:
     get:
       tags: [Permissions]
-      summary: List all active permissions (admin)
+      summary: List and search active permissions (admin)
+      description: Filtered and paged in the database. X-Total-Count is the number of matches.
       parameters:
         - name: limit
           in: query
           schema: { type: integer, default: 500, maximum: 2000 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: q
+          in: query
+          description: Case-insensitive substring of the username, machine name, or a remote user / scope.
+          schema: { type: string }
+        - name: access_type
+          in: query
+          schema: { type: string, enum: [ssh, scp, both, rdp, vnc, k8s] }
+        - name: user_id
+          in: query
+          schema: { type: string }
+        - name: machine_id
+          in: query
+          schema: { type: string }
       responses:
         "200":
           description: Active grants
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Grants matching the filters, across all pages
           content:
             application/json:
               schema:
@@ -3027,6 +3112,31 @@ components:
             create: { type: array, items: { $ref: "#/components/schemas/KubeBinding" } }
             update: { type: array, items: { $ref: "#/components/schemas/KubeBinding" } }
             delete: { type: array, items: { $ref: "#/components/schemas/KubeBinding" } }
+    BulkResult:
+      type: object
+      properties:
+        granted: { type: integer }
+        revoked: { type: integer }
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id: { type: string }
+              machine_id: { type: string }
+              permission_id: { type: string }
+              error: { type: string }
+    EffectiveAccess:
+      type: object
+      properties:
+        user_id: { type: string }
+        username: { type: string }
+        machine_id: { type: string }
+        machine_name: { type: string }
+        access_type: { type: string, description: 'ssh, scp, rdp, vnc, k8s, or "*" (every type, from a role)' }
+        remote_users: { type: array, items: { type: string }, description: Accounts, or k8s scopes; empty for rdp/vnc }
+        source: { type: string, example: "permission:3f2a…" }
+        expires_at: { type: string, format: date-time, nullable: true }
     Permission:
       type: object
       properties:

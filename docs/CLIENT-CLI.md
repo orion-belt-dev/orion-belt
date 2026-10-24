@@ -102,6 +102,8 @@ prints backup codes once, for the same reason.
 | `oadmin machines list` / `get` / `create` / `update` / `delete` | Manage target machines |
 | `oadmin machines kube-reconcile <cluster> [--apply]` | Check (or fix) a cluster's Kubernetes bindings against its k8s grants |
 | `oadmin permissions list [--user\|--machine]` / `grant` / `update` / `revoke` | Manage standing access |
+| `oadmin permissions bulk-grant --user … --machine … [--access-type …]` / `bulk-revoke <id>…` | Grant to every user × machine pair (up to 500), or revoke several grants |
+| `oadmin permissions effective --user …\|--machine …` | What a user can actually do, or who can reach a machine, after roles and grants are resolved |
 | `oadmin sessions list [--active]` / `get <id>` / `content <id>` | Inspect sessions, download recordings |
 | `oadmin audit list [--limit N] [--action …]` | Read the audit log |
 | `oadmin agents list` / `command` / `disconnect` / `install-script` | Operate connected agents |

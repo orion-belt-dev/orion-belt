@@ -236,3 +236,20 @@ export class ApiError extends Error {
     this.data = data;
   }
 }
+
+export type EffectiveAccess = {
+  user_id: string;
+  username: string;
+  machine_id: string;
+  machine_name: string;
+  access_type: string; // "*" from a role
+  remote_users?: string[] | null;
+  source: string; // role:<role> | permission:<id>
+  expires_at?: string | null;
+};
+
+export type BulkResult = {
+  granted?: number;
+  revoked?: number;
+  failed: { user_id?: string; machine_id?: string; permission_id?: string; error: string }[];
+};

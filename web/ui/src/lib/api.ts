@@ -114,3 +114,21 @@ export async function apiDownload(path: string, fallbackFilename: string): Promi
   a.remove();
   URL.revokeObjectURL(href);
 }
+
+// apiPage fetches a paged list and the total from X-Total-Count.
+export async function apiPage<T>(path: string): Promise<{ rows: T[]; total: number }> {
+  const headers = new Headers();
+  const token = getSessionToken();
+  const jwt = getJwt();
+  if (token) headers.set("X-Session-Token", token);
+  if (jwt) headers.set("Authorization", `Bearer ${jwt}`);
+  const res = await fetch(`/api/v1${path}`, { headers });
+  const data = (await res.json().catch(() => null)) as unknown;
+  if (!res.ok) {
+    const msg = data && typeof data === "object" && "error" in data ? String((data as { error: string }).error) : res.statusText;
+    throw new ApiError(msg || "request failed", res.status, data);
+  }
+  const rows = (Array.isArray(data) ? data : []) as T[];
+  const total = Number(res.headers.get("X-Total-Count") ?? rows.length);
+  return { rows, total: Number.isFinite(total) ? total : rows.length };
+}
