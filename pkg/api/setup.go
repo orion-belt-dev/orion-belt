@@ -12,12 +12,12 @@ func (s *APIServer) setupStatus(c *gin.Context) {
 
 	users, err := s.store.ListUsers(ctx, 500, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	machines, err := s.store.ListMachines(ctx, 500, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 

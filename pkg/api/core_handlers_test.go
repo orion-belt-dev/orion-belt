@@ -98,7 +98,7 @@ func TestUsers_CreateUpdateDelete(t *testing.T) {
 	if _, err := e.store.GetUser(context.Background(), e.bob.ID); err == nil {
 		t.Error("deleted user still exists")
 	}
-	e.expect(e.do("DELETE", "/api/v1/admin/users/missing", e.adminKey, nil), 500)
+	e.expect(e.do("DELETE", "/api/v1/admin/users/missing", e.adminKey, nil), 404)
 	if !e.audited("user.delete") || !e.audited("user.update") {
 		t.Errorf("audit trail = %v", e.auditActions())
 	}
@@ -257,7 +257,7 @@ func TestPermissions_GrantUpdateRevoke(t *testing.T) {
 	}
 
 	e.expect(e.do("DELETE", "/api/v1/admin/permissions/"+id, e.adminKey, nil), 200)
-	e.expect(e.do("DELETE", "/api/v1/admin/permissions/"+id, e.adminKey, nil), 500)
+	e.expect(e.do("DELETE", "/api/v1/admin/permissions/"+id, e.adminKey, nil), 404)
 	for _, a := range []string{"permission.grant", "permission.update", "permission.revoke"} {
 		if !e.audited(a) {
 			t.Errorf("%s not audited", a)
@@ -307,7 +307,7 @@ func TestAccessRequests_Lifecycle(t *testing.T) {
 	if got := r.obj(t); got["status"] != "approved" || got["duration"] != float64(120) {
 		t.Errorf("approved = %v", got)
 	}
-	e.expect(e.do("POST", "/api/v1/admin/access-requests/"+id1+"/approve", e.adminKey, nil), 500) // not pending
+	e.expect(e.do("POST", "/api/v1/admin/access-requests/"+id1+"/approve", e.adminKey, nil), 409) // not pending
 
 	e.expect(e.do("POST", "/api/v1/admin/access-requests/"+id2+"/reject", e.adminKey, map[string]any{"reviewer_id": "someone"}), 403)
 	r = e.do("POST", "/api/v1/admin/access-requests/"+id2+"/reject", e.operatorKey, nil)
@@ -315,7 +315,7 @@ func TestAccessRequests_Lifecycle(t *testing.T) {
 	if r.obj(t)["status"] != "rejected" {
 		t.Errorf("rejected = %s", r.body)
 	}
-	e.expect(e.do("POST", "/api/v1/admin/access-requests/missing/reject", e.adminKey, nil), 500)
+	e.expect(e.do("POST", "/api/v1/admin/access-requests/missing/reject", e.adminKey, nil), 404)
 
 	ctx := context.Background()
 	if n, _ := e.store.CountUnreadNotifications(ctx, e.alice.ID); n != 1 {

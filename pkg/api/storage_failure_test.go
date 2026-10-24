@@ -128,6 +128,10 @@ func TestEveryEndpointReportsStorageFailure(t *testing.T) {
 		if err := json.Unmarshal(r.body, &body); err != nil || body["error"] == nil {
 			t.Errorf("%s %s = %d with no error body (%q): a panic?", rq.method, rq.path, r.code, r.body)
 		}
+		// Internal causes are logged, never sent (docs/ERROR_HANDLING.md).
+		if strings.Contains(string(r.body), "database is closed") {
+			t.Errorf("%s %s leaked the internal error: %s", rq.method, rq.path, r.body)
+		}
 	}
 	if strings.Contains(e.logs.String(), "panic") {
 		t.Error("a handler panicked")

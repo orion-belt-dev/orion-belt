@@ -384,7 +384,7 @@ func (s *APIServer) listSSHKeys(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	keys, err := s.store.ListUserSSHKeys(c.Request.Context(), userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, keys)
@@ -414,7 +414,7 @@ func (s *APIServer) addSSHKey(c *gin.Context) {
 		CreatedAt: time.Now(),
 	}
 	if err := s.store.CreateSSHKey(c.Request.Context(), key); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, key)
@@ -428,7 +428,7 @@ func (s *APIServer) deleteSSHKey(c *gin.Context) {
 	id := c.Param("id")
 	keys, err := s.store.ListUserSSHKeys(ctx, c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	owned := false

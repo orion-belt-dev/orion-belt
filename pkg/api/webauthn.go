@@ -110,12 +110,12 @@ func (s *APIServer) webauthnRegisterBegin(c *gin.Context) {
 	}
 	waUser, err := s.loadWebAuthnUser(ctx, user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	options, session, err := s.webAuthn.BeginRegistration(waUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	webauthnSessions.Store("reg:"+user.ID, session)
@@ -132,7 +132,7 @@ func (s *APIServer) webauthnRegisterFinish(c *gin.Context) {
 	}
 	waUser, err := s.loadWebAuthnUser(ctx, user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	raw, ok := webauthnSessions.Load("reg:" + user.ID)
@@ -175,7 +175,7 @@ func (s *APIServer) webauthnList(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	creds, err := s.store.ListWebAuthnCredentials(c.Request.Context(), userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	out := make([]gin.H, 0, len(creds))
@@ -195,7 +195,7 @@ func (s *APIServer) webauthnDelete(c *gin.Context) {
 	ctx := c.Request.Context()
 	creds, err := s.store.ListWebAuthnCredentials(ctx, userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	id := c.Param("id")
@@ -211,7 +211,7 @@ func (s *APIServer) webauthnDelete(c *gin.Context) {
 		return
 	}
 	if err := s.store.DeleteWebAuthnCredential(ctx, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	if len(creds) <= 1 {
@@ -245,7 +245,7 @@ func (s *APIServer) webauthnLoginBegin(c *gin.Context) {
 	}
 	options, session, err := s.webAuthn.BeginLogin(waUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	webauthnSessions.Store("login:"+user.Username, session)
@@ -285,7 +285,7 @@ func (s *APIServer) webauthnLoginFinish(c *gin.Context) {
 	}
 	waUser, err := s.loadWebAuthnUser(ctx, user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.fail(c, err)
 		return
 	}
 	raw, ok := webauthnSessions.Load("login:" + username)
