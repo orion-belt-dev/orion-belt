@@ -20,6 +20,7 @@ import (
 
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
+	"github.com/orion-belt-dev/orion-belt/pkg/kube"
 )
 
 // gateway is a stub Orion Belt gateway the agent dials into. Once the agent
@@ -34,6 +35,7 @@ type gateway struct {
 	renewOK      bool
 	renewPayload []byte
 	certKeyIDs   []string
+	kubeAnnounce int
 
 	conns chan *gossh.ServerConn
 }
@@ -86,6 +88,12 @@ func startGateway(t *testing.T) *gateway {
 
 func (g *gateway) globalRequests(reqs <-chan *gossh.Request) {
 	for req := range reqs {
+		if req.Type == kube.CapabilityRequest {
+			g.mu.Lock()
+			g.kubeAnnounce++
+			g.mu.Unlock()
+			continue
+		}
 		if req.Type == ca.AgentCertRenewRequest {
 			g.mu.Lock()
 			ok, payload := g.renewOK, g.renewPayload
