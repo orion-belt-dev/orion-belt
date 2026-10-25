@@ -22,7 +22,9 @@ FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2
 # host it runs on directly (setuid-drop to the requested local user) — it does
 # not run its own sshd, so no ssh server, no local user accounts, no password
 # auth. It only needs to reach the server outbound.
-RUN apk add --no-cache ca-certificates
+# scp (openssh-client-common) is the receiving end of ocp copies: the agent
+# runs "scp -t <path>" for an upload and "scp -f <path>" for a download.
+RUN apk add --no-cache ca-certificates openssh-client-common
 
 WORKDIR /app
 
