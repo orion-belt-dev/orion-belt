@@ -221,3 +221,10 @@ sudoedit /etc/orion-belt/server.yaml
 sudo /usr/lib/orion-belt/orion-belt-server-service setup
 orion-belt-server setup
 ```
+
+The server package runs as the `orionbelt` user, which it creates before
+unpacking, and owns `/etc/orion-belt`, `/var/lib/orion-belt` and
+`/var/log/orion-belt`. Install creates the SSH host key
+`/etc/orion-belt/ssh_host_key` with `ssh-keygen`; where that is missing (for
+example minimal openSUSE, which skips recommended packages) the server creates
+the key on first start and logs its fingerprint.
