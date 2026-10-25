@@ -150,7 +150,7 @@ const config = {
           },
           {
             to: '/docs/quickstart/try-in-10-minutes',
-            label: 'Try in 10 min',
+            label: 'Docker demo',
             position: 'left',
           },
           {to: '/blog', label: 'Blog', position: 'left'},
@@ -178,8 +178,8 @@ const config = {
             title: 'Docs',
             items: [
               {label: 'Introduction', to: '/docs/introduction'},
-              {label: 'Try in 10 minutes', to: '/docs/quickstart/try-in-10-minutes'},
-              {label: 'Get started', to: '/docs/quickstart/get-started'},
+              {label: 'Get started in 10 minutes', to: '/docs/quickstart/get-started'},
+              {label: 'Docker demo', to: '/docs/quickstart/try-in-10-minutes'},
               {label: 'Architecture', to: '/docs/architecture/overview'},
             ],
           },

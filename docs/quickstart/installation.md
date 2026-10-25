@@ -5,10 +5,13 @@ title: Installation
 
 # Installation
 
-Install Orion Belt via Docker (fastest), curl|bash on Linux, packages, or from source.
+Install from the signed packages: they come from
+[pkgs.orion-belt.dev](https://pkgs.orion-belt.dev) and upgrade with the rest of
+the system. Docker and building from source are there when packages don't fit.
 
 :::tip Fastest path
-For a lab that ends in a recorded session, follow **[Try in 10 minutes](./try-in-10-minutes)** (`./scripts/docker-quickstart.sh`).
+**[Get started in 10 minutes](./get-started)** walks through the server, your
+computer and an agent for your operating system, from the packages.
 :::
 
 ## System requirements
@@ -19,37 +22,32 @@ For a lab that ends in a recorded session, follow **[Try in 10 minutes](./try-in
 | Agent | 1+ core | 512MB+ | 10GB+ | Linux (any modern distro) |
 | Client | Any | 256MB | 100MB | Linux, macOS, Windows |
 
-## Docker (recommended to try)
+## Packages (recommended)
+
+| Package | Install on | Systems |
+| --- | --- | --- |
+| `orion-belt` | The server | Debian, Ubuntu, Fedora, RHEL and clones, openSUSE, Alpine, Arch |
+| `orion-belt-agent` | Each machine to reach | The same Linux systems |
+| `orion-belt-tools` (`osh`, `ocp`, `oadmin`) | Your computer | Linux, macOS, Windows, FreeBSD, OpenBSD, NetBSD, illumos, Solaris |
+
+The repository and install commands for each system are in
+[Get started](./get-started). Or let the installer pick the package manager:
 
 ```bash
-git clone https://github.com/orion-belt-dev/orion-belt.git
-cd orion-belt
-./scripts/docker-quickstart.sh
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh                 # tools
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- agent     # agent
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- server    # server
 ```
 
-The script asks whether to **build from this checkout** or **pull published GHCR
-images**. Non-interactive:
+On Linux it adds the signed repository (apt, dnf, zypper, apk or pacman) and
+installs the package; elsewhere it installs the release binaries in
+`/usr/local/bin`. On Windows: `irm https://pkgs.orion-belt.dev/install.ps1 | iex`.
 
-```bash
-./scripts/docker-quickstart.sh --images        # ghcr.io/orion-belt-dev/...:latest
-./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
-```
+For air-gapped installs, build the packages from a checkout with
+`make packages` and install them from `dist/` (see the main repository's
+`docs/PACKAGING.md`).
 
-Full walkthrough: [Try in 10 minutes](./try-in-10-minutes).
-
-### Published images (GHCR)
-
-```bash
-docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.4.0
-docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.4.0
-# or :latest
-```
-
-From a clone: `cp .env.prod.example .env.prod` (set secrets + public URL), then
-`make docker-prod-up`. Pin with `ORION_IMAGE_TAG=1.4.0` if you do not want
-`:latest`. Image list: [CONTAINERS](https://pkgs.orion-belt.dev/CONTAINERS).
-
-## curl | bash (Linux server)
+## One-command server install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/scripts/install-server.sh | sudo bash
@@ -85,9 +83,39 @@ sudo bash scripts/install-server.sh --uninstall --unattended --drop-db --drop-lo
 
 Then continue with [Server setup](./server) / [Agent](./agent).
 
+## Docker
+
+```bash
+git clone https://github.com/orion-belt-dev/orion-belt.git
+cd orion-belt
+./scripts/docker-quickstart.sh
+```
+
+The script asks whether to **build from this checkout** or **pull published GHCR
+images**. Non-interactive:
+
+```bash
+./scripts/docker-quickstart.sh --images        # ghcr.io/orion-belt-dev/...:latest
+./scripts/docker-quickstart.sh --from-source   # build Dockerfiles here
+```
+
+Full walkthrough: [Try it with Docker](./try-in-10-minutes). For a server on Docker without cloning, see the **Docker** tab in [Get started](./get-started).
+
+### Published images (GHCR)
+
+```bash
+docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.4.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.4.0
+# or :latest
+```
+
+From a clone: `cp .env.prod.example .env.prod` (set secrets + public URL), then
+`make docker-prod-up`. Pin with `ORION_IMAGE_TAG=1.4.0` if you do not want
+`:latest`. Image list: [CONTAINERS](https://pkgs.orion-belt.dev/CONTAINERS).
+
 ## From source
 
-Requires Go **1.26.5+** (see `go.mod`).
+For development, or a platform without a package. Requires Go **1.27.3+** (see `go.mod`) and Node 22 for the web console.
 
 ```bash
 git clone https://github.com/orion-belt-dev/orion-belt.git
@@ -95,25 +123,6 @@ cd orion-belt
 make build
 # or: make build-server / build-client / build-agent
 ```
-
-## Packages (deb / rpm / apk)
-
-Public mirror (default for **Add agent** install scripts):
-
-```text
-https://pkgs.orion-belt.dev
-```
-
-From a checkout of the repo (local / air-gapped builds):
-
-```bash
-make packages
-# install from dist/ — see the main repo docs/PACKAGING.md
-```
-
-After package install, set `server.public_url` (and optional `public_ssh_host` /
-`public_ssh_port`), run the setup wizard, and add agents — see
-[Server setup](./server) and [Agent](./agent).
 
 ## Verify
 
@@ -125,6 +134,6 @@ curl -s http://localhost:8080/api/v1/gateway-info   # advertised public URL / SS
 
 ## Next steps
 
-1. [Server setup](./server)
-2. [Agent setup](./agent)
-3. [Client / first connection](./client)
+1. [Get started in 10 minutes](./get-started)
+2. [Server setup](./server) for HTTPS, MFA and recording options
+3. [Agent setup](./agent) and [Client setup](./client)
