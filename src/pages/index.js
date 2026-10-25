@@ -6,9 +6,12 @@ import Belt from '@site/src/components/Belt';
 
 import styles from './index.module.css';
 
-const QUICKSTART = `git clone https://github.com/orion-belt-dev/orion-belt.git
-cd orion-belt
-./scripts/docker-quickstart.sh --images`;
+const QUICKSTART = `# server (Linux)
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- server
+# each machine you want to reach
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- agent
+# your computer: osh, ocp, oadmin
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh`;
 
 // What people put up with today, and what replaces it. Each row is a real
 // default of the product, not an aspiration.
@@ -128,11 +131,11 @@ function Hero() {
             audit trail.
           </p>
           <div className={styles.buttons}>
-            <Link className={`button button--lg ${styles.ctaPrimary}`} to="/docs/quickstart/try-in-10-minutes">
-              Try it in 10 minutes
+            <Link className={`button button--lg ${styles.ctaPrimary}`} to="/docs/quickstart/get-started">
+              Get started in 10 minutes
             </Link>
-            <Link className={`button button--lg ${styles.ctaSecondary}`} to="/docs/quickstart/get-started">
-              Install guide
+            <Link className={`button button--lg ${styles.ctaSecondary}`} to="/docs/quickstart/try-in-10-minutes">
+              Try it with Docker
             </Link>
           </div>
           <p className={styles.heroMeta}>
@@ -301,10 +304,12 @@ function RunIt() {
             Runs on your hardware
           </Heading>
           <p className={styles.intro}>
-            No SaaS, no phone-home. The quickstart brings up a gateway, an agent and a recorded
-            session on your laptop. For production, use the packages or the curl installer.
+            No SaaS, no phone-home. Signed packages for Debian, Ubuntu, Fedora, RHEL, openSUSE,
+            Alpine and Arch, and clients for macOS, Windows and the BSDs, all upgraded by your
+            package manager. The guide takes you from install to a recorded session per system.
           </p>
           <p className={styles.links}>
+            <Link to="/docs/quickstart/get-started">Step-by-step for your OS</Link>
             <Link to="/docs/quickstart/installation">All install options</Link>
             <Link to="https://pkgs.orion-belt.dev">Package repositories</Link>
           </p>
@@ -343,8 +348,8 @@ function Closing() {
           Agents dial out. Sessions are recorded. Access expires on its own.
         </Heading>
         <div className={styles.buttons}>
-          <Link className={`button button--lg ${styles.ctaPrimary}`} to="/docs/quickstart/try-in-10-minutes">
-            Try it in 10 minutes
+          <Link className={`button button--lg ${styles.ctaPrimary}`} to="/docs/quickstart/get-started">
+            Get started in 10 minutes
           </Link>
           <Link className={`button button--lg ${styles.ctaSecondary}`} to="/docs/introduction">
             Read the docs

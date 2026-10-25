@@ -10,7 +10,7 @@ title: Introduction
 Teleport-like SSH access control — without opening inbound ports or adopting a large platform. Agents dial **out** over reverse SSH; you get session recording, live watch, JIT approvals, MFA/WebAuthn, ReBAC, and optional SSH CA.
 
 :::tip[v1.4.0]
-Stable and public. Fastest path: **[Try Orion Belt in 10 minutes](./quickstart/try-in-10-minutes)** (Docker with GHCR images or build-from-source). Linux servers can also use the **curl|bash** installer — see [Installation](./quickstart/installation).
+Stable and public. Fastest path: **[Get started in 10 minutes](./quickstart/get-started)**, from the signed packages, step by step for your OS. To only look around, [try it with Docker](./quickstart/try-in-10-minutes). Every option: [Installation](./quickstart/installation).
 New in 1.4.0: [RDP and VNC](./guides/rdp-vnc) and [just-in-time Kubernetes access](./guides/kubernetes) through the same outbound agents, [compliance reports](./guides/compliance-reports), and [risk signals, access explain and anomaly flags](./guides/risk-and-anomalies).
 :::
 
@@ -64,8 +64,8 @@ flowchart TB
 
 ## Getting started
 
-1. **[Get started](./quickstart/get-started)** — install the server, an agent and the clients, per OS  
-2. [Try in 10 minutes](./quickstart/try-in-10-minutes) — Docker lab to first recorded session  
+1. **[Get started in 10 minutes](./quickstart/get-started)** — install, configure and run the server, the clients and an agent, per OS  
+2. [Try it with Docker](./quickstart/try-in-10-minutes) — throwaway demo to a first recorded session  
 3. [Installation](./quickstart/installation) — every install method, including from source  
 4. [Server setup](./quickstart/server) · [Agent](./quickstart/agent) · [Client](./quickstart/client)
 

@@ -66,7 +66,7 @@ curl -fsSL https://raw.githubusercontent.com/orion-belt-dev/orion-belt/master/sc
 
 Writes `/etc/orion-belt/server.yaml` (including **public URL**), enables the
 service, and runs setup. Details and unattended flags:
-[Installation](./installation#curl--bash-linux-server).
+[Installation](./installation#one-command-server-install).
 
 ## Option D — Packages / systemd
 

@@ -1,9 +1,14 @@
 ---
-sidebar_position: 0
-title: Try in 10 minutes
+sidebar_position: 0.5
+title: Try it with Docker
 ---
 
-# Try Orion Belt in 10 minutes
+# Try it with Docker
+
+:::tip Installing for real?
+This is a throwaway demo on your laptop. To install Orion Belt on your
+servers, follow [Get started in 10 minutes](./get-started), from the packages.
+:::
 
 One command gives you a running gateway, a machine to connect to, and a link
 that signs you in. By the end you will have opened a shell through Orion Belt

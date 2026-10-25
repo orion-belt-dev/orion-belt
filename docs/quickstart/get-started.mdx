@@ -1,40 +1,41 @@
 ---
-sidebar_position: 0.5
-title: Get started
-description: Install and configure the Orion Belt server, an agent and the clients, step by step for your operating system.
+sidebar_position: 0
+title: Get started in 10 minutes
+description: Install, configure and run the Orion Belt server, your clients and an agent from the signed packages, step by step for your operating system.
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Get started
+# Get started in 10 minutes
 
-Three pieces, installed in this order:
+Install Orion Belt from the signed package repository at
+[pkgs.orion-belt.dev](https://pkgs.orion-belt.dev), so it upgrades with the
+rest of the system. Four steps:
 
-| Piece | Runs on | Package |
+| Step | Where | Time |
 | --- | --- | --- |
-| **Server** (gateway) | One Linux host your team and your machines can reach | `orion-belt` |
-| **Agent** | Each Linux machine you want to reach | `orion-belt-agent` |
-| **Clients** (`osh`, `ocp`, `oadmin`) | Your laptop: Linux, macOS, Windows, BSD | `orion-belt-tools` |
+| [1. Server](#1-server) | One Linux host that you and your machines can reach | 5 min |
+| [2. Your computer](#2-your-computer) | macOS, Windows, Linux or BSD | 2 min |
+| [3. Agent](#3-agent) | Each Linux machine you want to reach | 2 min |
+| [4. Connect](#4-connect) | Your computer | 1 min |
 
-Pick your system once; every step below follows it. All packages come from the
-signed repository at [pkgs.orion-belt.dev](https://pkgs.orion-belt.dev), so they
-upgrade with the rest of the system.
+The server needs ports **2222** (SSH) and **8080** (console and API) reachable
+from your computer and your machines. The examples call it
+`orion.example.com`; use its DNS name or IP address.
 
-:::tip Only trying it out?
-[Try in 10 minutes](./try-in-10-minutes) runs a server, a demo machine and a
-recorded session with one Docker command. Come back here for a real install.
+:::tip Only want to look around?
+[Try it with Docker](./try-in-10-minutes) runs a server, a demo machine and a
+recorded session on your laptop, with nothing to configure.
 :::
 
-## 1. Install the server
+## 1. Server
 
-You need a Linux host with ports **2222** (SSH) and **8080** (web console and
-API) reachable, and a PostgreSQL database. The examples use
-`orion.example.com` for the server's address.
+The server runs on Linux. On macOS or Windows, use the **Docker** tab.
 
-### Install the package
+### Install the server and PostgreSQL
 
-<Tabs groupId="os" queryString>
+<Tabs groupId="server-os" queryString>
 <TabItem value="debian" label="Debian / Ubuntu" default>
 
 ```bash
@@ -42,17 +43,19 @@ sudo curl -fsSLo /usr/share/keyrings/orion-belt.gpg https://pkgs.orion-belt.dev/
 echo 'deb [signed-by=/usr/share/keyrings/orion-belt.gpg] https://pkgs.orion-belt.dev stable main' \
   | sudo tee /etc/apt/sources.list.d/orion-belt.list
 sudo apt update
-sudo apt install orion-belt
+sudo apt install orion-belt postgresql
 ```
 
-Also covers Raspberry Pi OS.
+PostgreSQL starts on install. Also covers Raspberry Pi OS.
 
 </TabItem>
 <TabItem value="rhel" label="Fedora / RHEL">
 
 ```bash
 sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
-sudo dnf install orion-belt
+sudo dnf install orion-belt postgresql-server
+sudo postgresql-setup --initdb
+sudo systemctl enable --now postgresql
 ```
 
 Also covers Rocky Linux, AlmaLinux, CentOS Stream and Amazon Linux (use `yum`
@@ -63,8 +66,15 @@ where `dnf` is missing).
 
 ```bash
 sudo zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo zypper install openssh-clients openssl postgresql-server
 sudo zypper install orion-belt
+sudo systemctl enable --now postgresql
 ```
+
+zypper asks once whether to trust the repository key. Compare its fingerprint
+with the one on [pkgs.orion-belt.dev](https://pkgs.orion-belt.dev), then answer
+`a` (always). `openssh-clients` goes first because the package creates the
+server's SSH host key with `ssh-keygen`.
 
 </TabItem>
 <TabItem value="alpine" label="Alpine">
@@ -73,8 +83,15 @@ sudo zypper install orion-belt
 sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub
 echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
 sudo apk update
-sudo apk add orion-belt
+sudo apk add orion-belt postgresql openssl
+sudo chown -R orionbelt:orionbelt /etc/orion-belt /var/lib/orion-belt /var/log/orion-belt
+sudo rc-service postgresql setup
+sudo rc-service postgresql start
+sudo rc-update add postgresql
 ```
+
+The `chown` is needed on 1.4.0: apk leaves the server's directories owned by
+root, and the server, which runs as `orionbelt`, could not read its config.
 
 </TabItem>
 <TabItem value="arch" label="Arch Linux">
@@ -84,7 +101,9 @@ curl -fsSL https://pkgs.orion-belt.dev/orion-belt.asc | sudo pacman-key --add -
 sudo pacman-key --lsign-key F1E47F7B036D5202262E174F613B2217A8958DA9
 printf '[orion-belt]\nServer = https://pkgs.orion-belt.dev/archlinux/$arch\n' \
   | sudo tee -a /etc/pacman.conf
-sudo pacman -Sy orion-belt
+sudo pacman -Sy orion-belt postgresql
+sudo -u postgres initdb -D /var/lib/postgres/data
+sudo systemctl enable --now postgresql
 ```
 
 Check the key fingerprint against the one on [pkgs.orion-belt.dev](https://pkgs.orion-belt.dev).
@@ -92,66 +111,90 @@ Check the key fingerprint against the one on [pkgs.orion-belt.dev](https://pkgs.
 </TabItem>
 <TabItem value="docker" label="Docker">
 
-From a clone of [orion-belt](https://github.com/orion-belt-dev/orion-belt), on
-any OS with Docker:
+On any OS with Docker and the Compose plugin. Nothing to clone: download the
+compose file and write its settings.
 
 ```bash
-cp .env.prod.example .env.prod
-# set POSTGRES_PASSWORD, ORION_JWT_SECRET (openssl rand -hex 32) and ORION_PUBLIC_URL
-make docker-prod-up
+mkdir orion-belt && cd orion-belt
+curl -fsSLO https://raw.githubusercontent.com/orion-belt-dev/orion-belt/v1.4.0/docker-compose.prod.yml
+ORION_HOST=orion.example.com    # the name or IP you and your machines use for this server
+cat > .env.prod <<EOF
+ORION_IMAGE_TAG=1.4.0
+POSTGRES_PASSWORD=$(openssl rand -hex 16)
+ORION_JWT_SECRET=$(openssl rand -hex 32)
+ORION_PUBLIC_HOST=$ORION_HOST
+ORION_PUBLIC_ORIGIN=http://$ORION_HOST:8080
+EOF
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
 
-This starts the server and its PostgreSQL. Then create the first admin inside
-the container and skip to [step 2](#2-add-an-agent):
+This starts the server and its own PostgreSQL. Create the first admin: the
+wizard asks for a name, an email and your SSH public key (the line in
+`~/.ssh/id_ed25519.pub` on your computer; create it with
+`ssh-keygen -t ed25519` if you have none).
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod \
-  exec server /app/orion-belt-server setup
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec server \
+  /app/orion-belt-server -c /etc/orion-belt/config.generated.yaml setup
 ```
 
-</TabItem>
-<TabItem value="macos" label="macOS">
-
-The server runs on Linux only. On a Mac, use the **Docker** tab, or install
-the server on a Linux host and only the clients on the Mac
-([step 3](#3-connect-from-your-computer)).
-
-</TabItem>
-<TabItem value="windows" label="Windows">
-
-The server runs on Linux only. On Windows, use the **Docker** tab (Docker
-Desktop or WSL 2), or install the server on a Linux host and only the clients
-on Windows ([step 3](#3-connect-from-your-computer)).
+Press Enter to keep the suggested SSH host and port. Then skip to
+[step 2](#2-your-computer).
 
 </TabItem>
 </Tabs>
 
-:::note One command instead
-On Linux, `curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh -s -- server`
-detects the package manager and does the repository and install step above for you.
-:::
+### Create the database
+
+Skip this with Docker.
+
+```bash
+sudo -u postgres createuser orionbelt
+sudo -u postgres createdb -O orionbelt orionbelt
+```
+
+The server connects over PostgreSQL's local socket as the `orionbelt` system
+user the package created, so the database needs no password.
 
 ### Configure it
 
-Edit `/etc/orion-belt/server.yaml` and set these three values:
-
-```yaml
-server:
-  public_url: "https://orion.example.com"   # the address people open; not a bind address
-
-database:
-  connection_string: "postgres://orionbelt:CHANGE-ME@localhost:5432/orionbelt?sslmode=disable"
-
-auth:
-  jwt_secret: "CHANGE-ME"                    # openssl rand -hex 32
-```
+Set `ORION_HOST` to the server's name or IP, then run the whole block:
 
 ```bash
-sudoedit /etc/orion-belt/server.yaml
+ORION_HOST=orion.example.com
+sudo sed -i \
+  -e 's|connection_string: .*|connection_string: "postgres://orionbelt@/orionbelt?host=/run/postgresql"|' \
+  -e "s|change-me-to-a-long-random-secret|$(openssl rand -hex 32)|" \
+  -e "s|https://orion.example.com|http://$ORION_HOST:8080|g" \
+  -e "s|orion.example.com|$ORION_HOST|g" \
+  /etc/orion-belt/server.yaml
 ```
 
-Agents dial the host in `public_url` on port 2222. If they must use a different
-address, also set `server.public_ssh_host` and `server.public_ssh_port`.
+This points `/etc/orion-belt/server.yaml` at the local database, sets a random
+JWT secret, and sets the public address (`server.public_url` and the WebAuthn
+`rp_id` and `origins`) to `http://$ORION_HOST:8080`. Once you put HTTPS in
+front of port 8080 ([reverse proxy](https://github.com/orion-belt-dev/orion-belt/blob/master/docs/REVERSE_PROXY.md)),
+change those values to `https://$ORION_HOST`. Security keys (WebAuthn) only
+work over HTTPS.
+
+### Create the first admin
+
+You sign in as the admin with your SSH key. On your computer, print the
+public half (create one with `ssh-keygen -t ed25519` if you have none):
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+On the server, run the setup wizard:
+
+```bash
+sudo -u orionbelt env ORION_SETUP_PUBLIC_URL="http://$ORION_HOST:8080" \
+  orion-belt-server -c /etc/orion-belt/server.yaml setup
+```
+
+Press Enter to keep the suggested SSH host and port, then give an admin
+username (`admin` below), an email, and paste the key line.
 
 ### Start it
 
@@ -159,55 +202,169 @@ The same command works with systemd, OpenRC, runit and SysV init:
 
 ```bash
 sudo /usr/lib/orion-belt/orion-belt-server-service setup
-```
-
-### Create the first admin
-
-```bash
-sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
-```
-
-The wizard asks for an admin name, email and SSH public key (it can generate
-one). Then check the server answers and open the console:
-
-```bash
 curl -s http://127.0.0.1:8080/api/v1/version
 ```
 
-Console: `https://orion.example.com/ui`. For HTTPS in front of port 8080, see
-the main repository's `docs/REVERSE_PROXY.md`.
+The second command prints the version once the server is up. If a firewall
+runs on the host, open ports 2222 and 8080.
 
-## 2. Add an agent
+## 2. Your computer
 
-Agents run on the machines you want to reach and connect **out** to the server
-on port 2222. The machine needs no inbound port.
+Install `osh` (connect), `ocp` (copy files) and `oadmin` (administer):
 
-### Easiest: an install script from the server
+<Tabs groupId="client-os" queryString="client">
+<TabItem value="macos" label="macOS" default>
 
-In the console: **Agents → Add agent**, pick the OS, enter the agent name and
-the server host, then **Generate install script**. Or from a terminal with
-`oadmin` ([step 3](#3-connect-from-your-computer)):
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh
+```
+
+Installs the three tools in `/usr/local/bin`.
+
+</TabItem>
+<TabItem value="windows" label="Windows">
+
+In PowerShell:
+
+```powershell
+irm https://pkgs.orion-belt.dev/install.ps1 | iex
+```
+
+Or with [Scoop](https://scoop.sh):
+`scoop install https://pkgs.orion-belt.dev/scoop/orion-belt.json`
+
+</TabItem>
+<TabItem value="linux" label="Linux">
+
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh
+```
+
+Adds the signed repository for your package manager (apt, dnf, zypper, apk or
+pacman) and installs the `orion-belt-tools` package, so the tools upgrade with
+the system. To do it by hand, add the repository as in step 1 and install
+`orion-belt-tools`.
+
+</TabItem>
+<TabItem value="bsd" label="BSD / illumos">
+
+```bash
+curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh
+```
+
+Works on FreeBSD, OpenBSD, NetBSD, illumos and Solaris. Installs the three
+tools in `/usr/local/bin`.
+
+</TabItem>
+</Tabs>
+
+Tell the tools where the server is and who you are. Replace
+`orion.example.com` with your server, and `admin` with the username you gave
+the wizard:
+
+<Tabs groupId="client-os" queryString="client">
+<TabItem value="macos" label="macOS" default>
+
+```bash
+mkdir -p ~/.orion-belt
+cat > ~/.orion-belt/client.yaml <<'EOF'
+server:
+  host: "orion.example.com"
+  port: 2222
+  api_endpoint: "http://orion.example.com:8080"
+auth:
+  user: "admin"
+  key_file: "~/.ssh/id_ed25519"
+EOF
+```
+
+</TabItem>
+<TabItem value="windows" label="Windows">
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.orion-belt" | Out-Null
+@'
+server:
+  host: "orion.example.com"
+  port: 2222
+  api_endpoint: "http://orion.example.com:8080"
+auth:
+  user: "admin"
+  key_file: "~/.ssh/id_ed25519"
+'@ | Set-Content "$HOME\.orion-belt\client.yaml"
+```
+
+</TabItem>
+<TabItem value="linux" label="Linux">
+
+```bash
+mkdir -p ~/.orion-belt
+cat > ~/.orion-belt/client.yaml <<'EOF'
+server:
+  host: "orion.example.com"
+  port: 2222
+  api_endpoint: "http://orion.example.com:8080"
+auth:
+  user: "admin"
+  key_file: "~/.ssh/id_ed25519"
+EOF
+```
+
+</TabItem>
+<TabItem value="bsd" label="BSD / illumos">
+
+```bash
+mkdir -p ~/.orion-belt
+cat > ~/.orion-belt/client.yaml <<'EOF'
+server:
+  host: "orion.example.com"
+  port: 2222
+  api_endpoint: "http://orion.example.com:8080"
+auth:
+  user: "admin"
+  key_file: "~/.ssh/id_ed25519"
+EOF
+```
+
+</TabItem>
+</Tabs>
+
+Check that it works:
+
+```bash
+osh --list     # "No machines available." until step 3
+osh login      # opens the web console, signed in with your SSH key
+```
+
+The first connection asks you to trust the server's host key; answer `yes`.
+
+## 3. Agent
+
+The agent runs on each machine you want to reach and dials **out** to the
+server on port 2222, so the machine needs no inbound port.
+
+### Quickest: a generated install script
+
+On your computer, generate a script for the machine (here `web-01`), copy it
+over and run it:
 
 ```bash
 oadmin agents install-script web-01 --gateway-host orion.example.com -o install-web-01.sh
+scp install-web-01.sh web-01:
+ssh -t web-01 'sudo bash install-web-01.sh && rm install-web-01.sh'
 ```
 
-Copy the script to the machine and run it as root:
+Generating the script registers the machine. The script works on any Linux
+with `bash` (on Alpine, `apk add bash` first): it installs the agent and its
+service, writes the config and key, and starts it. It contains the agent's
+private key, so copy it only over a channel you trust, and delete it
+afterwards. The console does the same under **Machines → Add agent**.
 
-```bash
-sudo sh install-web-01.sh
-```
+### Or: from the package
 
-Generating the script registers the machine. The script downloads and
-installs `orion-belt-agent` for the machine's package manager, writes its
-configuration and key, and starts it. It contains the agent's private key:
-copy it over SSH or another channel you trust, and delete it afterwards.
+Use this when you want the agent to upgrade with the system's packages.
 
-### By hand
-
-Install the package:
-
-<Tabs groupId="os" queryString>
+<Tabs groupId="server-os" queryString>
 <TabItem value="debian" label="Debian / Ubuntu" default>
 
 ```bash
@@ -231,7 +388,7 @@ sudo dnf install orion-belt-agent
 
 ```bash
 sudo zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo
-sudo zypper install orion-belt-agent
+sudo zypper install openssh-clients orion-belt-agent
 ```
 
 </TabItem>
@@ -241,7 +398,7 @@ sudo zypper install orion-belt-agent
 sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub
 echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
 sudo apk update
-sudo apk add orion-belt-agent
+sudo apk add orion-belt-agent openssh-keygen
 ```
 
 </TabItem>
@@ -258,193 +415,94 @@ sudo pacman -Sy orion-belt-agent
 </TabItem>
 <TabItem value="docker" label="Docker">
 
-From a clone of [orion-belt](https://github.com/orion-belt-dev/orion-belt):
+On the machine, with Docker and the Compose plugin:
 
 ```bash
-cp .env.agent.example .env.agent
-# ORION_AGENT_NAME=web-01, ORION_SERVER_HOST=orion.example.com
-# save the key from Agents → Add agent as ./agent-key (chmod 600)
-docker compose -f docker-compose.agent.yml --env-file .env.agent up -d
+mkdir orion-belt-agent && cd orion-belt-agent
+curl -fsSLO https://raw.githubusercontent.com/orion-belt-dev/orion-belt/v1.4.0/docker-compose.prod.agent.yml
+ssh-keygen -t ed25519 -f agent-key -N ""
+cat > .env.agent <<'EOF'
+ORION_IMAGE_TAG=1.4.0
+ORION_SERVER_HOST=orion.example.com
+ORION_AGENT_NAME=web-01
+EOF
+cat agent-key.pub
 ```
 
-The rest of this section is for package installs.
-
-</TabItem>
-<TabItem value="macos" label="macOS">
-
-The agent runs on Linux only. Use the **Docker** tab to run one on a Mac for
-testing.
-
-</TabItem>
-<TabItem value="windows" label="Windows">
-
-The agent runs on Linux only. Use the **Docker** tab to run one on Windows for
-testing.
+Register the key on the server as below, then start it with
+`docker compose -f docker-compose.prod.agent.yml --env-file .env.agent up -d`.
 
 </TabItem>
 </Tabs>
 
-Create its key and point it at the server in `/etc/orion-belt/agent.yaml`:
+Create the agent's key and point it at the server. Set the two names, then run
+the block:
 
 ```bash
+ORION_HOST=orion.example.com
+AGENT_NAME=web-01
 sudo ssh-keygen -t ed25519 -f /etc/orion-belt/agent_key -N ""
-sudoedit /etc/orion-belt/agent.yaml
+sudo sed -i \
+  -e "s|^\([[:space:]]*host:\).*|\1 \"$ORION_HOST\"|" \
+  -e "s|^\([[:space:]]*name:\).*|\1 \"$AGENT_NAME\"|" \
+  /etc/orion-belt/agent.yaml
+sudo cat /etc/orion-belt/agent_key.pub
 ```
 
-```yaml
-server:
-  host: "orion.example.com"
-  port: 2222
-
-agent:
-  name: "web-01"
-
-auth:
-  key_file: "/etc/orion-belt/agent_key"
-```
-
-Register the **public** key on the server host:
+Register that public key on the **server**:
 
 ```bash
 sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml \
-  agent register --name web-01 --key "$(cat agent_key.pub)"
+  agent register --name web-01 --key "ssh-ed25519 AAAA… root@web-01"
 ```
 
-(`agent_key.pub` is the file from the agent machine.) Then start the agent:
+With a Docker server, run it in the container instead:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec server \
+  /app/orion-belt-server -c /etc/orion-belt/config.generated.yaml \
+  agent register --name web-01 --key "ssh-ed25519 AAAA… root@web-01"
+```
+
+Back on the machine, start the agent (systemd, OpenRC, runit or SysV):
 
 ```bash
 sudo /usr/lib/orion-belt/orion-belt-agent-service setup
 ```
 
-It shows as online under **Machines** in the console within a few seconds.
+## 4. Connect
 
-## 3. Connect from your computer
-
-Install the clients on the computer you work from:
-
-<Tabs groupId="os" queryString>
-<TabItem value="debian" label="Debian / Ubuntu" default>
+From your computer:
 
 ```bash
-sudo curl -fsSLo /usr/share/keyrings/orion-belt.gpg https://pkgs.orion-belt.dev/orion-belt.gpg
-echo 'deb [signed-by=/usr/share/keyrings/orion-belt.gpg] https://pkgs.orion-belt.dev stable main' \
-  | sudo tee /etc/apt/sources.list.d/orion-belt.list
-sudo apt update
-sudo apt install orion-belt-tools
+osh --list                                 # web-01 shows as online
+osh root@web-01                            # a recorded shell on web-01, as root
+ocp ./notes.txt web-01:/tmp/notes.txt      # copy a file
 ```
 
-</TabItem>
-<TabItem value="rhel" label="Fedora / RHEL">
+`ocp` needs `scp` on the machine (`openssh-client` on Alpine; most other
+distributions have it already). It does not work into the Docker agent image,
+which has no `scp`.
+
+Plain OpenSSH works too, without the tools:
 
 ```bash
-sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
-sudo dnf install orion-belt-tools
+ssh -p 2222 admin+web-01@orion.example.com
 ```
 
-</TabItem>
-<TabItem value="suse" label="openSUSE">
+Admins can reach every machine. Everyone else needs a grant first, from
+**Permissions** in the console or with `oadmin`:
 
 ```bash
-sudo zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo
-sudo zypper install orion-belt-tools
+oadmin permissions grant --user alice --machine web-01 --access-type both --remote-user root
 ```
 
-</TabItem>
-<TabItem value="alpine" label="Alpine">
-
-```bash
-sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub
-echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
-sudo apk update
-sudo apk add orion-belt-tools
-```
-
-</TabItem>
-<TabItem value="arch" label="Arch Linux">
-
-```bash
-curl -fsSL https://pkgs.orion-belt.dev/orion-belt.asc | sudo pacman-key --add -
-sudo pacman-key --lsign-key F1E47F7B036D5202262E174F613B2217A8958DA9
-printf '[orion-belt]\nServer = https://pkgs.orion-belt.dev/archlinux/$arch\n' \
-  | sudo tee -a /etc/pacman.conf
-sudo pacman -Sy orion-belt-tools
-```
-
-</TabItem>
-<TabItem value="docker" label="Docker">
-
-The clients are single binaries and do not need Docker. Pick your computer's
-system in the other tabs.
-
-</TabItem>
-<TabItem value="macos" label="macOS">
-
-```bash
-curl -fsSL https://pkgs.orion-belt.dev/install.sh | sh
-```
-
-Installs `osh`, `ocp` and `oadmin` in `/usr/local/bin` (`--prefix` to change).
-The same command works on FreeBSD, OpenBSD, NetBSD, illumos and Solaris.
-
-</TabItem>
-<TabItem value="windows" label="Windows">
-
-In PowerShell:
-
-```powershell
-irm https://pkgs.orion-belt.dev/install.ps1 | iex
-```
-
-Or with [Scoop](https://scoop.sh):
-
-```powershell
-scoop install https://pkgs.orion-belt.dev/scoop/orion-belt.json
-```
-
-</TabItem>
-</Tabs>
-
-Tell the clients where the server is in `~/.orion-belt/client.yaml`
-(`%USERPROFILE%\.orion-belt\client.yaml` on Windows):
-
-```yaml
-server:
-  host: "orion.example.com"
-  port: 2222
-  api_endpoint: "https://orion.example.com"
-
-auth:
-  user: "alice"                  # your Orion Belt username
-  key_file: "~/.ssh/id_ed25519"  # the key whose public half is on your account
-```
-
-Before the first connection, an admin grants you the machine, under
-**Permissions** in the console, or on the server host:
-
-```bash
-sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml \
-  permission grant --user alice --machine web-01 --type both --remote-users root
-```
-
-Then connect:
-
-```bash
-osh --list          # machines you can reach
-osh web-01          # a recorded shell on web-01
-ocp ./notes.txt web-01:/tmp/notes.txt
-osh login           # open the web console, signed in with your SSH key
-```
-
-Plain OpenSSH works too, without the clients:
-
-```bash
-ssh -p 2222 alice+web-01@orion.example.com
-```
-
-The session appears under **Sessions** in the console, where you can replay it.
+Every session appears under **Sessions** in the console, where you can replay
+it or watch it live.
 
 ## Next
 
 - [Initial connection checklist](./initial-connection) if something does not connect
 - [Client setup](./client) for OpenSSH usernames, `ssh_config` and Ansible
-- [Server setup](./server) for MFA, WebAuthn, recording encryption and Docker options
+- [Server setup](./server) for HTTPS, MFA, WebAuthn and recording encryption
+- [RDP and VNC](../guides/rdp-vnc) and [Kubernetes](../guides/kubernetes) through the same agents
