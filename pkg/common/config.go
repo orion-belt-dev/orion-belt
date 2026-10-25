@@ -162,6 +162,40 @@ func (s ServerConfig) WebAuthnDefaultsFromPublicURL(wa *WebAuthnConfig) {
 	}
 }
 
+// WebAuthnFollowPublicURL moves WebAuthn RPID/origins that were set for
+// oldBase (the public URL before a change) to the current PublicURL, and
+// fills empty ones. Values that never matched oldBase were chosen on purpose
+// and are left alone; other origins in the list are kept.
+func (s ServerConfig) WebAuthnFollowPublicURL(wa *WebAuthnConfig, oldBase string) {
+	if wa == nil {
+		return
+	}
+	base := s.AdvertisedURL()
+	parsed, err := url.Parse(base)
+	if base == "" || err != nil || parsed.Hostname() == "" {
+		return
+	}
+	oldBase = strings.TrimRight(strings.TrimSpace(oldBase), "/")
+	oldHost := ""
+	if old, err := url.Parse(oldBase); err == nil {
+		oldHost = old.Hostname()
+	}
+
+	rpid := strings.TrimSpace(wa.RPID)
+	if rpid == "" || (oldHost != "" && rpid == oldHost) {
+		wa.RPID = parsed.Hostname()
+	}
+	if len(wa.Origins) == 0 {
+		wa.Origins = []string{base}
+		return
+	}
+	for i, origin := range wa.Origins {
+		if oldBase != "" && strings.TrimRight(strings.TrimSpace(origin), "/") == oldBase {
+			wa.Origins[i] = base
+		}
+	}
+}
+
 // DatabaseConfig contains database configuration
 type DatabaseConfig struct {
 	Driver           string `yaml:"driver"`

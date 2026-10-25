@@ -185,6 +185,7 @@ docker-build-server:
 	docker build \
 		--file $(DOCKERFILE) \
 		--target server \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		--tag $(IMAGE_PREFIX)-server:$(DOCKER_TAG) \
 		--label org.opencontainers.image.source=https://github.com/orion-belt-dev/orion-belt \
 		--label org.opencontainers.image.description="Orion Belt PAM gateway server" \
@@ -196,6 +197,7 @@ docker-build-agent:
 	docker build \
 		--file $(DOCKERFILE_AGENT) \
 		--target agent \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		--tag $(IMAGE_PREFIX)-agent:$(DOCKER_TAG) \
 		--label org.opencontainers.image.source=https://github.com/orion-belt-dev/orion-belt \
 		--label org.opencontainers.image.description="Orion Belt reverse-SSH agent" \

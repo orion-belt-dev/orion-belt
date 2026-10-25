@@ -10,8 +10,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-ARG TARGETOS TARGETARCH TARGETVARIANT
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} make build-agent
+# Version comes in as build args; see docker/Dockerfile.
+ARG TARGETOS TARGETARCH TARGETVARIANT VERSION COMMIT DATE
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} make build-agent \
+    ${VERSION:+VERSION=$VERSION} ${COMMIT:+COMMIT=$COMMIT} ${DATE:+DATE=$DATE}
 
 # Agent image
 FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS agent
@@ -20,7 +22,9 @@ FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2
 # host it runs on directly (setuid-drop to the requested local user) — it does
 # not run its own sshd, so no ssh server, no local user accounts, no password
 # auth. It only needs to reach the server outbound.
-RUN apk add --no-cache ca-certificates
+# scp (openssh-client-common) is the receiving end of ocp copies: the agent
+# runs "scp -t <path>" for an upload and "scp -f <path>" for a download.
+RUN apk add --no-cache ca-certificates openssh-client-common
 
 WORKDIR /app
 

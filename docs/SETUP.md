@@ -29,7 +29,7 @@ each option. The ones to review before going live:
 | Setting | Purpose |
 |---|---|
 | `server.trusted_proxies` | Reverse proxies allowed to report the client address. Required behind a proxy; see [REVERSE_PROXY.md](REVERSE_PROXY.md). |
-| `auth.webauthn.*` | Hardware-key (FIDO2) login; see [WebAuthn](#webauthn-fido2). When `rp_id` and `origins` are empty they are derived from `server.public_url`. |
+| `auth.webauthn.*` | Hardware-key (FIDO2) login; see [WebAuthn](#webauthn-fido2). When `rp_id` and `origins` are empty they are derived from `server.public_url`, and `orion-belt-server setup` moves them along when it changes the public URL (values you set to something else are kept). |
 | `auth.mfa_required` | Require a TOTP code after SSH-key login from `osh`, `ocp` and `oadmin`. Off by default, so device login (`osh login`) uses the key alone. Password login always requires TOTP. |
 | `auth.rate_limit_per_minute` | Request limit per user or IP address on authenticated API routes. Default 600. Sign-in and registration endpoints have a separate, fixed limit of 30 requests per minute per IP address. |
 | `auth.openfga.*` | Use an external OpenFGA server for authorization instead of the built-in permission tables. |
