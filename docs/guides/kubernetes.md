@@ -109,7 +109,23 @@ Anything listed for deletion is expired, revoked or orphaned.
 
 ---
 
-## 4. Audit
+## 4. Network interruptions
+
+:::info[After 1.4.0]
+Ships in the next release; not in 1.4.0.
+:::
+
+`osh kube` behaves like `osh rdp` when the network drops: the local relay
+stays up, the gateway connection is redialled with backoff, and the next
+`kubectl` command goes through once it is back. A `kubectl` command in flight,
+such as a `logs -f` or `exec`, ends and can be rerun. Bindings are unaffected:
+they follow grants on the gateway and the agent, not the client's connection.
+See [RDP and VNC](./rdp-vnc#4-network-interruptions) for the keepalive, limit
+and timeout details shared by all relays.
+
+---
+
+## 5. Audit
 
 | Action | When |
 | --- | --- |

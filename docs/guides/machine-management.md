@@ -45,6 +45,12 @@ With **SSH CA** enabled, registration may return a Host certificate — see main
 
 Stop and wipe `/etc/orion-belt/agent_key` on the host after removal.
 
+## Reload, drain and update
+
+From the next release, admins can reload an agent's config, drain it for
+maintenance and update its binary from the gateway. See
+[Agent remote management](./agent-management).
+
 ## Tags & grants
 
 Use tags/metadata for grouping. Access is still **per user ↔ machine** (and remote users) via **Permissions** / grants — tagging alone does not grant SSH.
