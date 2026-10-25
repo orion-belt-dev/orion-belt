@@ -8,19 +8,25 @@ title: API Reference
 Orion-Belt exposes a REST API for integration with external systems and automation scripts.
 
 - Base URL: `http://<server>:8080/api/v1`
-- Authentication: API tokens generated in the server
+- Authentication: `Authorization: Bearer <key>` with an API key (`osh api-keys create`, or the console's **Security → API keys**) or a JWT from `POST /api/v1/public/login/token`
 - Content-Type: `application/json`
+- Schema: the server serves its OpenAPI document at `/api/v1/openapi.yaml`
+
+```bash
+curl -s -H "Authorization: Bearer $ORION_API_KEY" https://orion.example.com/api/v1/machines
+```
 
 ---
 
 ## Available Resources
 
-- `/agents` – List, register, update, delete agents
-- `/users` – Create, update, delete users
-- `/permissions` – Grant, revoke, list permissions
-- `/sessions` – Active session monitoring and recording retrieval
+- `/api/v1/users`, `/api/v1/admin/users` – list, create, update, delete users
+- `/api/v1/machines`, `/api/v1/admin/agents` – machines, connected agents, install scripts, agent commands
+- `/api/v1/admin/permissions`, `/api/v1/access-requests` – grants and just-in-time requests
+- `/api/v1/sessions` – session history, recordings, live watch
+- `/api/v1/audit-logs`, `/api/v1/reports` – audit log and compliance reports
 
-Refer to [`endpoints.md`](endpoints.md) for detailed endpoint documentation.
+Refer to [`endpoints.md`](endpoints.md) for every endpoint.
 
 ---
 
