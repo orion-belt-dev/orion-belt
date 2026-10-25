@@ -171,6 +171,9 @@ jobs:
           VER="${TAG#v}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          # Stamped into the image's binaries, as GoReleaser does for the others.
+          echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "date=$(TZ=UTC0 git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)" >> "$GITHUB_OUTPUT"
           # workflow_dispatch without a tag → latest only
           if [[ "$TAG" == v* ]]; then
             echo "server_tags=ghcr.io/orion-belt-dev/orion-belt-server:${VER},ghcr.io/orion-belt-dev/orion-belt-server:${TAG},ghcr.io/orion-belt-dev/orion-belt-server:latest" >> "$GITHUB_OUTPUT"
@@ -189,6 +192,10 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
           push: true
           tags: ${{ steps.meta.outputs.server_tags }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.meta.outputs.commit }}
+            DATE=${{ steps.meta.outputs.date }}
           labels: |
             org.opencontainers.image.source=https://github.com/orion-belt-dev/orion-belt
             org.opencontainers.image.description=Orion Belt PAM gateway server
@@ -203,6 +210,10 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
           push: true
           tags: ${{ steps.meta.outputs.agent_tags }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.meta.outputs.commit }}
+            DATE=${{ steps.meta.outputs.date }}
           labels: |
             org.opencontainers.image.source=https://github.com/orion-belt-dev/orion-belt
             org.opencontainers.image.description=Orion Belt reverse-SSH agent

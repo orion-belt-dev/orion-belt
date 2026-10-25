@@ -20,8 +20,12 @@ COPY . .
 # build-ui then binaries; UI lands in web/static and is compiled into the server.
 # Plugins (audit-logger, slack/email/webhook notifications, chatops-access-request)
 # are compiled directly into orion-belt-server — no separate build step.
-ARG TARGETOS TARGETARCH TARGETVARIANT
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} make build
+# .git is not in the build context, so the Makefile cannot work out the
+# version itself: pass VERSION, COMMIT and DATE as build args (release.yml and
+# make docker-build do). Unset ones keep the Makefile's defaults.
+ARG TARGETOS TARGETARCH TARGETVARIANT VERSION COMMIT DATE
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} make build \
+    ${VERSION:+VERSION=$VERSION} ${COMMIT:+COMMIT=$COMMIT} ${DATE:+DATE=$DATE}
 
 # Server image
 FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS server
