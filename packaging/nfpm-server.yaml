@@ -26,14 +26,15 @@ contents:
   - src: config/server.example.yaml
     dst: /etc/orion-belt/server.yaml
     type: config|noreplace
-  - dst: /var/lib/orion-belt/recordings
-    type: dir
-    file_info:
-      mode: 0750
-  - dst: /var/log/orion-belt
-    type: dir
-    file_info:
-      mode: 0750
+  # See .goreleaser.yaml: apk resets directory ownership after post-install.
+  - {dst: /var/lib/orion-belt/recordings, type: dir, packager: deb, file_info: {mode: 0750}}
+  - {dst: /var/log/orion-belt, type: dir, packager: deb, file_info: {mode: 0750}}
+  - {dst: /var/lib/orion-belt/recordings, type: dir, packager: rpm, file_info: {mode: 0750}}
+  - {dst: /var/log/orion-belt, type: dir, packager: rpm, file_info: {mode: 0750}}
+  - {dst: /var/lib/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+  - {dst: /var/lib/orion-belt/recordings, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+  - {dst: /var/log/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+  - {dst: /etc/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
   # orion-belt-service and the init templates it installs (OpenRC, runit, SysV).
   - src: packaging/linux/orion-belt-service
     dst: /usr/lib/orion-belt/orion-belt-server-service
@@ -52,5 +53,6 @@ contents:
     file_info:
       mode: 0755
 scripts:
+  preinstall: packaging/scripts/server-preinstall.sh
   postinstall: packaging/scripts/server-postinstall.sh
   preremove: packaging/scripts/server-preremove.sh

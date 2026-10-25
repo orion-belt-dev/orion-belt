@@ -382,19 +382,24 @@ nfpms:
         dst: /etc/orion-belt/server.yaml
         type: config|noreplace
         file_info: {mode: 0640}
-      - dst: /var/lib/orion-belt/recordings
-        type: dir
-        file_info: {mode: 0750}
-      - dst: /var/log/orion-belt
-        type: dir
-        file_info: {mode: 0750}
-      - dst: /etc/orion-belt
-        type: dir
-        file_info: {mode: 0750}
+      # rpm and pacman keep the ownership post-install sets; apk resets
+      # directories to the package's ownership after post-install, so for apk
+      # they are owned by the service user (created in preinstall).
+      - {dst: /var/lib/orion-belt/recordings, type: dir, packager: rpm, file_info: {mode: 0750}}
+      - {dst: /var/log/orion-belt, type: dir, packager: rpm, file_info: {mode: 0750}}
+      - {dst: /etc/orion-belt, type: dir, packager: rpm, file_info: {mode: 0750}}
+      - {dst: /var/lib/orion-belt/recordings, type: dir, packager: archlinux, file_info: {mode: 0750}}
+      - {dst: /var/log/orion-belt, type: dir, packager: archlinux, file_info: {mode: 0750}}
+      - {dst: /etc/orion-belt, type: dir, packager: archlinux, file_info: {mode: 0750}}
+      - {dst: /var/lib/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+      - {dst: /var/lib/orion-belt/recordings, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+      - {dst: /var/log/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+      - {dst: /etc/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
       - src: LICENSE
         dst: /usr/share/licenses/orion-belt/LICENSE
         file_info: {mode: 0644}
     scripts:
+      preinstall: packaging/scripts/server-preinstall.sh
       postinstall: packaging/scripts/server-postinstall.sh
       preremove: packaging/scripts/server-preremove.sh
     # ssh-keygen creates the gateway's host key on install; without it the
@@ -564,9 +569,11 @@ nfpms:
         dst: /etc/orion-belt/agent.yaml
         type: config|noreplace
         file_info: {mode: 0640}
-      - dst: /etc/orion-belt
-        type: dir
-        file_info: {mode: 0750}
+      # Not declared for apk: apk keeps the first package's ownership of a
+      # shared directory, and the server package needs it owned by orionbelt.
+      # agent-postinstall creates it.
+      - {dst: /etc/orion-belt, type: dir, packager: rpm, file_info: {mode: 0750}}
+      - {dst: /etc/orion-belt, type: dir, packager: archlinux, file_info: {mode: 0750}}
       - src: LICENSE
         dst: /usr/share/licenses/orion-belt-agent/LICENSE
         file_info: {mode: 0644}
