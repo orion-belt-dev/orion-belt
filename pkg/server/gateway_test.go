@@ -489,8 +489,9 @@ func TestNew_ConfigurationErrors(t *testing.T) {
 		"openfga incomplete":   func(cfg *common.Config) { cfg.Auth.OpenFGA.Enabled = true },
 		"ssh ca without key":   func(cfg *common.Config) { cfg.SSHCA.Enabled = true },
 		"no host key":          func(cfg *common.Config) { cfg.Server.SSHHostKey = "" },
-		"unreadable host key":  func(cfg *common.Config) { cfg.Server.SSHHostKey = filepath.Join(t.TempDir(), "absent") },
-		"invalid host key":     func(cfg *common.Config) { cfg.Server.SSHHostKey = file },
+		// A missing key is created on start; one in a missing directory cannot be.
+		"unreadable host key": func(cfg *common.Config) { cfg.Server.SSHHostKey = filepath.Join(t.TempDir(), "absent", "ssh_host_key") },
+		"invalid host key":    func(cfg *common.Config) { cfg.Server.SSHHostKey = file },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
