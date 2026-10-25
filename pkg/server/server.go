@@ -266,14 +266,12 @@ func (s *Server) setupSSHConfig() error {
 	if s.config.Server.SSHHostKey == "" {
 		return fmt.Errorf("SSH host key not configured")
 	}
-	privateBytes, err := os.ReadFile(s.config.Server.SSHHostKey)
+	private, created, err := loadOrCreateHostKey(s.config.Server.SSHHostKey)
 	if err != nil {
-		return fmt.Errorf("failed to read host key: %w", err)
+		return err
 	}
-
-	private, err := ssh.ParsePrivateKey(privateBytes)
-	if err != nil {
-		return fmt.Errorf("failed to parse host key: %w", err)
+	if created {
+		s.logger.Info("Generated SSH host key %s (fingerprint %s)", s.config.Server.SSHHostKey, ssh.FingerprintSHA256(private.PublicKey()))
 	}
 	s.hostPrivate = private
 	cfg.AddHostKey(private)

@@ -297,7 +297,8 @@ nfpms:
     scripts:
       postinstall: packaging/scripts/server-postinstall.sh
       preremove: packaging/scripts/server-preremove.sh
-    # ssh-keygen creates the gateway's host key on install.
+    # ssh-keygen creates the gateway's host key on install; without it the
+    # server creates one on first start.
     recommends: [openssh-client]
     overrides:
       rpm:
@@ -396,7 +397,8 @@ nfpms:
     scripts:
       postinstall: packaging/scripts/server-postinstall.sh
       preremove: packaging/scripts/server-preremove.sh
-    # ssh-keygen creates the gateway's host key on install.
+    # ssh-keygen creates the gateway's host key on install; without it the
+    # server creates one on first start.
     recommends: [openssh-client]
     overrides:
       rpm:

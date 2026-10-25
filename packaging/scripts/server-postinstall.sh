@@ -26,6 +26,8 @@ if [ -f /etc/orion-belt/server.yaml ]; then
   chmod 640 /etc/orion-belt/server.yaml 2>/dev/null || true
 fi
 
+# Without ssh-keygen (e.g. minimal openSUSE, where recommends are skipped) the
+# server creates the key itself on first start.
 if [ ! -f /etc/orion-belt/ssh_host_key ]; then
   if command -v ssh-keygen >/dev/null 2>&1; then
     ssh-keygen -q -t ed25519 -f /etc/orion-belt/ssh_host_key -N "" -C "orion-belt-host"
