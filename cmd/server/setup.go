@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -33,6 +34,32 @@ ORION_SETUP_PUBLIC_URL / ORION_SETUP_PUBLIC_SSH_HOST / ORION_SETUP_PUBLIC_SSH_PO
 
 func init() {
 	rootCmd.AddCommand(setupCmd)
+}
+
+// applyPublicAddress sets the advertised address and moves the WebAuthn
+// rp_id and origins with it: WebAuthn only accepts the console's own origin,
+// so values left at the old address would break security-key sign-in. Values
+// set to something else are kept. It reports whether the address changed.
+func applyPublicAddress(config *common.Config, publicURL, sshHost string, sshPort int) bool {
+	changed := config.Server.PublicURL != publicURL ||
+		config.Server.PublicSSHHost != sshHost ||
+		config.Server.PublicSSHPort != sshPort
+	oldPublicURL := config.Server.AdvertisedURL()
+	config.Server.PublicURL = publicURL
+	config.Server.PublicSSHHost = sshHost
+	config.Server.PublicSSHPort = sshPort
+	config.Server.WebAuthnFollowPublicURL(&config.Auth.WebAuthn, oldPublicURL)
+	return changed
+}
+
+// printPublicAddress prints the settings applyPublicAddress changed, for an
+// operator who chose not to let setup rewrite the config file.
+func printPublicAddress(w io.Writer, config *common.Config) {
+	fmt.Fprintf(w, "    server.public_url: %q\n", config.Server.PublicURL)
+	fmt.Fprintf(w, "    server.public_ssh_host: %q\n", config.Server.PublicSSHHost)
+	fmt.Fprintf(w, "    server.public_ssh_port: %d\n", config.Server.PublicSSHPort)
+	fmt.Fprintf(w, "    auth.webauthn.rp_id: %q\n", config.Auth.WebAuthn.RPID)
+	fmt.Fprintf(w, "    auth.webauthn.origins: %q\n", config.Auth.WebAuthn.Origins)
 }
 
 func runSetup(cmd *cobra.Command, args []string) {
@@ -111,16 +138,7 @@ func runSetup(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	changed := config.Server.PublicURL != publicURL ||
-		config.Server.PublicSSHHost != sshHost ||
-		config.Server.PublicSSHPort != sshPort
-	oldPublicURL := config.Server.AdvertisedURL()
-	config.Server.PublicURL = publicURL
-	config.Server.PublicSSHHost = sshHost
-	config.Server.PublicSSHPort = sshPort
-	// WebAuthn only accepts the console's own origin, so rp_id and origins
-	// follow the public address (unless they were set to something else).
-	config.Server.WebAuthnFollowPublicURL(&config.Auth.WebAuthn, oldPublicURL)
+	changed := applyPublicAddress(config, publicURL, sshHost, sshPort)
 
 	if changed && configPath != "" {
 		// Full rewrite drops comments — only do it when the installer/env is
@@ -142,11 +160,7 @@ func runSetup(cmd *cobra.Command, args []string) {
 			}
 		} else {
 			fmt.Println("  Not writing config. Set these, then restart:")
-			fmt.Printf("    server.public_url: %q\n", publicURL)
-			fmt.Printf("    server.public_ssh_host: %q\n", sshHost)
-			fmt.Printf("    server.public_ssh_port: %d\n", sshPort)
-			fmt.Printf("    auth.webauthn.rp_id: %q\n", config.Auth.WebAuthn.RPID)
-			fmt.Printf("    auth.webauthn.origins: %q\n", config.Auth.WebAuthn.Origins)
+			printPublicAddress(os.Stdout, config)
 		}
 	} else if publicURL != "" {
 		fmt.Printf("✓ Public URL: %s\n", publicURL)
