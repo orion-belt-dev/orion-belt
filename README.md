@@ -18,13 +18,14 @@
 
 Agents dial out. Sessions are recorded. Access expires on its own.
 
-Orion Belt is a self-hosted SSH access gateway with privileged access management (PAM) workflows. Agents on your servers connect out to the gateway over reverse SSH, so targets need no inbound ports. The gateway adds session recording and live watch, just-in-time access with approvals, MFA and WebAuthn, relationship-based access control (ReBAC), and an optional SSH certificate authority.
+Orion Belt is a self-hosted access gateway for SSH, RDP, VNC and Kubernetes, with privileged access management (PAM) workflows. Agents on your servers connect out to the gateway over reverse SSH, so targets need no inbound ports. The gateway adds session recording and live watch, just-in-time access with approvals, MFA and WebAuthn, relationship-based access control (ReBAC), and an optional SSH certificate authority.
 
-> Version 1.0.0 is stable. Orion Belt is free to self-host and use internally under [Apache 2.0 with the Commons Clause](LICENSE); it may not be sold as a product or hosted service. See [orion-belt.dev](https://orion-belt.dev) for details.
+> Version 1.4.0 is the current release. Orion Belt is free to self-host and use internally under [Apache 2.0 with the Commons Clause](LICENSE); it may not be sold as a product or hosted service. See [orion-belt.dev](https://orion-belt.dev) for details.
 
 ## Why Orion Belt
 
 - Self-hosted, with no SaaS dependency.
+- SSH, SCP, RDP, VNC and just-in-time Kubernetes access through the same agent tunnel.
 - Agents connect out over reverse SSH, so target hosts need no inbound firewall rules.
 - Every session is recorded and can be watched live.
 - Just-in-time access with approvals from the console, the API, or chat (ChatOps).
@@ -66,23 +67,26 @@ For the full walkthrough, including an agent on a real machine, see
 
 | | Orion Belt | Teleport | Boundary | Traditional bastion |
 | --- | --- | --- | --- | --- |
-| Scope | SSH-focused PAM / bastion | Broad zero-trust platform | Credential brokering / sessions | Jump host |
+| Scope | PAM / bastion for SSH, RDP/VNC and Kubernetes | Broad zero-trust platform | Credential brokering / sessions | Jump host |
 | Deploy | Self-hosted, Linux-first | Self-hosted or cloud | Self-hosted or HCP | DIY |
 | Target reach | Agents dial out (no inbound on hosts) | Node agents / reverse tunnels | Workers / proxies | Inbound to bastion, often to hosts too |
 | Session recording | Yes, with live watch | Yes | Yes (with workers) | Usually custom or none |
 | JIT approvals | Built in, with ChatOps | Yes | Via workflows / IdP | Rarely |
 | Weight | Lighter SSH PAM slice | Large platform | Identity-centric | Minimal features |
 
-Orion Belt fits teams that want to run their own SSH access management without exposing SSH on every host or operating a platform the size of Teleport.
+Orion Belt fits teams that want to run their own access management for servers, desktops and clusters without exposing SSH, RDP or the Kubernetes API on every host or operating a platform the size of Teleport.
 
 ## Features
 
 - **Gateway:** SSH and SCP proxy with recording, ReBAC, MFA and an optional SSH CA.
-- **Agents:** connect out over reverse SSH; targets need no inbound ports.
+- **RDP and VNC:** `osh rdp` / `osh vnc` open a local port relayed through the agent; see [RDP_VNC.md](docs/RDP_VNC.md).
+- **Kubernetes:** approved grants become time-limited RoleBindings, used through `osh kube`; see [KUBERNETES.md](docs/KUBERNETES.md).
+- **Agents:** connect out over reverse SSH; targets need no inbound ports. Reload, drain and update them from the gateway ([AGENT_MANAGEMENT.md](docs/AGENT_MANAGEMENT.md)).
 - **Clients:** `osh`, `ocp` and `oadmin`, or standard OpenSSH (`user+machine@gateway`).
 - **Just-in-time access:** request, approve, and receive a time-limited grant from the console, the API, or Slack, Discord, Teams and Rocket.Chat.
 - **Web console:** terminal, file browser, session playback and live watch, and management of users, machines and permissions.
 - **Usage dashboard:** access volume, approval latency and most-used targets over a rolling window.
+- **Compliance and risk:** SOC2, ISO 27001 and PCI reports (CSV/PDF/JSON), explain-access, risk-based auto-approve/escalate, anomaly flags; see [COMPLIANCE_REPORTS.md](docs/COMPLIANCE_REPORTS.md) and [RISK.md](docs/RISK.md).
 - **Plugins:** audit logging, email, webhook and Slack notifications, and ChatOps approvals, configured from the console.
 - **Operations:** Prometheus metrics, JSON logs, an OpenAPI specification, and GPG-signed deb/rpm plus RSA-signed apk repositories.
 
@@ -489,6 +493,10 @@ Local packages: `make packages` → install from `dist/` ([PACKAGING.md](docs/PA
 | [Try in 10 minutes](docs/TRY_IN_10_MINUTES.md) | Lab path to first recorded session |
 | [SETUP.md](docs/SETUP.md) | Production / package first-run |
 | [SSH_CA.md](docs/SSH_CA.md) | Optional certificate authority |
+| [RDP_VNC.md](docs/RDP_VNC.md) | RDP and VNC through the agent tunnel |
+| [KUBERNETES.md](docs/KUBERNETES.md) | Just-in-time Kubernetes access |
+| [AGENT_MANAGEMENT.md](docs/AGENT_MANAGEMENT.md) | Reload, drain and update agents |
+| [COMPLIANCE_REPORTS.md](docs/COMPLIANCE_REPORTS.md) | SOC2 / ISO 27001 / PCI reports |
 | [GO_SDK.md](docs/GO_SDK.md) | Reusable Go SDK for API integrations |
 | [MULTI_LANGUAGE_SDK.md](docs/MULTI_LANGUAGE_SDK.md) | Python / .NET / JS SDK plan |
 | [openssh-clients.md](docs/openssh-clients.md) | Vanilla `ssh` via the gateway |
@@ -497,7 +505,7 @@ Local packages: `make packages` → install from `dist/` ([PACKAGING.md](docs/PA
 | [OBSERVABILITY.md](docs/OBSERVABILITY.md) | Metrics and logging |
 | [BENCHMARKS.md](docs/BENCHMARKS.md) | Session and throughput benchmarks, performance gate |
 | [OpenAPI](docs/openapi/openapi.yaml) | HTTP/WS API |
-| [ROADMAP.md](docs/ROADMAP.md) | Planned work (OIDC, HA and more) |
+| [ROADMAP.md](docs/ROADMAP.md) | Planned work (OIDC, secrets vault, DB gateway, HA and more) |
 
 ## Security
 

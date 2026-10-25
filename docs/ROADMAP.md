@@ -2,33 +2,69 @@
 
 ## Current Status
 
-**Version:** v1.0.0
-**Status:** **v1.0.0** — stable SSH PAM release. Next up is OIDC / HA / multi-protocol / SDKs / compliance (see below).
+**Version:** v1.4.0 (released 2026-10-24)
+**Status:** Stable SSH PAM with RDP/VNC and just-in-time Kubernetes access through the agent tunnel, compliance reports, risk policy and anomaly flags. Identity providers (OIDC first), the secrets vault and the database gateway are next.
 
-## Pending / Next Up — 2026-07-14
+## Unreleased on `master`
 
-### v1.0.0 (done)
+- Standardised API error handling: `pkg/apperr`, no internal errors leaked in 500s ([ERROR_HANDLING.md](ERROR_HANDLING.md), #66, PR #139)
+- RDP, VNC and Kubernetes tunnels survive network drops (PR #138)
+- Permission editor: bulk grant/revoke, effective access view, server-side search (#70, PR #140)
+- Agent remote management: `orion:reload`, `orion:drain`/`undrain`, `orion:update` and `oadmin agents` ([AGENT_MANAGEMENT.md](AGENT_MANAGEMENT.md), #71, PR #141)
 
-Shipped as a stability cut of what’s already on `master` (CA, MFA, JIT, ReBAC, recording, live watch, packages) — not a new IdP or protocol. Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_STABILITY.md), [RELEASE_SMOKE.md](RELEASE_SMOKE.md) (`make release-smoke`).
+## Releases since v1.0.0
 
-### Still open
+| Version | Highlights |
+|---------|------------|
+| v1.1.0 | OpenTelemetry tracing (#65), per-user notification preferences (#68), report export PDF/CSV/SIEM (#50), usage analytics dashboard (#53), Go SDK (#60), coverage above 86% (#72), benchmark suite (#74) |
+| v1.2.0 | Notification templates (#67), installer, agent delete cascade fix (#90) |
+| v1.3.0 / v1.3.1 | Capability catalog UI (#57), CLI coverage for new endpoints (#64), auth/authz/proxy hardening, terminal resize fix (#103), packages for every Linux distro and clients for every OS, pkgs.orion-belt.dev |
+| v1.4.0 | Compliance reports SOC2/ISO 27001/PCI (#47–#49), explain-access (#59), risk signals and auto-approve/escalate policy (#40, #41), anomaly flags (#45), recording compression (#69), break-glass admin (#17), integration suites (#73), RDP/VNC tunnel (#29), JIT Kubernetes RoleBindings (#37–#39), reports for non-SSH protocols (#54) |
 
-- [ ] HashiCorp Vault
-- [ ] Fancier agent remote management (reload, drain, update)
-- [ ] Better unit coverage / integration suites
-- [x] OpenTelemetry tracing — gateway → agent → target spans over OTLP, off by default ([OBSERVABILITY.md](OBSERVABILITY.md))
+## Open work — 2026-10-25
 
-### After v1.0.0
+Open issues grouped by what they wait on. "Ready" means nothing else has to land first.
 
-- OIDC (Okta / Entra / Keycloak / Google / friends) + group → role/grant mapping; keep a local break-glass admin
-- SAML / LDAP
-- HA / DB replicas
-- RDP / VNC / Kubernetes / DB proxies
-- Client SDKs
-- Compliance reporting packs
-- SIEM / ticketing, RBAC-on-ReBAC, command filtering
+### Ready
 
-Permissions editor, recording compression, live watch, notification prefs, and JIT polish landed on the way here (historically called v0.9 work).
+| Issue | Size | Notes |
+|-------|------|-------|
+| #11 OIDC login for the web console | L | Unblocks #14, #15, #16, #18 |
+| #12 SAML login, #13 LDAP/AD sync | L | Independent of OIDC; need an IdP in the test lab |
+| #20 Secrets vault: storage | L | Reuses the recording AES-256-GCM approach; unblocks #21–#28 |
+| #42 OPA policy integration | L | Unblocks #46 and #56 |
+| #43 RBAC-on-ReBAC | M | Schema change |
+| #51 SIEM forwarding plugin | M | Compiled-in plugin platform |
+| #52 Ticketing hooks (Jira/ServiceNow) | M | Compiled-in plugin platform |
+| #55 Capability definition (admin) | M | Builds on the read-only catalog in `pkg/api/capabilities.go` |
+| #58 Relationship graph explorer | L | Builds on `/access/explain` |
+| #61 Python SDK, #62 TypeScript SDK | M | `sdk/python` and `sdk/js` exist but cover a fraction of `/api/v1`; publishing needs PyPI/npm accounts |
+| #19 HA / DB replicas for the auth path | L | |
+| #30 Cloud privilege broker (AWS/Azure/GCP) | L | Needs cloud test accounts |
+| #34 Database gateway: connection proxying | L | Unblocks #35, #36 |
+| #32 RDP/VNC recording + live watch, #33 clipboard/file-transfer control | M/S | Build on the RDP/VNC tunnel from v1.4.0 |
+
+### Needs a design decision
+
+- #44 In-session command filtering: enforcing allow/deny lists inside an interactive PTY without a check-then-execute race is not reliable; scoping it to `exec` requests is.
+- #63 Workflow automation rules: scope not defined yet.
+
+### Blocked
+
+| Issue | Waits on |
+|-------|----------|
+| #14 JIT provisioning, #15 group mapping, #16 de-provisioning, #18 SSH with IdP users | #11 (or #12/#13) |
+| #21 credential injection, #22 scoped retrieval, #23–#25 rotation, #26 rotation failures, #27 Vault backend, #28 secret audit log | #20 |
+| #31 Cloud broker JIT workflow | #30 |
+| #35 query policy, #36 SQL audit log | #34 |
+| #46 Policy authoring UI | #42 |
+| #56 Capability-based access request | #55, #42, #43 |
+
+### Not tracked as issues
+
+- [ ] Alerting
+- [ ] Log shipping to Loki/ELK (logs are JSON slog today)
+- [ ] Config validation improvements
 
 ## Audit Findings — 2026-07-13
 
@@ -159,7 +195,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
   - [x] Generic webhook notification plugin
   - [x] Access-request / access-granted hooks fired from API
   - [x] Post-auth hook fired after successful SSH auth
-  - [ ] Template system for notification content
+  - [x] Template system for notification content (v1.2.0, #67)
   - [x] User notification preferences management (per-user channel/event
         choices bounded by an admin policy; admin-mandated events cannot be
         switched off — `GET/PUT /admin/notifications/policy`)
@@ -167,7 +203,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 * **Agent Command Interface**
   - [x] Agent control commands: `orion:ping`, `orion:health`, `orion:status`, `orion:info`
   - [x] Admin API: `GET /api/v1/admin/agents/connected`, `POST /api/v1/admin/agents/:machine_id/command`, `POST /api/v1/admin/agents/install-script`
-  - [ ] Richer remote management (reload config, drain, update)
+  - [x] Richer remote management: reload, drain, update ([AGENT_MANAGEMENT.md](AGENT_MANAGEMENT.md), #71)
 
 * **Observability**
   - [x] Prometheus-format metrics at `GET /metrics`
@@ -200,7 +236,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
   - [x] AES-256-GCM at-rest encryption (`recording.encryption_key`)
   - [x] Decrypt on playback API
   - [x] Retention enforcement loop (`recording.retention_days`)
-  - [ ] Compression
+  - [x] Compression (#69)
 
 ---
 
@@ -231,12 +267,12 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 
 ## Still open (post-v0.4)
 
-- [ ] HashiCorp Vault integration
-- [ ] Structured logs (Loki/ELK)
+- [ ] HashiCorp Vault integration (#20, #27)
+- [x] Structured logs (JSON slog); shipping to Loki/ELK still open
 - [x] OpenTelemetry tracing
-- [ ] Notification templates / user preferences
-- [ ] Recording compression
-- [ ] Richer permission editor in UI
+- [x] Notification templates / user preferences
+- [x] Recording compression
+- [x] Richer permission editor in UI (#70)
 - [x] Machine CRUD in UI
 - [x] Session recording playback + audit trail + user management in `/ui`
 - [x] Web terminal sessions recorded with `source=web`
@@ -260,10 +296,11 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 ### After 1.0 — identity and bigger features
 
 - [ ] OIDC (Okta / Entra / Keycloak / Google / …)
-- [ ] Map IdP groups to roles/grants; keep a local break-glass admin
+- [ ] Map IdP groups to roles/grants (#15)
+- [x] Local break-glass admin (#17)
 - [ ] HA / DB replicas
 - [x] JIT access (TTL, `access_type`, reject notify, stale expiry)
-- [ ] Risk-based policies
+- [x] Risk-based policies ([RISK.md](RISK.md), #40, #41)
 - [ ] RBAC next to ReBAC
 - [x] Live session watch
 - [ ] Command filtering
@@ -273,19 +310,21 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 
 ### After 1.0 — compliance-ish
 
-- [ ] Compliance reporting packs
-- [ ] Declarative policy engine
+- [x] Compliance reporting packs ([COMPLIANCE_REPORTS.md](COMPLIANCE_REPORTS.md), #47–#49)
+- [ ] Declarative policy engine (OPA, #42)
 - [ ] Extra network segmentation proxies
 - [x] Usage analytics (dashboard: access volume, approval latency, top targets)
-- [ ] Anomaly / security analytics
+- [x] Anomaly / security analytics (flag, don't block; #45)
 
 ### After 1.0 — other protocols / platform
 
-- [ ] RDP / VNC / Kubernetes / DB proxies
-- [ ] SDKs (Go, Python, TypeScript)
+- [x] RDP / VNC ([RDP_VNC.md](RDP_VNC.md)) and Kubernetes ([KUBERNETES.md](KUBERNETES.md))
+- [ ] DB proxies (#34–#36)
+- [x] Go SDK ([GO_SDK.md](GO_SDK.md))
+- [ ] Python and TypeScript SDKs (#61, #62)
 - [ ] Workflow automation
 - [ ] AI/ML access analytics (maybe)
-- [ ] More CLI work
+- [x] CLI coverage for new endpoints (#64)
 
 ---
 
@@ -293,16 +332,16 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 
 **Code Quality**
 
-- [ ] Hit ~80% unit test coverage
-- [ ] Integration test suites
+- [x] Hit ~80% unit test coverage (above 86%, #72)
+- [x] Integration test suites (#73)
 - [x] End-to-end CVE gate (`e2e/cve`, `scripts/cve-check.sh`)
 - [x] Multi-distro e2e lab (compose + QEMU) + [E2E test plan](E2E_TEST_PLAN.md)
 - [x] Performance benchmarks (`pkg/server/bench_test.go`, nightly gate) — [BENCHMARKS.md](BENCHMARKS.md)
-- [x] Architecture Decision Records (ADRs) — started (`docs/adr/`)
+- [ ] Architecture Decision Records (ADRs); the first one, `docs/adr/0001-recording-compression.md`, was dropped in the v1.0 docs cut (71a1353)
 
 **Refactoring**
 
-- [ ] Error handling standardization
+- [x] Error handling standardization ([ERROR_HANDLING.md](ERROR_HANDLING.md), #66)
 - [x] Logging standardization (JSON slog)
 - [ ] Config validation improvements
 - [x] Complete remaining machine CRUD admin stubs
@@ -333,7 +372,11 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 * **v0.8:** SSH Certificate Authority (user/host certs, agent Host-cert identity, renewal, revoke), challenge-response pubkey API login, browser bootstrap codes, in-app notification bell, password+TOTP login — see `docs/SSH_CA.md`
 * **v0.9:** Richer permissions UI, recording compression, live session watch, notification prefs, JIT polish, ops docs (folded into the v1.0 cut)
 * **v1.0:** Stable SSH PAM — `/api/v1` compatibility promise, ops docs, release smoke; see [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md)
-* **Later:** OIDC (then SAML/LDAP), HA, other protocols, SDKs, compliance packs, SIEM/ticketing
+* **v1.1:** OpenTelemetry tracing, per-user notification preferences, report export, usage analytics dashboard, Go SDK, benchmark suite
+* **v1.2:** Notification templates, installer
+* **v1.3:** Capability catalog, CLI coverage for new endpoints, security hardening, packages for every Linux distro and clients for every OS (pkgs.orion-belt.dev)
+* **v1.4:** Compliance reports, explain-access, risk policy, anomaly flags, recording compression, break-glass admin, RDP/VNC and JIT Kubernetes access
+* **Later:** OIDC (then SAML/LDAP), secrets vault, database gateway, HA, OPA, Python/TypeScript SDKs, SIEM/ticketing — see [Open work](#open-work--2026-10-25)
 
 ---
 
@@ -341,15 +384,17 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 
 Helpful directions right now:
 
-- OIDC + group mapping
-- Agent remote management (drain, reload, update)
-- HA, RDP/VNC, SDKs, tests / coverage
+- OIDC + group mapping (#11, then #14–#16)
+- Secrets vault (#20)
+- SIEM forwarding (#51) and ticketing hooks (#52)
+- Relationship graph explorer (#58)
+- Python and TypeScript SDKs (#61, #62)
 
 ---
 
 ## Notes
 
-Tags and merged PRs are the history. **v1.0.0** is the first release we call stable SSH PAM (API notes + ops docs + smoke). OIDC and friends come after.
+Tags and merged PRs are the history. **v1.0.0** is the first release we call stable SSH PAM (API notes + ops docs + smoke). Open GitHub issues (FR-x.y) are the source of truth for planned work; this file summarises them.
 
-**Last Updated:** 2026-07-14 (v1.0.0)  
+**Last Updated:** 2026-10-25 (v1.4.0 + unreleased `master`)  
 **Maintainer:** Mohamed Zrouga ([@zrougamed](https://github.com/zrougamed))
