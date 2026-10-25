@@ -214,6 +214,9 @@ type AgentConfig struct {
 	Tunnels map[string]string `yaml:"tunnels,omitempty"`
 	// Kubernetes turns the agent into a cluster's in-cluster agent.
 	Kubernetes KubernetesAgentConfig `yaml:"kubernetes,omitempty"`
+	// RemoteUpdate lets the gateway replace this agent's binary
+	// (orion:update). On unless set to false.
+	RemoteUpdate *bool `yaml:"remote_update,omitempty"`
 }
 
 // KubernetesAgentConfig configures an agent running inside a cluster. Empty

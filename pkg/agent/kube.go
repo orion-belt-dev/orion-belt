@@ -18,28 +18,37 @@ var kubeSweepInterval = time.Minute
 
 // kubeAgent is the in-cluster half of the Kubernetes integration.
 type kubeAgent struct {
+	mu     sync.Mutex
 	client *kube.Client
-	once   sync.Once
 }
 
 // kubeClient returns the API server client, building it on first use. Nil
-// means the agent is not configured as an in-cluster agent.
+// means the agent is not configured as an in-cluster agent. A failed build is
+// not cached, so a fixed config (see reload) is picked up on the next use.
 func (a *Agent) kubeClient() (*kube.Client, error) {
-	cfg := a.config.Agent.Kubernetes
+	cfg := a.agentConfig().Kubernetes
 	if !cfg.Enabled {
 		return nil, nil
 	}
-	var err error
-	a.kube.once.Do(func() {
-		a.kube.client, err = kube.NewClient(kube.Config{APIServer: cfg.APIServer, TokenFile: cfg.TokenFile, CAFile: cfg.CAFile})
-	})
+	a.kube.mu.Lock()
+	defer a.kube.mu.Unlock()
+	if a.kube.client != nil {
+		return a.kube.client, nil
+	}
+	c, err := kube.NewClient(kube.Config{APIServer: cfg.APIServer, TokenFile: cfg.TokenFile, CAFile: cfg.CAFile})
 	if err != nil {
 		return nil, err
 	}
-	if a.kube.client == nil {
-		return nil, fmt.Errorf("kubernetes client unavailable")
-	}
-	return a.kube.client, nil
+	a.kube.client = c
+	return c, nil
+}
+
+// resetKubeClient drops the cached client so the next use reads the config
+// again.
+func (a *Agent) resetKubeClient() {
+	a.kube.mu.Lock()
+	defer a.kube.mu.Unlock()
+	a.kube.client = nil
 }
 
 // announceKubernetes tells the gateway this agent fronts a cluster, so it
@@ -75,6 +84,13 @@ func (a *Agent) handleKube(newChannel gossh.NewChannel) {
 		newChannel.Reject(gossh.Prohibited, "proxy needs a user")
 		return
 	}
+	// A draining agent still manages bindings, but takes no new kubectl.
+	if req.Op == kube.OpProxy {
+		if draining, _ := a.workStatus(); draining {
+			newChannel.Reject(gossh.ConnectionFailed, errDraining.Error())
+			return
+		}
+	}
 
 	channel, reqs, err := newChannel.Accept()
 	if err != nil {
@@ -88,6 +104,11 @@ func (a *Agent) handleKube(newChannel gossh.NewChannel) {
 	switch req.Op {
 	case kube.OpProxy:
 		cancel() // the proxy lives as long as the kubectl connection
+		end, err := a.begin(channel)
+		if err != nil {
+			return // a drain started between the check above and now
+		}
+		defer end()
 		a.logger.Info("Kubernetes API session for %s", req.User)
 		kube.ServeStream(channel, kube.NewProxy(c, req.User, func(err error) {
 			a.logger.Warn("Kubernetes proxy for %s: %v", req.User, err)

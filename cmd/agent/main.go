@@ -106,6 +106,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Fatal("Failed to create agent: %v", err)
 	}
+	agt.SetConfigPath(configFile)
 
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)

@@ -41,7 +41,14 @@ func (a *Agent) handleTunnel(newChannel gossh.NewChannel) {
 		return
 	}
 
-	addr := a.config.Agent.TunnelAddress(data.Protocol)
+	if draining, _ := a.workStatus(); draining {
+		// ConnectionFailed, not Prohibited: osh retries it, so a tunnel
+		// opened during a short maintenance waits instead of failing.
+		newChannel.Reject(gossh.ConnectionFailed, errDraining.Error())
+		return
+	}
+
+	addr := a.agentConfig().TunnelAddress(data.Protocol)
 	if addr == "" {
 		a.logger.Warn("Refusing %q tunnel: not enabled on this agent", data.Protocol)
 		newChannel.Reject(gossh.Prohibited, data.Protocol+" is not enabled on this agent")
@@ -62,6 +69,11 @@ func (a *Agent) handleTunnel(newChannel gossh.NewChannel) {
 	}
 	defer channel.Close()
 	go gossh.DiscardRequests(reqs)
+	end, err := a.begin(channel)
+	if err != nil {
+		return
+	}
+	defer end()
 
 	a.logger.Info("Tunnel %s relaying to %s", data.Protocol, addr)
 	done := make(chan struct{}, 2)

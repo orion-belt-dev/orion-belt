@@ -107,6 +107,7 @@ prints backup codes once, for the same reason.
 | `oadmin sessions list [--active]` / `get <id>` / `content <id>` | Inspect sessions, download recordings |
 | `oadmin audit list [--limit N] [--action …]` | Read the audit log |
 | `oadmin agents list` / `command` / `disconnect` / `install-script` | Operate connected agents |
+| `oadmin agents reload` / `drain [--timeout]` / `undrain` / `update --url --sha256` | Manage agents remotely ([AGENT_MANAGEMENT.md](AGENT_MANAGEMENT.md)) |
 | `oadmin plugins list` / `enable` / `disable` / `config` | Manage plugins |
 | `oadmin notifications policy` / `set-policy` | Set the org-wide notification bounds |
 | `oadmin notifications templates [--body]` / `set-template` / `reset-template` | Edit the copy recipients see per event |
