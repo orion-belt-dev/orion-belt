@@ -114,10 +114,13 @@ func runSetup(cmd *cobra.Command, args []string) {
 	changed := config.Server.PublicURL != publicURL ||
 		config.Server.PublicSSHHost != sshHost ||
 		config.Server.PublicSSHPort != sshPort
+	oldPublicURL := config.Server.AdvertisedURL()
 	config.Server.PublicURL = publicURL
 	config.Server.PublicSSHHost = sshHost
 	config.Server.PublicSSHPort = sshPort
-	config.Server.WebAuthnDefaultsFromPublicURL(&config.Auth.WebAuthn)
+	// WebAuthn only accepts the console's own origin, so rp_id and origins
+	// follow the public address (unless they were set to something else).
+	config.Server.WebAuthnFollowPublicURL(&config.Auth.WebAuthn, oldPublicURL)
 
 	if changed && configPath != "" {
 		// Full rewrite drops comments — only do it when the installer/env is
@@ -142,6 +145,8 @@ func runSetup(cmd *cobra.Command, args []string) {
 			fmt.Printf("    server.public_url: %q\n", publicURL)
 			fmt.Printf("    server.public_ssh_host: %q\n", sshHost)
 			fmt.Printf("    server.public_ssh_port: %d\n", sshPort)
+			fmt.Printf("    auth.webauthn.rp_id: %q\n", config.Auth.WebAuthn.RPID)
+			fmt.Printf("    auth.webauthn.origins: %q\n", config.Auth.WebAuthn.Origins)
 		}
 	} else if publicURL != "" {
 		fmt.Printf("✓ Public URL: %s\n", publicURL)
