@@ -1252,7 +1252,7 @@ func (s *PostgresStore) CreatePermission(ctx context.Context, permission *common
 	_, err := s.db.ExecContext(ctx, query,
 		permission.ID, permission.UserID, permission.MachineID,
 		permission.AccessType, remoteUsers, nullableString(permission.GrantedBy),
-		permission.GrantedAt, permission.ExpiresAt)
+		localTime(&permission.GrantedAt), localTime(permission.ExpiresAt))
 
 	if err != nil {
 		return fmt.Errorf("failed to create permission: %w", err)
@@ -1310,6 +1310,19 @@ func remoteUsersArray(users []string) interface{} {
 		users = []string{}
 	}
 	return pq.Array(users)
+}
+
+// localTime prepares t for a TIMESTAMP (without time zone) column. lib/pq
+// sends the value with its offset and Postgres drops the offset on the cast,
+// so a time in any zone but the server's would be stored as a different
+// instant. Columns hold the server's local wall clock (see
+// common.FromDBTimestamp).
+func localTime(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	l := t.In(time.Local)
+	return &l
 }
 
 // archivePermissionsSQL wraps a DELETE ... RETURNING * on permissions so the
@@ -1503,8 +1516,8 @@ func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *common
 		)
 		UPDATE permissions SET access_type=$1, remote_users=$2, expires_at=$3, granted_by=$4, granted_at=$5
 		WHERE id=$6`,
-		permission.AccessType, remoteUsersArray(permission.RemoteUsers), permission.ExpiresAt,
-		nullableString(permission.GrantedBy), permission.GrantedAt, permission.ID, time.Now(), common.PermissionEndUpdated)
+		permission.AccessType, remoteUsersArray(permission.RemoteUsers), localTime(permission.ExpiresAt),
+		nullableString(permission.GrantedBy), localTime(&permission.GrantedAt), permission.ID, time.Now(), common.PermissionEndUpdated)
 	if err != nil {
 		return fmt.Errorf("failed to update permission: %w", err)
 	}

@@ -265,6 +265,36 @@ func TestPermissions_GrantUpdateRevoke(t *testing.T) {
 	}
 }
 
+// The column has no time zone, so an expiry sent with an offset used to be
+// stored as its wall clock and outlive the approved instant by the offset.
+func TestPermissions_UpdateExpiresAtKeepsTheInstant(t *testing.T) {
+	e := newEnv(t, nil)
+	r := e.do("POST", "/api/v1/admin/permissions", e.adminKey, map[string]any{
+		"user_id": e.alice.ID, "machine_id": e.machine.ID, "access_type": "ssh", "remote_users": []string{"root"}, "duration_seconds": 600,
+	})
+	e.expect(r, 201)
+	id := r.obj(t)["id"].(string)
+
+	want := time.Now().Add(48 * time.Hour).Truncate(time.Second)
+	for _, zone := range []*time.Location{
+		time.FixedZone("+01:00", 3600),
+		time.FixedZone("+14:00", 14*3600),
+		time.FixedZone("-09:30", -(9*3600 + 1800)),
+	} {
+		sent := want.In(zone).Format(time.RFC3339)
+		e.expect(e.do("PATCH", "/api/v1/admin/permissions/"+id, e.adminKey, map[string]any{"expires_at": sent}), 200)
+
+		var perms []common.Permission
+		e.do("GET", "/api/v1/permissions/machine/"+e.machine.ID, e.adminKey, nil).json(t, &perms)
+		if len(perms) != 1 || perms[0].ExpiresAt == nil {
+			t.Fatalf("permissions after PATCH %s = %+v", sent, perms)
+		}
+		if got := *perms[0].ExpiresAt; !got.Equal(want) {
+			t.Errorf("PATCH expires_at=%s stored %s, want %s", sent, got.UTC().Format(time.RFC3339), want.UTC().Format(time.RFC3339))
+		}
+	}
+}
+
 // --- access requests --------------------------------------------------------------------
 
 func TestAccessRequests_Lifecycle(t *testing.T) {
