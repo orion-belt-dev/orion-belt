@@ -105,6 +105,21 @@ func TestAPIKeys_Endpoints(t *testing.T) {
 	if _, err := e.store.GetAPIKey(context.Background(), forever); err == nil {
 		t.Error("deleted key still stored")
 	}
+
+	raw := created["api_key"].(string)
+	if l := e.lastAudit("auth.api_key.create", raw); l.UserID != e.alice.ID || l.Metadata["name"] != "forever" {
+		t.Errorf("create audit = %+v", l)
+	}
+	if l := e.lastAudit("auth.api_key.revoke", raw); l.Resource != "api_key:"+id || l.Metadata["owner_id"] != e.alice.ID {
+		t.Errorf("revoke audit = %+v", l)
+	}
+	// An admin deleting alice's key is recorded against the admin, naming alice.
+	if l := e.lastAudit("auth.api_key.delete", raw); l.UserID != e.admin.ID || l.Metadata["owner_id"] != e.alice.ID {
+		t.Errorf("delete audit = %+v", l)
+	}
+	if n := len(e.auditLogsFor("auth.api_key.revoke")) + len(e.auditLogsFor("auth.api_key.delete")); n != 2 {
+		t.Errorf("refused key actions were audited as done: %d entries", n)
+	}
 }
 
 // --- key login: session and JWT ----------------------------------------------------------
@@ -221,12 +236,25 @@ func TestMFA_EnrollConfirmDisable(t *testing.T) {
 	u.PasswordHash, _ = auth.HashPassword("correct horse battery")
 	_ = e.store.UpdateUser(context.Background(), u)
 	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": code(t, secret)}), 409)
+	// A backup code presented to a refused disable is spent all the same.
+	backup := enroll["backup_codes"].([]any)[0].(string)
+	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": backup}), 409)
+	u, _ = e.store.GetUser(context.Background(), e.alice.ID)
 	u.PasswordHash = ""
 	_ = e.store.UpdateUser(context.Background(), u)
+	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": backup}), 401)
 
 	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": code(t, secret)}), 200)
 	if u, _ := e.store.GetUser(context.Background(), e.alice.ID); u.MFAEnabled || u.TOTPSecret != "" {
 		t.Errorf("after disable = %+v", u)
+	}
+	for _, action := range []string{"auth.mfa.enable", "auth.mfa.disable"} {
+		if l := e.lastAudit(action, secret); l.UserID != e.alice.ID || l.Resource != "user:"+e.alice.ID {
+			t.Errorf("%s audit = %+v", action, l)
+		}
+	}
+	if n := len(e.auditLogsFor("auth.mfa.disable")); n != 1 {
+		t.Errorf("auth.mfa.disable entries = %d, want only the one that succeeded", n)
 	}
 }
 

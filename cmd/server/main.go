@@ -64,6 +64,10 @@ func init() {
 	rootCmd.Run = runServer
 }
 
+// shutdownTimeout bounds how long a stop waits for sessions to finish.
+// Systemd's default stop timeout is 90s; this leaves room under it.
+const shutdownTimeout = 30 * time.Second
+
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -124,7 +128,10 @@ func runServer(cmd *cobra.Command, args []string) {
 	select {
 	case sig := <-sigChan:
 		logger.Info("Received signal: %v", sig)
-		ctx := context.Background()
+		// Live sessions are ended and given this long to write their
+		// recordings; past it the server stops anyway.
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
 		if err := srv.Stop(ctx); err != nil {
 			logger.Error("Error stopping server: %v", err)
 		}

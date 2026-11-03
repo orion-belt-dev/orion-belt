@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -84,12 +84,15 @@ export function SecurityPage() {
   const mandatoryInApp = mandatoryEvents["in_app"] ?? [];
   const mandatoryEmail = mandatoryEvents["email"] ?? [];
 
-  useEffect(() => {
-    if (!notifPrefs.data) return;
+  // Load the form from fresh preferences (set during render, as React
+  // recommends over an effect).
+  const [prefsFor, setPrefsFor] = useState<typeof notifPrefs.data>(undefined);
+  if (notifPrefs.data && notifPrefs.data !== prefsFor) {
+    setPrefsFor(notifPrefs.data);
     setNotifInApp(notifPrefs.data.in_app_enabled !== false);
     setNotifEmail(!!notifPrefs.data.email_enabled);
     setNotifEvents((notifPrefs.data.event_types || []).join(", "));
-  }, [notifPrefs.data]);
+  }
 
   async function enrollMfa() {
     try {
@@ -381,16 +384,16 @@ export function SecurityPage() {
                   <img className="mfa-qr" src={qrSrc} alt="TOTP QR code" width={220} height={220} />
                 ) : null}
                 <div>
-                  <label className="field">Secret (manual entry)</label>
-                  <input className="mono" readOnly value={secret} />
-                  <label className="field">otpauth URL</label>
-                  <textarea className="mono" rows={2} readOnly value={otpauth} />
+                  <label className="field" htmlFor="security-secret-manual-entry">Secret (manual entry)</label>
+                  <input id="security-secret-manual-entry" className="mono" readOnly value={secret} />
+                  <label className="field" htmlFor="security-otpauth-url">otpauth URL</label>
+                  <textarea id="security-otpauth-url" className="mono" rows={2} readOnly value={otpauth} />
                 </div>
               </div>
               {backupCodes.length ? (
                 <>
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                    <label className="field">Backup codes — save these now</label>
+                    <span className="field">Backup codes — save these now</span>
                     <button
                       type="button"
                       className="btn secondary sm"
@@ -406,8 +409,8 @@ export function SecurityPage() {
                 </>
               ) : null}
               <form onSubmit={confirmMfa}>
-                <label className="field">Confirm code</label>
-                <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" />
+                <label className="field" htmlFor="security-confirm-code">Confirm code</label>
+                <input id="security-confirm-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" />
                 <button className="btn sm" type="submit" style={{ marginTop: "0.55rem" }}>
                   Confirm enrollment
                 </button>
@@ -434,8 +437,9 @@ export function SecurityPage() {
               minLength={10}
               required
             />
-            <label className="field">Confirm</label>
+            <label className="field" htmlFor="security-confirm">Confirm</label>
             <input
+              id="security-confirm"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -455,12 +459,12 @@ export function SecurityPage() {
                     height={180}
                   />
                 ) : null}
-                <label className="field">Secret</label>
-                <input className="mono" readOnly value={secret} />
+                <label className="field" htmlFor="security-secret">Secret</label>
+                <input id="security-secret" className="mono" readOnly value={secret} />
                 {backupCodes.length ? (
                   <>
                     <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                      <label className="field">Backup codes</label>
+                      <span className="field">Backup codes</span>
                       <button
                         type="button"
                         className="btn secondary sm"
@@ -477,8 +481,9 @@ export function SecurityPage() {
                 ) : null}
               </div>
             ) : null}
-            <label className="field">Authenticator code</label>
+            <label className="field" htmlFor="security-authenticator-code">Authenticator code</label>
             <input
+              id="security-authenticator-code"
               value={passwordTotp}
               onChange={(e) => setPasswordTotp(e.target.value)}
               autoComplete="one-time-code"
@@ -516,30 +521,32 @@ export function SecurityPage() {
               </div>
             ) : null}
             {(waCreds.data || []).length ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Credential</th>
-                    <th>Created</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {(waCreds.data || []).map((c) => (
-                    <tr key={c.id}>
-                      <td>{c.name || "key"}</td>
-                      <td className="mono">{(c.cred_id || c.id).slice(0, 16)}…</td>
-                      <td className="mono">{fmtTime(c.created_at)}</td>
-                      <td>
-                        <button type="button" className="btn danger sm" onClick={() => void deleteWA(c.id)}>
-                          Delete
-                        </button>
-                      </td>
+              <section className="table-scroll" tabIndex={0} aria-label="Registered authenticators">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Credential</th>
+                      <th>Created</th>
+                      <th><span className="sr-only">Actions</span></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(waCreds.data || []).map((c) => (
+                      <tr key={c.id}>
+                        <td>{c.name || "key"}</td>
+                        <td className="mono">{(c.cred_id || c.id).slice(0, 16)}…</td>
+                        <td className="mono">{fmtTime(c.created_at)}</td>
+                        <td>
+                          <button type="button" className="btn danger sm" onClick={() => void deleteWA(c.id)}>
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
             ) : !waCreds.isError ? (
               <div className="empty">No WebAuthn credentials yet. Register a key above (not from the login page).</div>
             ) : null}
@@ -557,10 +564,11 @@ export function SecurityPage() {
               <span className="mono">sk-*</span>).
             </p>
             <form onSubmit={addKey}>
-              <label className="field">Name</label>
-              <input value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="laptop, yubikey-work…" required />
-              <label className="field">Public key</label>
+              <label className="field" htmlFor="security-name">Name</label>
+              <input id="security-name" value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="laptop, yubikey-work…" required />
+              <label className="field" htmlFor="security-public-key">Public key</label>
               <textarea
+                id="security-public-key"
                 rows={3}
                 value={keyPub}
                 onChange={(e) => setKeyPub(e.target.value)}
@@ -577,30 +585,32 @@ export function SecurityPage() {
             {keyList.length === 0 ? (
               <div className="empty">No keys in the SSH key store yet. Add one above to sign in with pubkey auth.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Created</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {keyList.map((k) => (
-                    <tr key={k.id}>
-                      <td>{k.name}</td>
-                      <td className="mono">{k.key_type || "—"}</td>
-                      <td className="mono">{fmtTime(k.created_at)}</td>
-                      <td>
-                        <button type="button" className="btn danger sm" onClick={() => void deleteKey(k.id)}>
-                          Delete
-                        </button>
-                      </td>
+              <section className="table-scroll" tabIndex={0} aria-label="Your SSH keys">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Created</th>
+                      <th><span className="sr-only">Actions</span></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {keyList.map((k) => (
+                      <tr key={k.id}>
+                        <td>{k.name}</td>
+                        <td className="mono">{k.key_type || "—"}</td>
+                        <td className="mono">{fmtTime(k.created_at)}</td>
+                        <td>
+                          <button type="button" className="btn danger sm" onClick={() => void deleteKey(k.id)}>
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
             )}
           </div>
         </>
@@ -615,10 +625,11 @@ export function SecurityPage() {
               raw key is shown once at creation — copy it now, it can't be retrieved again.
             </p>
             <form onSubmit={createAPIKey}>
-              <label className="field">Name</label>
-              <input value={apiKeyName} onChange={(e) => setApiKeyName(e.target.value)} placeholder="ci-pipeline, laptop-cli…" required />
-              <label className="field">Expires in days (0 = never)</label>
+              <label className="field" htmlFor="security-name-2">Name</label>
+              <input id="security-name-2" value={apiKeyName} onChange={(e) => setApiKeyName(e.target.value)} placeholder="ci-pipeline, laptop-cli…" required />
+              <label className="field" htmlFor="security-expires-in-days-0-never">Expires in days (0 = never)</label>
               <input
+                id="security-expires-in-days-0-never"
                 type="number"
                 min={0}
                 value={apiKeyExpiresDays}
@@ -655,46 +666,48 @@ export function SecurityPage() {
             {(apiKeys.data?.api_keys || []).length === 0 ? (
               <div className="empty">No API keys yet. Create one above to authenticate {"osh"} or scripts.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Prefix</th>
-                    <th>Created</th>
-                    <th>Last used</th>
-                    <th>Expires</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {(apiKeys.data?.api_keys || []).map((k) => (
-                    <tr key={k.id}>
-                      <td>{k.name}</td>
-                      <td className="mono">{k.key_prefix ? `${k.key_prefix}…` : "—"}</td>
-                      <td className="mono">{fmtTime(k.created_at)}</td>
-                      <td className="mono">{k.last_used_at ? fmtTime(k.last_used_at) : "never"}</td>
-                      <td className="mono">{k.expires_at ? fmtTime(k.expires_at) : "never"}</td>
-                      <td>{k.revoked_at ? <span className="muted">revoked</span> : <span className="okmsg">active</span>}</td>
-                      <td>
-                        <div className="row">
-                          <button
-                            type="button"
-                            className="btn secondary sm"
-                            disabled={!!k.revoked_at}
-                            onClick={() => void revokeAPIKey(k.id, k.name)}
-                          >
-                            Revoke
-                          </button>
-                          <button type="button" className="btn danger sm" onClick={() => void deleteAPIKey(k.id, k.name)}>
-                            Delete
-                          </button>
-                        </div>
-                      </td>
+              <section className="table-scroll" tabIndex={0} aria-label="Your API keys">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Prefix</th>
+                      <th>Created</th>
+                      <th>Last used</th>
+                      <th>Expires</th>
+                      <th>Status</th>
+                      <th><span className="sr-only">Actions</span></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(apiKeys.data?.api_keys || []).map((k) => (
+                      <tr key={k.id}>
+                        <td>{k.name}</td>
+                        <td className="mono">{k.key_prefix ? `${k.key_prefix}…` : "—"}</td>
+                        <td className="mono">{fmtTime(k.created_at)}</td>
+                        <td className="mono">{k.last_used_at ? fmtTime(k.last_used_at) : "never"}</td>
+                        <td className="mono">{k.expires_at ? fmtTime(k.expires_at) : "never"}</td>
+                        <td>{k.revoked_at ? <span className="muted">revoked</span> : <span className="okmsg">active</span>}</td>
+                        <td>
+                          <div className="row">
+                            <button
+                              type="button"
+                              className="btn secondary sm"
+                              disabled={!!k.revoked_at}
+                              onClick={() => void revokeAPIKey(k.id, k.name)}
+                            >
+                              Revoke
+                            </button>
+                            <button type="button" className="btn danger sm" onClick={() => void deleteAPIKey(k.id, k.name)}>
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
             )}
           </div>
         </>
@@ -741,8 +754,9 @@ export function SecurityPage() {
                   {mandatoryEmail.length > 0 ? <span className="muted"> — required</span> : null}
                 </label>
                 <div>
-                  <label className="field">Event allow-list (comma-separated, empty = all)</label>
+                  <label className="field" htmlFor="security-event-allow-list-comma-separated-empty-a">Event allow-list (comma-separated, empty = all)</label>
                   <input
+                    id="security-event-allow-list-comma-separated-empty-a"
                     value={notifEvents}
                     onChange={(e) => setNotifEvents(e.target.value)}
                     placeholder="access_request.approved, access_request.rejected"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 
 export type SortDir = "asc" | "desc";
@@ -19,18 +19,20 @@ export function useTableState<T>(opts?: { pageSize?: number }) {
     setPage(0);
   }
 
-  function process(
-    rows: T[],
-    getSortValue: (row: T, key: string) => string | number | null | undefined,
-    searchText: (row: T) => string,
-  ) {
+  // Stable while the table state is unchanged, so callers can memoise on it.
+  const process = useCallback(
+    (
+      rows: T[],
+      getSortValue: (row: T, key: string) => string | number | null | undefined,
+      searchText: (row: T) => string,
+    ) => {
     const needle = query.trim().toLowerCase();
     let filtered = rows;
     if (needle) {
       filtered = rows.filter((r) => searchText(r).toLowerCase().includes(needle));
     }
     if (sortKey) {
-      filtered = [...filtered].sort((a, b) => {
+      filtered = filtered.toSorted((a, b) => {
         const av = getSortValue(a, sortKey);
         const bv = getSortValue(b, sortKey);
         const aEmpty = av == null || av === "";
@@ -49,7 +51,9 @@ export function useTableState<T>(opts?: { pageSize?: number }) {
     const safePage = Math.min(page, Math.max(0, pageCount - 1));
     const start = safePage * pageSize;
     return { rows: filtered.slice(start, start + pageSize), total, pageCount, page: safePage, start };
-  }
+    },
+    [query, sortKey, sortDir, page, pageSize],
+  );
 
   return {
     query,

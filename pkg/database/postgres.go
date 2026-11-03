@@ -63,8 +63,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			webauthn_enabled BOOLEAN DEFAULT FALSE,
 			totp_secret TEXT DEFAULT '',
 			backup_codes_hash TEXT DEFAULT '',
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			created_at TIMESTAMPTZ NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS machines (
 			id VARCHAR(36) PRIMARY KEY,
@@ -74,9 +74,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			tags JSONB,
 			agent_id VARCHAR(36),
 			is_active BOOLEAN DEFAULT FALSE,
-			last_seen_at TIMESTAMP,
-			created_at TIMESTAMP NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			last_seen_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS sessions (
 			id VARCHAR(36) PRIMARY KEY,
@@ -84,11 +84,11 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			machine_id VARCHAR(36) NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
 			remote_user VARCHAR(255) NOT NULL,
 			source VARCHAR(32) NOT NULL DEFAULT 'ssh',
-			start_time TIMESTAMP NOT NULL,
-			end_time TIMESTAMP,
+			start_time TIMESTAMPTZ NOT NULL,
+			end_time TIMESTAMPTZ,
 			recording_path TEXT NOT NULL,
 			status VARCHAR(50) NOT NULL,
-			created_at TIMESTAMP NOT NULL
+			created_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS access_requests (
 			id VARCHAR(36) PRIMARY KEY,
@@ -99,10 +99,10 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			reason TEXT NOT NULL,
 			duration INTEGER NOT NULL,
 			status VARCHAR(50) NOT NULL,
-			requested_at TIMESTAMP NOT NULL,
-			reviewed_at TIMESTAMP,
+			requested_at TIMESTAMPTZ NOT NULL,
+			reviewed_at TIMESTAMPTZ,
 			reviewed_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
-			expires_at TIMESTAMP
+			expires_at TIMESTAMPTZ
 		)`,
 		`CREATE TABLE IF NOT EXISTS permissions (
 			id VARCHAR(36) PRIMARY KEY,
@@ -111,8 +111,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			access_type VARCHAR(50) NOT NULL,
 			remote_users TEXT[] NOT NULL,
 			granted_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
-			granted_at TIMESTAMP NOT NULL,
-			expires_at TIMESTAMP
+			granted_at TIMESTAMPTZ NOT NULL,
+			expires_at TIMESTAMPTZ
 		)`,
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id VARCHAR(36) PRIMARY KEY,
@@ -121,7 +121,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			resource VARCHAR(255) NOT NULL,
 			metadata JSONB,
 			ip_address VARCHAR(45) NOT NULL,
-			timestamp TIMESTAMP NOT NULL
+			timestamp TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS api_keys (
 			id VARCHAR(36) PRIMARY KEY,
@@ -129,10 +129,10 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			name VARCHAR(255) NOT NULL,
 			key_hash VARCHAR(64) NOT NULL UNIQUE,
 			key_prefix VARCHAR(16) NOT NULL,
-			last_used_at TIMESTAMP,
-			expires_at TIMESTAMP,
-			created_at TIMESTAMP NOT NULL,
-			revoked_at TIMESTAMP
+			last_used_at TIMESTAMPTZ,
+			expires_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL,
+			revoked_at TIMESTAMPTZ
 		)`,
 		`CREATE TABLE IF NOT EXISTS http_sessions (
 			id VARCHAR(36) PRIMARY KEY,
@@ -140,9 +140,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			token_hash VARCHAR(64) NOT NULL UNIQUE,
 			ip_address VARCHAR(45) NOT NULL,
 			user_agent TEXT,
-			expires_at TIMESTAMP NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			last_seen_at TIMESTAMP NOT NULL
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL,
+			last_seen_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_machine_id ON sessions(machine_id)`,
@@ -176,7 +176,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS risk_policy (
 			id SMALLINT PRIMARY KEY CHECK (id = 1),
 			policy JSONB NOT NULL,
-			updated_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL,
 			updated_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS user_ssh_keys (
@@ -185,13 +185,13 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			name VARCHAR(255) NOT NULL,
 			public_key TEXT NOT NULL,
 			key_type VARCHAR(100) NOT NULL,
-			created_at TIMESTAMP NOT NULL
+			created_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS plugin_settings (
 			name VARCHAR(255) PRIMARY KEY,
 			enabled BOOLEAN NOT NULL DEFAULT FALSE,
 			config JSONB NOT NULL DEFAULT '{}',
-			updated_at TIMESTAMP NOT NULL
+			updated_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS webauthn_credentials (
 			id VARCHAR(36) PRIMARY KEY,
@@ -206,7 +206,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			backup_eligible BOOLEAN NOT NULL DEFAULT FALSE,
 			backup_state BOOLEAN NOT NULL DEFAULT FALSE,
 			flags_known BOOLEAN NOT NULL DEFAULT FALSE,
-			created_at TIMESTAMP NOT NULL
+			created_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_ssh_keys_user_id ON user_ssh_keys(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id)`,
@@ -218,7 +218,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			in_app_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 			email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
 			event_types TEXT[] NOT NULL DEFAULT '{}',
-			updated_at TIMESTAMP NOT NULL
+			updated_at TIMESTAMPTZ NOT NULL
 		)`,
 		// Admin-set boundary for user notification preferences. Singleton:
 		// the CHECK pins it to a single row so there is exactly one policy.
@@ -226,7 +226,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
 			allowed_channels TEXT[] NOT NULL DEFAULT '{}',
 			mandatory_events JSONB NOT NULL DEFAULT '{}',
-			updated_at TIMESTAMP NOT NULL
+			updated_at TIMESTAMPTZ NOT NULL
 		)`,
 		// Admin-editable notification copy. One row per overridden event type;
 		// an event with no row renders the built-in default, so this table is
@@ -235,7 +235,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			event_type VARCHAR(100) PRIMARY KEY,
 			title VARCHAR(255) NOT NULL,
 			body TEXT NOT NULL,
-			updated_at TIMESTAMP NOT NULL
+			updated_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS notifications (
 			id VARCHAR(36) PRIMARY KEY,
@@ -244,8 +244,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			title VARCHAR(255) NOT NULL,
 			body TEXT NOT NULL DEFAULT '',
 			metadata JSONB,
-			read_at TIMESTAMP,
-			created_at TIMESTAMP NOT NULL
+			read_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at)`,
@@ -257,8 +257,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			private_key_encrypted BYTEA NOT NULL,
 			fingerprint VARCHAR(255) NOT NULL,
 			active BOOLEAN NOT NULL DEFAULT TRUE,
-			created_at TIMESTAMP NOT NULL,
-			rotated_at TIMESTAMP
+			created_at TIMESTAMPTZ NOT NULL,
+			rotated_at TIMESTAMPTZ
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ssh_ca_keys_type_active ON ssh_ca_keys(ca_type) WHERE active = true`,
 		`CREATE TABLE IF NOT EXISTS ssh_certificates (
@@ -269,9 +269,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			key_id VARCHAR(255) NOT NULL,
 			principals TEXT[] NOT NULL,
 			public_key_fingerprint VARCHAR(255) NOT NULL,
-			issued_at TIMESTAMP NOT NULL,
-			expires_at TIMESTAMP NOT NULL,
-			revoked_at TIMESTAMP,
+			issued_at TIMESTAMPTZ NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			revoked_at TIMESTAMPTZ,
 			revoked_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL,
 			revoke_reason TEXT
 		)`,
@@ -290,9 +290,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			access_type VARCHAR(50) NOT NULL,
 			remote_users TEXT[] NOT NULL,
 			granted_by VARCHAR(36),
-			granted_at TIMESTAMP NOT NULL,
-			expires_at TIMESTAMP,
-			superseded_at TIMESTAMP NOT NULL,
+			granted_at TIMESTAMPTZ NOT NULL,
+			expires_at TIMESTAMPTZ,
+			superseded_at TIMESTAMPTZ NOT NULL,
 			end_reason VARCHAR(20) NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_permission_history_granted_at ON permission_history(granted_at)`,
@@ -302,6 +302,11 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		if _, err := s.db.ExecContext(ctx, migration); err != nil {
 			return fmt.Errorf("%w: %v", ErrMigrationFailed, err)
 		}
+	}
+
+	// Databases created before TIMESTAMPTZ still have wall-clock columns.
+	if err := s.migrateTimestampsToTZ(ctx); err != nil {
+		return fmt.Errorf("%w: %v", ErrMigrationFailed, err)
 	}
 
 	// Repair FK / nullability drift on upgraded databases (idempotent; no-op when OK).
@@ -836,25 +841,26 @@ func (s *PostgresStore) DeleteMachine(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListSessionRecordingPathsForMachine returns recording_path values for a machine.
-func (s *PostgresStore) ListSessionRecordingPathsForMachine(ctx context.Context, machineID string) ([]string, error) {
+// ListMachineSessions returns every session on machineID, oldest first.
+func (s *PostgresStore) ListMachineSessions(ctx context.Context, machineID string) ([]*common.Session, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT recording_path FROM sessions WHERE machine_id = $1 AND recording_path <> ''`, machineID)
+		`SELECT id, user_id, machine_id, remote_user, COALESCE(source, 'ssh'), start_time, end_time, recording_path, status, created_at
+		 FROM sessions WHERE machine_id = $1 ORDER BY start_time`, machineID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list session recordings: %w", err)
+		return nil, fmt.Errorf("failed to list sessions for machine %s: %w", machineID, err)
 	}
 	defer rows.Close()
-	var paths []string
+	sessions := make([]*common.Session, 0)
 	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, fmt.Errorf("failed to scan recording path: %w", err)
+		session := &common.Session{}
+		if err := rows.Scan(&session.ID, &session.UserID, &session.MachineID, &session.RemoteUser, &session.Source,
+			&session.StartTime, &session.EndTime, &session.RecordingPath,
+			&session.Status, &session.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
 		}
-		if p != "" {
-			paths = append(paths, p)
-		}
+		sessions = append(sessions, session)
 	}
-	return paths, rows.Err()
+	return sessions, rows.Err()
 }
 
 // ListMachines lists machines with pagination
@@ -1311,6 +1317,7 @@ func remoteUsersArray(users []string) interface{} {
 	}
 	return pq.Array(users)
 }
+
 
 // archivePermissionsSQL wraps a DELETE ... RETURNING * on permissions so the
 // removed rows land in permission_history in the same statement. $1 is the

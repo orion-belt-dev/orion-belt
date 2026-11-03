@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useToast } from "./Toast";
@@ -45,12 +45,15 @@ export function NotificationTemplatesCard() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!q.data?.templates) return;
+  // Reset the drafts when fresh templates arrive (set during render, as
+  // React recommends over an effect: no extra render with stale drafts).
+  const [draftsFor, setDraftsFor] = useState<typeof q.data>(undefined);
+  if (q.data?.templates && q.data !== draftsFor) {
+    setDraftsFor(q.data);
     const next: Record<string, Draft> = {};
     for (const t of q.data.templates) next[t.event_type] = { title: t.title, body: t.body };
     setDrafts(next);
-  }, [q.data]);
+  }
 
   if (q.isError) return null; // non-admin, or templates endpoint unavailable
 

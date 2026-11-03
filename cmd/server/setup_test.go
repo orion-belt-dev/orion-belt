@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -46,5 +47,55 @@ func TestApplyPublicAddressMovesShippedWebAuthn(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// A fresh package install keeps the shipped placeholder until something
+// replaces it; setup does, and leaves real or empty secrets alone.
+func TestEnsureJWTSecret(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "server.yaml")
+	raw, err := os.ReadFile(filepath.Join("..", "..", "config", "server.example.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := common.LoadConfig(path)
+
+	var out bytes.Buffer
+	if !ensureJWTSecret(&out, path, cfg) || !strings.Contains(out.String(), "Generated a random auth.jwt_secret") {
+		t.Fatalf("placeholder not replaced: %s", out.String())
+	}
+	reloaded, err := common.LoadConfig(path)
+	if err != nil || reloaded.Auth.JWTSecret != cfg.Auth.JWTSecret || common.ValidateJWTSecret(reloaded.Auth.JWTSecret) != nil {
+		t.Fatalf("saved secret %q (config %q), %v", reloaded.Auth.JWTSecret, cfg.Auth.JWTSecret, err)
+	}
+	if got, _ := os.ReadFile(path); strings.Count(string(got), "#") != strings.Count(string(raw), "#") {
+		t.Error("comments lost")
+	}
+
+	// Already valid, or deliberately empty: untouched.
+	for _, secret := range []string{reloaded.Auth.JWTSecret, ""} {
+		c := &common.Config{}
+		c.Auth.JWTSecret = secret
+		if ensureJWTSecret(&out, path, c) || c.Auth.JWTSecret != secret {
+			t.Errorf("secret %q was replaced", secret)
+		}
+	}
+
+	// No config file to write: say what to do instead.
+	out.Reset()
+	c := &common.Config{}
+	c.Auth.JWTSecret = "short"
+	if ensureJWTSecret(&out, "", c) || !strings.Contains(out.String(), "openssl rand -hex 32") {
+		t.Errorf("no path: %s", out.String())
+	}
+	// A file without a jwt_secret line: same.
+	bare := filepath.Join(t.TempDir(), "bare.yaml")
+	_ = os.WriteFile(bare, []byte("auth:\n  mfa_required: false\n"), 0o600)
+	out.Reset()
+	if ensureJWTSecret(&out, bare, c) || !strings.Contains(out.String(), "Could not set auth.jwt_secret") {
+		t.Errorf("no line: %s", out.String())
 	}
 }

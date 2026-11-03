@@ -14,6 +14,7 @@ export function CommandPalette() {
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const navigate = useNavigate();
   const role = useRole();
 
@@ -84,9 +85,19 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  // A modal <dialog> traps focus and makes the page behind it inert. A press
+  // outside the box lands on the dialog itself (its backdrop) and closes it,
+  // as Esc does from the keyboard.
   useEffect(() => {
-    setActive(0);
-  }, [q]);
+    const dialog = dialogRef.current;
+    if (!open || !dialog) return;
+    if (!dialog.open) dialog.showModal();
+    const onPress = (e: MouseEvent) => {
+      if (e.target === dialog) setOpen(false);
+    };
+    dialog.addEventListener("mousedown", onPress);
+    return () => dialog.removeEventListener("mousedown", onPress);
+  }, [open]);
 
   function go(item: Item) {
     setOpen(false);
@@ -102,19 +113,22 @@ export function CommandPalette() {
   const flat = items;
 
   return (
-    <div
-      className="palette-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) setOpen(false);
-      }}
+    <dialog
+      ref={dialogRef}
+      className="palette card"
+      aria-label="Command palette"
+      onClose={() => setOpen(false)}
     >
-      <div className="palette card" role="dialog" aria-label="Command palette">
+      <div className="palette-body">
         <input
           ref={inputRef}
           className="palette-input"
           placeholder="Jump to page, machine, or session… (Esc to close)"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setActive(0);
+          }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
@@ -157,6 +171,6 @@ export function CommandPalette() {
           <span>esc close</span>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

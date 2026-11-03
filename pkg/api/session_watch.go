@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 // sessionWatchWS is a read-only live view of an active recorded session.
@@ -48,9 +49,21 @@ func (s *APIServer) sessionWatchWS(c *gin.Context) {
 
 	ch := s.recorder.Hub().Subscribe(sessionID)
 	defer s.recorder.Hub().Unsubscribe(sessionID, ch)
+	// The session may have ended between the check above and Subscribe; its
+	// hub entry was then already closed and nothing would ever close ours.
+	// Ending a recording closes the hub entry first, so a recording still
+	// here means ours will be closed when it ends.
+	if _, err := s.recorder.GetRecorder(sessionID); err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("session ended"))
+		return
+	}
 
+	// The viewer only listens; its reads end when it disconnects, which must
+	// end this handler even while the session prints nothing.
+	gone := make(chan struct{})
 	_ = conn.SetReadDeadline(time.Now().Add(24 * time.Hour))
 	go func() {
+		defer close(gone)
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				return
@@ -58,9 +71,17 @@ func (s *APIServer) sessionWatchWS(c *gin.Context) {
 		}
 	}()
 
-	for data := range ch {
-		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err := conn.WriteMessage(2, data); err != nil { // BinaryMessage — raw PTY bytes
+	for {
+		select {
+		case data, open := <-ch:
+			if !open {
+				return
+			}
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+				return
+			}
+		case <-gone:
 			return
 		}
 	}

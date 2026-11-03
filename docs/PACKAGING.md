@@ -110,7 +110,10 @@ itself.
 **Agents → Add agent** (or `POST /api/v1/admin/agents/install-script`)
 generates a script that picks the package for the host's CPU from the
 **package base URL**: `https://pkgs.orion-belt.dev` by default, or any mirror
-of a release's files, such as a local `dist/`:
+of a release's files. Each download must match the release's signed
+`checksums.txt` (see [SETUP.md](SETUP.md#install-script-recommended)). A mirror
+of a local snapshot build, which the release key did not sign, needs **Allow an
+unsigned local build**, which is audited:
 
 ```bash
 make packages

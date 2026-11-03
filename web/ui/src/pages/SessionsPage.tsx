@@ -39,8 +39,9 @@ export function SessionsPage() {
     return (id: string) => map.get(id) || shortId(id);
   }, [machinesQ.data]);
 
+  const processRows = table.process;
   const processed = useMemo(() => {
-    return table.process(
+    return processRows(
       sessionsQ.data || [],
       (s, key) => {
         if (key === "id") return s.id;
@@ -56,7 +57,7 @@ export function SessionsPage() {
       (s) =>
         `${s.id} ${userName(s.user_id)} ${machineName(s.machine_id)} ${s.remote_user || ""} ${s.source || ""} ${s.status || ""}`,
     );
-  }, [sessionsQ.data, table.query, table.sortKey, table.sortDir, table.page, table.pageSize, userName, machineName]);
+  }, [sessionsQ.data, processRows, userName, machineName]);
 
   async function play(id: string) {
     setErr("");
@@ -128,62 +129,64 @@ export function SessionsPage() {
         {exportErr ? <div className="err">{exportErr}</div> : null}
         <TableToolbar query={table.query} onQuery={table.setQuery} placeholder="Filter by user, machine, status, ID…" />
         {processed.total ? (
-          <table>
-            <thead>
-              <tr>
-                <SortTh label="ID" col="id" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="User" col="user" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="Machine" col="machine" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="Remote" col="remote" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="Source" col="source" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="Started" col="started" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="Ended" col="ended" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {processed.rows.map((s) => (
-                <tr key={s.id}>
-                  <td className="mono">{shortId(s.id)}</td>
-                  <td>{userName(s.user_id)}</td>
-                  <td>{machineName(s.machine_id)}</td>
-                  <td className="mono">{s.remote_user || "—"}</td>
-                  <td>
-                    <Badge status={s.source || "ssh"}>{s.source || "ssh"}</Badge>
-                  </td>
-                  <td className="mono">{fmtTime(s.start_time)}</td>
-                  <td className="mono">{fmtTime(s.end_time)}</td>
-                  <td>
-                    <Badge status={s.status}>{s.status}</Badge>
-                  </td>
-                  <td>
-                    <div className="row">
-                      {s.status === "active" ? (
-                        <button
-                          type="button"
-                          className="btn sm"
-                          onClick={() => {
-                            setPlayId(null);
-                            setCastText(null);
-                            setWatchId(s.id);
-                            window.setTimeout(() => {
-                              document.getElementById("watch-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                            }, 50);
-                          }}
-                        >
-                          Watch
-                        </button>
-                      ) : null}
-                      <button type="button" className="btn secondary sm" disabled={!s.recording_path} onClick={() => void play(s.id)}>
-                        Playback
-                      </button>
-                    </div>
-                  </td>
+          <section className="table-scroll" tabIndex={0} aria-label="Sessions">
+            <table>
+              <thead>
+                <tr>
+                  <SortTh label="ID" col="id" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="User" col="user" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="Machine" col="machine" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="Remote" col="remote" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="Source" col="source" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="Started" col="started" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="Ended" col="ended" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {processed.rows.map((s) => (
+                  <tr key={s.id}>
+                    <td className="mono">{shortId(s.id)}</td>
+                    <td>{userName(s.user_id)}</td>
+                    <td>{machineName(s.machine_id)}</td>
+                    <td className="mono">{s.remote_user || "—"}</td>
+                    <td>
+                      <Badge status={s.source || "ssh"}>{s.source || "ssh"}</Badge>
+                    </td>
+                    <td className="mono">{fmtTime(s.start_time)}</td>
+                    <td className="mono">{fmtTime(s.end_time)}</td>
+                    <td>
+                      <Badge status={s.status}>{s.status}</Badge>
+                    </td>
+                    <td>
+                      <div className="row">
+                        {s.status === "active" ? (
+                          <button
+                            type="button"
+                            className="btn sm"
+                            onClick={() => {
+                              setPlayId(null);
+                              setCastText(null);
+                              setWatchId(s.id);
+                              window.setTimeout(() => {
+                                document.getElementById("watch-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                              }, 50);
+                            }}
+                          >
+                            Watch
+                          </button>
+                        ) : null}
+                        <button type="button" className="btn secondary sm" disabled={!s.recording_path} onClick={() => void play(s.id)}>
+                          Playback
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
         ) : (
           <div className="empty">{table.query.trim() ? "No sessions match your search." : "No sessions."}</div>
         )}

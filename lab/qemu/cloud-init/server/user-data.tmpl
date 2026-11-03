@@ -38,7 +38,7 @@ write_files:
       auth:
         rebac_enabled: true
         allow_temp_access: true
-        jwt_secret: "qemu-lab-secret-change-me"
+        jwt_secret: "{{JWT_SECRET}}"
         jwt_expiry_hours: 24
         mfa_required: false
         webauthn:

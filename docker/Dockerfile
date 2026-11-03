@@ -30,7 +30,12 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} mak
 # Server image
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS server
 
-RUN apk add --no-cache ca-certificates openssh-keygen
+# su-exec: the entrypoint starts as root only to hand the mounted volumes to
+# the service user (volumes from earlier images are root-owned), then runs
+# the server as that user.
+RUN apk add --no-cache ca-certificates openssh-keygen su-exec \
+    && addgroup -S -g 10001 orionbelt \
+    && adduser -S -D -H -u 10001 -G orionbelt -h /var/lib/orion-belt -s /sbin/nologin orionbelt
 
 WORKDIR /app
 
@@ -42,7 +47,8 @@ RUN chmod +x /app/entrypoint.sh
 # baking it into the image would give every container from this image the
 # same host key, defeating host-key verification. entrypoint.sh generates a
 # unique one on first run and persists it in the mounted volume instead.
-RUN mkdir -p /var/lib/orion-belt/recordings /etc/orion-belt
+RUN mkdir -p /var/lib/orion-belt/recordings /etc/orion-belt /var/log/orion-belt \
+    && chown -R orionbelt:orionbelt /var/lib/orion-belt /etc/orion-belt /var/log/orion-belt
 
 EXPOSE 2222 8080
 

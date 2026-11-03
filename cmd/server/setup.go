@@ -84,6 +84,7 @@ func runSetup(cmd *cobra.Command, args []string) {
 	if configPath != "" {
 		fmt.Printf("  %s\n", configPath)
 	}
+	ensureJWTSecret(os.Stdout, configPath, config)
 
 	store, err := openStore(cmd.Context())
 	if err != nil {
@@ -307,4 +308,30 @@ func expandHome(p string) string {
 		return filepath.Join(home, p[2:])
 	}
 	return p
+}
+
+// ensureJWTSecret replaces a placeholder or too-short auth.jwt_secret with a
+// random one, since the server refuses to start with either. An empty secret
+// (JWT sign-in off) is left alone. Only the jwt_secret line is rewritten.
+// It reports whether the secret was replaced.
+func ensureJWTSecret(w io.Writer, configPath string, config *common.Config) bool {
+	if config.Auth.JWTSecret == "" || common.ValidateJWTSecret(config.Auth.JWTSecret) == nil {
+		return false
+	}
+	secret, err := common.GenerateJWTSecret()
+	if err != nil {
+		fmt.Fprintf(w, "  ! %v\n", err)
+		return false
+	}
+	if configPath == "" {
+		fmt.Fprintln(w, "  ! auth.jwt_secret is a placeholder or too short; set it with: openssl rand -hex 32")
+		return false
+	}
+	if err := common.ReplaceJWTSecret(configPath, secret); err != nil {
+		fmt.Fprintf(w, "  ! Could not set auth.jwt_secret in %s: %v\n    Set it with: openssl rand -hex 32\n", configPath, err)
+		return false
+	}
+	config.Auth.JWTSecret = secret
+	fmt.Fprintf(w, "✓ Generated a random auth.jwt_secret in %s (restart the server to use it)\n", configPath)
+	return true
 }

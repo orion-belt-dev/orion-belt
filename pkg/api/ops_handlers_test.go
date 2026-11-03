@@ -77,6 +77,12 @@ func TestNotifications_PolicyClampsPrefs(t *testing.T) {
 		"mandatory_events": map[string][]string{notify.EventAccessRequestApproved: {"in_app"}},
 	}
 	e.expect(e.do("PUT", "/api/v1/admin/notifications/policy", e.adminKey, policy), 200)
+	if l := e.lastAudit("notification_policy.update"); l.UserID != e.admin.ID || l.Metadata["policy"] == nil {
+		t.Errorf("policy audit = %+v", l)
+	}
+	if n := len(e.auditLogsFor("notification_policy.update")); n != 1 {
+		t.Errorf("notification_policy.update entries = %d, want 1 (refused updates are not audited)", n)
+	}
 
 	r = e.do("PUT", "/api/v1/notifications/prefs", e.aliceKey, map[string]any{"in_app_enabled": false, "email_enabled": true})
 	e.expect(r, 200)

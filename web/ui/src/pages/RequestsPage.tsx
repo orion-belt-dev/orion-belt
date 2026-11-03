@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -87,8 +87,14 @@ export function RequestsPage() {
       .catch((e: Error) => toast(e.message, "err"));
   }
 
-  const userName = (id: string) => users.data?.find((u) => u.id === id)?.username || shortId(id);
-  const machineName = (id: string) => machines.data?.find((m) => m.id === id)?.name || shortId(id);
+  const userName = useCallback(
+    (id: string) => users.data?.find((u) => u.id === id)?.username || shortId(id),
+    [users.data],
+  );
+  const machineName = useCallback(
+    (id: string) => machines.data?.find((m) => m.id === id)?.name || shortId(id),
+    [machines.data],
+  );
 
   function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -101,8 +107,9 @@ export function RequestsPage() {
     return rows;
   }, [reqs.data, statusFilter]);
 
+  const processRows = table.process;
   const processed = useMemo(() => {
-    return table.process(
+    return processRows(
       filtered,
       (r, key) => {
         if (key === "user") return userName(r.user_id);
@@ -114,7 +121,7 @@ export function RequestsPage() {
       (r) =>
         `${userName(r.user_id)} ${machineName(r.machine_id)} ${(r.remote_users || []).join(" ")} ${r.status || ""} ${r.reason || ""}`,
     );
-  }, [filtered, table.query, table.sortKey, table.sortDir, table.page, table.pageSize, users.data, machines.data]);
+  }, [filtered, processRows, userName, machineName]);
 
   return (
     <>
@@ -128,8 +135,8 @@ export function RequestsPage() {
         <h3>New request</h3>
         <div className="form-grid">
           <div>
-            <label className="field">Machine</label>
-            <select value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
+            <label className="field" htmlFor="requests-machine">Machine</label>
+            <select id="requests-machine" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
               <option value="">Select…</option>
               {(machines.data || []).map((m) => (
                 <option key={m.id} value={m.id}>
@@ -151,8 +158,8 @@ export function RequestsPage() {
             />
           </div>
           <div>
-            <label className="field">Access type</label>
-            <select value={accessType} onChange={(e) => setAccessType(e.target.value)}>
+            <label className="field" htmlFor="requests-access-type">Access type</label>
+            <select id="requests-access-type" value={accessType} onChange={(e) => setAccessType(e.target.value)}>
               <option value="ssh">ssh</option>
               <option value="scp">scp</option>
               <option value="both">both (ssh + scp)</option>
@@ -162,12 +169,12 @@ export function RequestsPage() {
             </select>
           </div>
           <div>
-            <label className="field">Reason</label>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} required />
+            <label className="field" htmlFor="requests-reason">Reason</label>
+            <input id="requests-reason" value={reason} onChange={(e) => setReason(e.target.value)} required />
           </div>
           <div>
-            <label className="field">Access duration</label>
-            <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+            <label className="field" htmlFor="requests-access-duration">Access duration</label>
+            <select id="requests-access-duration" value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
               {TTL_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -188,6 +195,7 @@ export function RequestsPage() {
               setStatusFilter(e.target.value);
               table.setPage(0);
             }}
+            aria-label="Filter by status"
           >
             <option value="">All statuses</option>
             <option value="pending">pending</option>
@@ -195,75 +203,78 @@ export function RequestsPage() {
             <option value="rejected">rejected</option>
           </select>
         </TableToolbar>
-        <table>
-          <thead>
-            <tr>
-              <SortTh label="User" col="user" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Machine" col="machine" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <th>Remote</th>
-              <th>Access</th>
-              <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <th>TTL</th>
-              <SortTh label="Created" col="created" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {processed.rows.map((r) => (
-              <tr key={r.id}>
-                <td>{userName(r.user_id)}</td>
-                <td>{machineName(r.machine_id)}</td>
-                <td className="mono">{(r.remote_users || []).join(", ")}</td>
-                <td>
-                  <Badge status={r.access_type || "both"}>{r.access_type || "both"}</Badge>
-                </td>
-                <td>
-                  <Badge status={r.status}>{r.status}</Badge>
-                  {r.risk_decision && r.risk_decision.outcome !== "manual" ? (
-                    <div className="muted" title={r.risk_decision.reasons.join("; ")}>
-                      {r.risk_decision.outcome === "escalate" ? "escalated: admin approval" : "auto-approved by policy"}
-                    </div>
-                  ) : null}
-                </td>
-                <td className="mono">
-                  {r.status === "approved" && r.expires_at ? `until ${fmtTime(r.expires_at)}` : fmtTTL(r.duration)}
-                </td>
-                <td className="mono">
-                  {fmtTime(r.requested_at)}
-                  {r.risk_signals ? (
-                    <div className="muted" title={r.risk_signals.device || undefined}>
-                      {r.risk_signals.source_ip || "unknown source"} · {r.risk_signals.target_sensitivity} sensitivity
-                      {r.risk_signals.mfa_enrolled ? "" : " · no MFA"}
-                    </div>
-                  ) : null}
-                </td>
-                <td>
-                  {approve && r.status === "pending" ? (
-                    <div className="row">
-                      <select
-                        value={ttlFor(r)}
-                        onChange={(e) => setTtlByRequest((m) => ({ ...m, [r.id]: Number(e.target.value) }))}
-                        style={{ maxWidth: "9.5rem" }}
-                      >
-                        {TTL_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="button" className="btn sm" onClick={() => approveRequest(r)}>
-                        Approve
-                      </button>
-                      <button type="button" className="btn secondary sm" onClick={() => rejectRequest(r.id)}>
-                        Reject
-                      </button>
-                    </div>
-                  ) : null}
-                </td>
+        <section className="table-scroll" tabIndex={0} aria-label="Access requests">
+          <table>
+            <thead>
+              <tr>
+                <SortTh label="User" col="user" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Machine" col="machine" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <th>Remote</th>
+                <th>Access</th>
+                <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <th>TTL</th>
+                <SortTh label="Created" col="created" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <th><span className="sr-only">Actions</span></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {processed.rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{userName(r.user_id)}</td>
+                  <td>{machineName(r.machine_id)}</td>
+                  <td className="mono">{(r.remote_users || []).join(", ")}</td>
+                  <td>
+                    <Badge status={r.access_type || "both"}>{r.access_type || "both"}</Badge>
+                  </td>
+                  <td>
+                    <Badge status={r.status}>{r.status}</Badge>
+                    {r.risk_decision && r.risk_decision.outcome !== "manual" ? (
+                      <div className="muted" title={r.risk_decision.reasons.join("; ")}>
+                        {r.risk_decision.outcome === "escalate" ? "escalated: admin approval" : "auto-approved by policy"}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="mono">
+                    {r.status === "approved" && r.expires_at ? `until ${fmtTime(r.expires_at)}` : fmtTTL(r.duration)}
+                  </td>
+                  <td className="mono">
+                    {fmtTime(r.requested_at)}
+                    {r.risk_signals ? (
+                      <div className="muted" title={r.risk_signals.device || undefined}>
+                        {r.risk_signals.source_ip || "unknown source"} · {r.risk_signals.target_sensitivity} sensitivity
+                        {r.risk_signals.mfa_enrolled ? "" : " · no MFA"}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>
+                    {approve && r.status === "pending" ? (
+                      <div className="row">
+                        <select
+                          aria-label="Approve for"
+                          value={ttlFor(r)}
+                          onChange={(e) => setTtlByRequest((m) => ({ ...m, [r.id]: Number(e.target.value) }))}
+                          style={{ maxWidth: "9.5rem" }}
+                        >
+                          {TTL_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="button" className="btn sm" onClick={() => approveRequest(r)}>
+                          Approve
+                        </button>
+                        <button type="button" className="btn secondary sm" onClick={() => rejectRequest(r.id)}>
+                          Reject
+                        </button>
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
         <Pagination
           page={processed.page}
           pageCount={processed.pageCount}

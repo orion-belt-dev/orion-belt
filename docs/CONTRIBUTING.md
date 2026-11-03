@@ -218,6 +218,13 @@ Pull requests may be reviewed for:
 
 When changing the HTTP API, update **`docs/openapi/openapi.yaml`** (served at `/api/v1/openapi.yaml`).  
 When changing `/ui` behavior, update **`docs/SRS-UI.md`** so the SRS stays the acceptance baseline.
+For any change under `web/ui`, run `npm ci && npm run lint && npm run build` there
+(Node 22) and commit the rebuilt `web/static`. CI fails on a lint warning or a
+stale bundle. The lint config (`web/ui/.oxlintrc.json`) includes the
+accessibility rules: tie every label to its control (`htmlFor`/`id`), name
+icon-only buttons and filter selects with `aria-label`, and put wide tables in
+`<section className="table-scroll" tabIndex={0} aria-label="…">`. Colour text
+with the `--*-text` tokens in `theme.css`, which meet WCAG AA in both themes.
 
 Please be patient — reviews may take time.
 

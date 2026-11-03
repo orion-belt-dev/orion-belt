@@ -168,6 +168,7 @@ func (s *APIServer) webauthnRegisterFinish(c *gin.Context) {
 	}
 	user.WebAuthnEnabled = true
 	_ = s.store.UpdateUser(ctx, user)
+	s.recordAudit(c, "auth.webauthn.register", "user:"+user.ID, map[string]interface{}{"credential_id": cred.ID, "name": cred.Name})
 	c.JSON(http.StatusOK, gin.H{"message": "webauthn registered", "id": cred.ID})
 }
 
@@ -221,6 +222,7 @@ func (s *APIServer) webauthnDelete(c *gin.Context) {
 			_ = s.store.UpdateUser(ctx, user)
 		}
 	}
+	s.recordAudit(c, "auth.webauthn.delete", "user:"+userID.(string), map[string]interface{}{"credential_id": id, "last_credential": len(creds) <= 1})
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 

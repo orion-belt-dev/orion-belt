@@ -72,7 +72,7 @@ func TestValidateMFACode(t *testing.T) {
 	}
 
 	totpCode, _ := totp.GenerateCode(key.Secret(), time.Now())
-	if updated, ok := ValidateMFACode(key.Secret(), store, totpCode); !ok || updated != "" {
+	if updated, ok := ValidateMFACode(key.Secret(), store, totpCode); !ok || updated != store {
 		t.Errorf("TOTP code: ok=%v updated=%q, want ok with no store change", ok, updated)
 	}
 
@@ -85,6 +85,28 @@ func TestValidateMFACode(t *testing.T) {
 	}
 	if _, ok := ValidateMFACode(key.Secret(), "", "ABCDEFGH"); ok {
 		t.Error("ValidateMFACode accepted a code with no backup store")
+	}
+}
+
+// Spending the last backup code empties the store; callers must still be
+// able to tell that from "nothing changed" so the code is not reusable.
+func TestValidateMFACode_LastBackupCode(t *testing.T) {
+	codes, store, err := GenerateBackupCodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, c := range codes {
+		updated, ok := ValidateMFACode("", store, c)
+		if !ok || updated == store {
+			t.Fatalf("code %d: ok=%v, store unchanged=%v", i, ok, updated == store)
+		}
+		store = updated
+	}
+	if store != "" {
+		t.Errorf("store after every code = %q, want empty", store)
+	}
+	if _, ok := ValidateMFACode("", store, codes[len(codes)-1]); ok {
+		t.Error("the last backup code was accepted again")
 	}
 }
 

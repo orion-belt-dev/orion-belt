@@ -106,8 +106,9 @@ export function CatalogPage() {
     return list;
   }, [catalog.data, statusFilter]);
 
+  const processRows = table.process;
   const processed = useMemo(() => {
-    return table.process(
+    return processRows(
       rows,
       (c, key) => {
         if (key === "machine") return c.machine_name;
@@ -117,7 +118,7 @@ export function CatalogPage() {
       },
       (c) => `${c.machine_name} ${c.hostname || ""} ${c.remote_user} ${c.access_type} ${c.status} ${c.reason}`,
     );
-  }, [rows, table.query, table.sortKey, table.sortDir, table.page, table.pageSize]);
+  }, [rows, processRows]);
 
   const counts = useMemo(() => {
     const all = catalog.data?.capabilities || [];
@@ -202,157 +203,159 @@ export function CatalogPage() {
           </div>
         ) : (
           <>
-            <table>
-              <thead>
-                <tr>
-                  <SortTh label="Machine" col="machine" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                  <SortTh label="Log in as" col="remote" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                  <th>Access</th>
-                  <th>Why you see this</th>
-                  <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {processed.rows.map((cap) => (
-                  <Fragment key={cap.id}>
-                    <tr>
-                      <td>
-                        {cap.machine_name}
-                        <div className="muted mono cap-host">
-                          {cap.hostname || "—"}
-                          {cap.machine_active ? "" : " · offline"}
-                        </div>
-                      </td>
-                      <td className="mono">{cap.remote_user || ANY_LOGIN}</td>
-                      <td>
-                        <Badge status={cap.access_type}>{cap.access_type}</Badge>
-                      </td>
-                      <td>
-                        <div>{cap.reason}</div>
-                        <div className="muted cap-host">
-                          {cap.status === "granted" && cap.expires_at ? `Until ${fmtTime(cap.expires_at)}` : null}
-                          {cap.status === "granted" && !cap.expires_at ? "No expiry" : null}
-                          {cap.last_used_at ? `Last used ${fmtTime(cap.last_used_at)}` : null}
-                        </div>
-                      </td>
-                      <td>
-                        <Badge status={STATUS_TONE[cap.status]}>{STATUS_LABEL[cap.status]}</Badge>
-                      </td>
-                      <td>
-                        {cap.status === "granted" ? (
-                          <Link
-                            className="btn secondary sm"
-                            to={`/terminal?machine=${encodeURIComponent(cap.machine_name)}&user=${encodeURIComponent(cap.remote_user)}`}
-                          >
-                            Open terminal
-                          </Link>
-                        ) : cap.status === "pending" ? (
-                          <Link className="btn secondary sm" to="/requests">
-                            View request
-                          </Link>
-                        ) : (
-                          <button type="button" className="btn sm" onClick={() => openRequest(cap)}>
-                            Request
-                          </button>
-                        )}
-                        {cap.remote_user ? (
-                          <button
-                            type="button"
-                            className="btn secondary sm"
-                            aria-expanded={explainId === cap.id}
-                            onClick={() => setExplainId(explainId === cap.id ? "" : cap.id)}
-                          >
-                            Why?
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                    {explainId === cap.id ? (
+            <section className="table-scroll" tabIndex={0} aria-label="Access catalog">
+              <table>
+                <thead>
+                  <tr>
+                    <SortTh label="Machine" col="machine" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                    <SortTh label="Log in as" col="remote" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                    <th>Access</th>
+                    <th>Why you see this</th>
+                    <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                    <th><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processed.rows.map((cap) => (
+                    <Fragment key={cap.id}>
                       <tr>
-                        <td colSpan={6}>
-                          <AccessExplanationPanel machine={cap.machine_id} remoteUser={cap.remote_user} />
+                        <td>
+                          {cap.machine_name}
+                          <div className="muted mono cap-host">
+                            {cap.hostname || "—"}
+                            {cap.machine_active ? "" : " · offline"}
+                          </div>
+                        </td>
+                        <td className="mono">{cap.remote_user || ANY_LOGIN}</td>
+                        <td>
+                          <Badge status={cap.access_type}>{cap.access_type}</Badge>
+                        </td>
+                        <td>
+                          <div>{cap.reason}</div>
+                          <div className="muted cap-host">
+                            {cap.status === "granted" && cap.expires_at ? `Until ${fmtTime(cap.expires_at)}` : null}
+                            {cap.status === "granted" && !cap.expires_at ? "No expiry" : null}
+                            {cap.last_used_at ? `Last used ${fmtTime(cap.last_used_at)}` : null}
+                          </div>
+                        </td>
+                        <td>
+                          <Badge status={STATUS_TONE[cap.status]}>{STATUS_LABEL[cap.status]}</Badge>
+                        </td>
+                        <td>
+                          {cap.status === "granted" ? (
+                            <Link
+                              className="btn secondary sm"
+                              to={`/terminal?machine=${encodeURIComponent(cap.machine_name)}&user=${encodeURIComponent(cap.remote_user)}`}
+                            >
+                              Open terminal
+                            </Link>
+                          ) : cap.status === "pending" ? (
+                            <Link className="btn secondary sm" to="/requests">
+                              View request
+                            </Link>
+                          ) : (
+                            <button type="button" className="btn sm" onClick={() => openRequest(cap)}>
+                              Request
+                            </button>
+                          )}
+                          {cap.remote_user ? (
+                            <button
+                              type="button"
+                              className="btn secondary sm"
+                              aria-expanded={explainId === cap.id}
+                              onClick={() => setExplainId(explainId === cap.id ? "" : cap.id)}
+                            >
+                              Why?
+                            </button>
+                          ) : null}
                         </td>
                       </tr>
-                    ) : null}
-                    {openId === cap.id ? (
-                      <tr>
-                        <td colSpan={6}>
-                          <form className="cap-request" onSubmit={(e) => submitRequest(e, cap)}>
-                            <h3>
-                              Request {cap.access_type} on {cap.machine_name}
-                            </h3>
-                            <div className="form-grid">
-                              <div>
-                                <label className="field" htmlFor="cap-remote">
-                                  Log in as
-                                </label>
-                                <input
-                                  id="cap-remote"
-                                  value={draft.remoteUser}
-                                  onChange={(e) => setDraft((d) => ({ ...d, remoteUser: e.target.value }))}
-                                  placeholder="root"
-                                  required
-                                />
+                      {explainId === cap.id ? (
+                        <tr>
+                          <td colSpan={6}>
+                            <AccessExplanationPanel machine={cap.machine_id} remoteUser={cap.remote_user} />
+                          </td>
+                        </tr>
+                      ) : null}
+                      {openId === cap.id ? (
+                        <tr>
+                          <td colSpan={6}>
+                            <form className="cap-request" onSubmit={(e) => submitRequest(e, cap)}>
+                              <h3>
+                                Request {cap.access_type} on {cap.machine_name}
+                              </h3>
+                              <div className="form-grid">
+                                <div>
+                                  <label className="field" htmlFor="cap-remote">
+                                    Log in as
+                                  </label>
+                                  <input
+                                    id="cap-remote"
+                                    value={draft.remoteUser}
+                                    onChange={(e) => setDraft((d) => ({ ...d, remoteUser: e.target.value }))}
+                                    placeholder="root"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <label className="field" htmlFor="cap-access">
+                                    Access type
+                                  </label>
+                                  <select
+                                    id="cap-access"
+                                    value={draft.accessType}
+                                    onChange={(e) => setDraft((d) => ({ ...d, accessType: e.target.value }))}
+                                  >
+                                    <option value="ssh">ssh</option>
+                                    <option value="scp">scp</option>
+                                    <option value="both">both</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="field" htmlFor="cap-reason">
+                                    Reason
+                                  </label>
+                                  <input
+                                    id="cap-reason"
+                                    value={draft.reason}
+                                    onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))}
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <label className="field" htmlFor="cap-duration">
+                                    Access duration
+                                  </label>
+                                  <select
+                                    id="cap-duration"
+                                    value={draft.duration}
+                                    onChange={(e) => setDraft((d) => ({ ...d, duration: Number(e.target.value) }))}
+                                  >
+                                    {TTL_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                               </div>
-                              <div>
-                                <label className="field" htmlFor="cap-access">
-                                  Access type
-                                </label>
-                                <select
-                                  id="cap-access"
-                                  value={draft.accessType}
-                                  onChange={(e) => setDraft((d) => ({ ...d, accessType: e.target.value }))}
-                                >
-                                  <option value="ssh">ssh</option>
-                                  <option value="scp">scp</option>
-                                  <option value="both">both</option>
-                                </select>
+                              <div className="row" style={{ marginTop: "0.75rem" }}>
+                                <button className="btn sm" type="submit" disabled={request.isPending}>
+                                  {request.isPending ? "Submitting…" : "Submit request"}
+                                </button>
+                                <button type="button" className="btn secondary sm" onClick={() => setOpenId("")}>
+                                  Cancel
+                                </button>
                               </div>
-                              <div>
-                                <label className="field" htmlFor="cap-reason">
-                                  Reason
-                                </label>
-                                <input
-                                  id="cap-reason"
-                                  value={draft.reason}
-                                  onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))}
-                                  required
-                                />
-                              </div>
-                              <div>
-                                <label className="field" htmlFor="cap-duration">
-                                  Access duration
-                                </label>
-                                <select
-                                  id="cap-duration"
-                                  value={draft.duration}
-                                  onChange={(e) => setDraft((d) => ({ ...d, duration: Number(e.target.value) }))}
-                                >
-                                  {TTL_OPTIONS.map((o) => (
-                                    <option key={o.value} value={o.value}>
-                                      {o.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                            <div className="row" style={{ marginTop: "0.75rem" }}>
-                              <button className="btn sm" type="submit" disabled={request.isPending}>
-                                {request.isPending ? "Submitting…" : "Submit request"}
-                              </button>
-                              <button type="button" className="btn secondary sm" onClick={() => setOpenId("")}>
-                                Cancel
-                              </button>
-                            </div>
-                          </form>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+                            </form>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </section>
             <Pagination
               page={processed.page}
               pageCount={processed.pageCount}

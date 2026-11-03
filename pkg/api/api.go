@@ -8,11 +8,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/orion-belt-dev/orion-belt/docs/openapi"
+	"github.com/orion-belt-dev/orion-belt/internal/livesessions"
 	"github.com/orion-belt-dev/orion-belt/pkg/auth"
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
@@ -52,6 +54,15 @@ type APIServer struct {
 	bootstrap       *bootstrapStore
 	passwordTickets *passwordTicketStore
 	serverCfg       common.ServerConfig
+
+	// webSessions are the live web terminals, ended and waited for on
+	// Shutdown.
+	webSessions livesessions.Tracker
+
+	// The HTTP server Start runs, kept for Shutdown.
+	httpMu     sync.Mutex
+	httpSrv    *http.Server
+	httpClosed bool
 }
 
 // AgentCommander sends control commands to connected agents.
@@ -134,6 +145,8 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 	}
 
 	api.router.Use(gin.Recovery())
+	api.router.Use(securityHeadersMiddleware(opt.Server.PublicURL))
+	api.router.Use(bodyLimitMiddleware())
 	api.router.Use(api.loggingMiddleware())
 	api.router.Use(api.metricsMiddleware())
 	api.setupRoutes(opt.MetricsEnabled)
@@ -484,7 +497,7 @@ func (s *APIServer) registerAgent(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	existingMachine, _ := s.store.GetMachineByName(ctx, req.Name)
 	if existingMachine != nil {
@@ -515,6 +528,7 @@ func (s *APIServer) registerAgent(c *gin.Context) {
 		}
 		_, hostCA := s.ca.ExportPublicKeys()
 		s.logger.Info("Agent registered with Host CA: %s (machine_id=%s)", req.Name, machine.ID)
+		s.auditAgentRegistration(c, caller, machine, "")
 		c.JSON(http.StatusCreated, RegisterAgentResponse{
 			MachineID:       machine.ID,
 			HostCertificate: string(ssh.MarshalAuthorizedKey(hostCert)),
@@ -541,12 +555,29 @@ func (s *APIServer) registerAgent(c *gin.Context) {
 	}
 
 	s.logger.Info("Agent registered: %s (user_id=%s, machine_id=%s)", req.Name, agentUser.ID, machine.ID)
+	s.auditAgentRegistration(c, caller, machine, agentUser.ID)
 
 	c.JSON(http.StatusCreated, RegisterAgentResponse{
 		UserID:    agentUser.ID,
 		MachineID: machine.ID,
 		Message:   "Agent registered successfully",
 	})
+}
+
+// auditAgentRegistration records a machine joining through the registration
+// API, as the install script path does, so the fleet has no unaudited way in.
+// The route is public, so the caller is passed in rather than read from the
+// request context.
+func (s *APIServer) auditAgentRegistration(c *gin.Context, caller *common.User, machine *common.Machine, agentUserID string) {
+	meta := map[string]interface{}{
+		"agent_name": machine.Name,
+		"hostname":   machine.Hostname,
+		"ssh_ca":     s.ca != nil,
+	}
+	if agentUserID != "" {
+		meta["agent_user_id"] = agentUserID
+	}
+	s.recordAuditAs(c, caller.ID, "agent.register", "machine:"+machine.ID, meta)
 }
 
 // RegisterClientRequest represents a client registration request
@@ -723,7 +754,7 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 // getAccessRequest gets a specific access request by ID
 func (s *APIServer) getAccessRequest(c *gin.Context) {
 	requestID := c.Param("id")
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	request, err := s.store.GetAccessRequest(ctx, requestID)
 	if err != nil {
@@ -881,7 +912,7 @@ func (s *APIServer) rejectAccessRequest(c *gin.Context) {
 
 // listPendingAccessRequests lists all pending access requests
 func (s *APIServer) listPendingAccessRequests(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	requests, err := s.store.ListPendingAccessRequests(ctx)
 	if err != nil {
@@ -897,7 +928,7 @@ func (s *APIServer) listPendingAccessRequests(c *gin.Context) {
 // roles (admin/operator/auditor) see every request; a plain user only sees
 // their own request history (all statuses).
 func (s *APIServer) listAccessRequests(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	var (
 		requests []*common.AccessRequest
 		err      error
@@ -1041,7 +1072,7 @@ func (s *APIServer) deleteUser(c *gin.Context) {
 }
 
 func (s *APIServer) listMachines(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	machines, err := s.store.ListMachines(ctx, 100, 0)
 	if err != nil {
 		s.fail(c, err)
@@ -1051,7 +1082,7 @@ func (s *APIServer) listMachines(c *gin.Context) {
 }
 
 func (s *APIServer) getMachine(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	machine, err := s.store.GetMachine(ctx, c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
@@ -1263,8 +1294,28 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 		return
 	}
 
-	// Best-effort: gather recording paths before cascading session rows away.
-	recordingPaths, _ := s.store.ListSessionRecordingPathsForMachine(ctx, id)
+	// Session rows cascade away with the machine, so they are copied into the
+	// audit entry first, and the delete stops if that entry cannot be written.
+	// Recording files stay on disk: only the recording.retention_days sweep
+	// removes them, so one admin action (or a stolen admin key) cannot destroy
+	// session evidence.
+	sessions, err := s.store.ListMachineSessions(ctx, id)
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(string)
+	entry := common.NewAuditLog(uid, "machine.delete", "machine:"+id, c.ClientIP(), map[string]interface{}{
+		"name":          machine.Name,
+		"hostname":      machine.Hostname,
+		"session_count": len(sessions),
+		"sessions":      deletedSessionRecords(sessions),
+	})
+	if err := s.store.CreateAuditLog(ctx, entry); err != nil {
+		s.fail(c, fmt.Errorf("audit machine %s delete: %w", id, err))
+		return
+	}
 
 	if s.agentCommander != nil {
 		_ = s.agentCommander.DisconnectAgent(id)
@@ -1283,18 +1334,30 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 			}
 		}
 	}
-	for _, path := range recordingPaths {
-		if path == "" {
-			continue
-		}
-		_ = os.Remove(path)
-		_ = os.Remove(path + ".enc")
-		if strings.HasSuffix(path, ".cast") {
-			_ = os.Remove(path + ".gz")
-		}
-	}
-	s.recordAudit(c, "machine.delete", "machine:"+id, map[string]interface{}{"name": machine.Name})
 	c.JSON(http.StatusOK, gin.H{"message": "machine deleted"})
+}
+
+// deletedSessionRecords is what a machine.delete audit entry keeps of each
+// session: enough to find its recording on disk and to show who was on the
+// host, and when.
+func deletedSessionRecords(sessions []*common.Session) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(sessions))
+	for _, sess := range sessions {
+		rec := map[string]interface{}{
+			"id":             sess.ID,
+			"user_id":        sess.UserID,
+			"remote_user":    sess.RemoteUser,
+			"source":         sess.Source,
+			"status":         sess.Status,
+			"start_time":     common.FromDBTimestamp(sess.StartTime).Format(time.RFC3339),
+			"recording_path": sess.RecordingPath,
+		}
+		if sess.EndTime != nil {
+			rec["end_time"] = common.FromDBTimestamp(*sess.EndTime).Format(time.RFC3339)
+		}
+		out = append(out, rec)
+	}
+	return out
 }
 
 func (s *APIServer) grantPermission(c *gin.Context) {

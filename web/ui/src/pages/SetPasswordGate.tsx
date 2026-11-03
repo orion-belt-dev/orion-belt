@@ -101,14 +101,14 @@ export function SetPasswordGate() {
             <div className="mfa-qr-row">
               {qrSrc ? <img className="mfa-qr" src={qrSrc} alt="TOTP QR code" width={200} height={200} /> : null}
               <div>
-                <label className="field">Secret (manual)</label>
-                <input className="mono" readOnly value={secret} />
+                <label className="field" htmlFor="setpassword-secret-manual">Secret (manual)</label>
+                <input id="setpassword-secret-manual" className="mono" readOnly value={secret} />
               </div>
             </div>
             {backupCodes.length ? (
               <>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                  <label className="field">Backup codes — save these now</label>
+                  <span className="field">Backup codes — save these now</span>
                   <button
                     type="button"
                     className="btn secondary sm"
@@ -128,8 +128,9 @@ export function SetPasswordGate() {
 
         {(mfaAlready || secret) && (
           <>
-            <label className="field">New password</label>
+            <label className="field" htmlFor="setpassword-new-password">New password</label>
             <input
+              id="setpassword-new-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -137,8 +138,9 @@ export function SetPasswordGate() {
               minLength={10}
               required
             />
-            <label className="field">Confirm password</label>
+            <label className="field" htmlFor="setpassword-confirm-password">Confirm password</label>
             <input
+              id="setpassword-confirm-password"
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -146,8 +148,9 @@ export function SetPasswordGate() {
               minLength={10}
               required
             />
-            <label className="field">Authenticator code</label>
+            <label className="field" htmlFor="setpassword-authenticator-code">Authenticator code</label>
             <input
+              id="setpassword-authenticator-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               autoComplete="one-time-code"

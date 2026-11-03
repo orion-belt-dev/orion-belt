@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Terminal } from "@xterm/xterm";
@@ -15,7 +15,7 @@ export function TerminalPage() {
   const [params] = useSearchParams();
   const machinesQ = useQuery({ queryKey: ["machines"], queryFn: () => api<Machine[]>("/machines") });
   // Deep links (access catalog, command palette) name the target up front.
-  const [machine, setMachine] = useState(params.get("machine") || "");
+  const [chosen, setMachine] = useState(params.get("machine") || "");
   const [user, setUser] = useState(params.get("user") || "root");
   const [connected, setConnected] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -25,13 +25,10 @@ export function TerminalPage() {
   const fitRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  useEffect(() => {
-    const list = machinesQ.data;
-    if (!list?.length) return;
-    // Also covers a deep link naming a machine that no longer exists.
-    if (machine && list.some((m) => m.name === machine)) return;
-    setMachine(list[0].name);
-  }, [machinesQ.data, machine]);
+  // The first machine until one is chosen; also covers a deep link naming a
+  // machine that no longer exists.
+  const list = machinesQ.data;
+  const machine = list?.length && !list.some((m) => m.name === chosen) ? list[0].name : chosen;
 
   useEffect(() => {
     return () => {
@@ -40,7 +37,8 @@ export function TerminalPage() {
     };
   }, []);
 
-  function fitAndNotify() {
+  // Reads only refs, so it never needs to change.
+  const fitAndNotify = useCallback(() => {
     const term = termRef.current;
     const fit = fitRef.current;
     if (!term || !fit) return;
@@ -51,27 +49,31 @@ export function TerminalPage() {
     } catch {
       /* ignore */
     }
-  }
-
-  useEffect(() => {
-    const onResize = () => fitAndNotify();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
-    const t = window.setTimeout(() => fitAndNotify(), 50);
-    return () => window.clearTimeout(t);
-  }, [expanded]);
+    window.addEventListener("resize", fitAndNotify);
+    return () => window.removeEventListener("resize", fitAndNotify);
+  }, [fitAndNotify]);
+
+  // Switches between the normal and expanded layout, then refits the
+  // terminal once the new size has been laid out.
+  const setLayout = useCallback(
+    (next: boolean) => {
+      setExpanded(next);
+      window.setTimeout(fitAndNotify, 50);
+    },
+    [fitAndNotify],
+  );
 
   useEffect(() => {
     if (!expanded) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setExpanded(false);
+      if (e.key === "Escape") setLayout(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [expanded]);
+  }, [expanded, setLayout]);
 
   function disconnect() {
     wsRef.current?.close();
@@ -130,14 +132,14 @@ export function TerminalPage() {
     setStatus("connecting…");
     const ws = new WebSocket(`${proto}://${location.host}/api/v1/terminal/ws?${q}`);
     ws.binaryType = "arraybuffer";
-    ws.onopen = () => {
+    ws.addEventListener("open", () => {
       setConnected(true);
       setStatus("live");
       toast("Terminal connected");
       term.focus();
       ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-    };
-    ws.onmessage = (ev) => {
+    });
+    ws.addEventListener("message", (ev) => {
       if (typeof ev.data === "string") {
         if (ev.data.startsWith("error:")) {
           toast(ev.data, "err");
@@ -150,13 +152,13 @@ export function TerminalPage() {
         return;
       }
       term.write(new Uint8Array(ev.data as ArrayBuffer));
-    };
-    ws.onerror = () => {
+    });
+    ws.addEventListener("error", () => {
       setStatus("error");
       // A refused handshake hides the server's reason from the browser, so
       // ask the gateway to explain the decision directly.
-      const params = new URLSearchParams({ machine, remote_user: user });
-      void api<AccessExplanation>(`/access/explain?${params}`)
+      const explain = new URLSearchParams({ machine, remote_user: user });
+      void api<AccessExplanation>(`/access/explain?${explain}`)
         .then((ex) => {
           if (ex.allowed) throw new Error("allowed");
           setStatus("denied");
@@ -164,8 +166,8 @@ export function TerminalPage() {
           toast(ex.summary, "err");
         })
         .catch(() => toast("WebSocket error — check Vite proxy (ws) and gateway auth", "err"));
-    };
-    ws.onclose = (ev) => {
+    });
+    ws.addEventListener("close", (ev) => {
       setConnected(false);
       wsRef.current = null;
       if (ev.code !== 1000) {
@@ -174,7 +176,7 @@ export function TerminalPage() {
       } else {
         setStatus("offline");
       }
-    };
+    });
     wsRef.current = ws;
   }
 
@@ -191,8 +193,8 @@ export function TerminalPage() {
       <div className={`card term-card${expanded ? " term-expanded" : ""}`}>
         <div className="term-toolbar">
           <div>
-            <label className="field">Machine</label>
-            <select value={machine} onChange={(e) => setMachine(e.target.value)} disabled={connected}>
+            <label className="field" htmlFor="terminal-machine">Machine</label>
+            <select id="terminal-machine" value={machine} onChange={(e) => setMachine(e.target.value)} disabled={connected}>
               {(machinesQ.data || []).map((m) => (
                 <option key={m.id} value={m.name}>
                   {m.name}
@@ -201,11 +203,13 @@ export function TerminalPage() {
             </select>
           </div>
           <div>
-            <label className="field">Remote user</label>
-            <input list="termRemoteUsers" value={user} onChange={(e) => setUser(e.target.value)} disabled={connected} />
+            <label className="field" htmlFor="terminal-remote-user">Remote user</label>
+            <input id="terminal-remote-user" list="termRemoteUsers" value={user} onChange={(e) => setUser(e.target.value)} disabled={connected} />
             <datalist id="termRemoteUsers">
               {REMOTE_USERS.map((u) => (
-                <option key={u} value={u} />
+                <option key={u} value={u}>
+                  {u}
+                </option>
               ))}
             </datalist>
           </div>
@@ -216,7 +220,7 @@ export function TerminalPage() {
             <button type="button" className="btn secondary" onClick={disconnect} disabled={!connected}>
               Disconnect
             </button>
-            <button type="button" className="btn secondary" onClick={() => setExpanded((v) => !v)}>
+            <button type="button" className="btn secondary" onClick={() => setLayout(!expanded)}>
               {expanded ? "Exit expand" : "Expand"}
             </button>
             <span className="muted">{status}</span>

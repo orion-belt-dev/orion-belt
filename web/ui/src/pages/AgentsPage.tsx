@@ -41,11 +41,12 @@ export function AgentsPage() {
   });
   const machinesQ = useQuery({ queryKey: ["machines"], queryFn: () => api<Machine[]>("/machines") });
 
-  const connected = new Set((connectedQ.data || []).map(String));
-  const machines = machinesQ.data || [];
+  const connected = useMemo(() => new Set((connectedQ.data || []).map(String)), [connectedQ.data]);
+  const machines = useMemo(() => machinesQ.data || [], [machinesQ.data]);
 
+  const processRows = table.process;
   const processed = useMemo(() => {
-    return table.process(
+    return processRows(
       machines,
       (m, key) => {
         if (key === "name") return m.name;
@@ -56,7 +57,7 @@ export function AgentsPage() {
       },
       (m) => `${m.name} ${m.hostname} ${m.id} ${tagStatus(m)}`,
     );
-  }, [machines, connected, table.query, table.sortKey, table.sortDir, table.page, table.pageSize]);
+  }, [machines, connected, processRows]);
 
   function refresh() {
     void connectedQ.refetch();
@@ -119,19 +120,19 @@ export function AgentsPage() {
   }
 
   async function pause(m: Machine) {
-    const tags = { ...(m.tags || {}), status: "paused" };
+    const tags = { ...m.tags, status: "paused" };
     await patchMachine(m.id, { is_active: false, tags }, "Agent paused (sessions blocked)");
   }
 
   async function resume(m: Machine) {
-    const tags = { ...(m.tags || {}) };
+    const tags = { ...m.tags };
     delete tags.status;
     await patchMachine(m.id, { is_active: true, tags }, "Agent resumed");
   }
 
   async function revoke(m: Machine) {
     if (!confirm(`Revoke agent ${m.name}? It cannot connect until re-enrolled.`)) return;
-    const tags = { ...(m.tags || {}), status: "revoked" };
+    const tags = { ...m.tags, status: "revoked" };
     await patchMachine(m.id, { is_active: false, tags }, "Agent revoked");
     if (connected.has(m.id) || connected.has(m.name)) {
       try {
@@ -145,7 +146,7 @@ export function AgentsPage() {
 
   async function archive(m: Machine) {
     if (!confirm(`Archive ${m.name}?`)) return;
-    const tags = { ...(m.tags || {}), status: "archived" };
+    const tags = { ...m.tags, status: "archived" };
     await patchMachine(m.id, { is_active: false, tags }, "Agent archived");
   }
 
@@ -156,7 +157,7 @@ export function AgentsPage() {
     }
     if (
       !confirm(
-        `Permanently delete ${m.name}?\n\nThis removes related permissions, access requests, session history, and recordings for this agent.\n\nIf you need to keep those records, cancel and Archive the agent instead.`,
+        `Permanently delete ${m.name}?\n\nThis removes related permissions, access requests, and session history for this agent. The session list is kept in the audit log, and recordings stay on disk until the recording retention period ends.\n\nIf you need to keep those records, cancel and Archive the agent instead.`,
       )
     ) {
       return;
@@ -204,16 +205,16 @@ export function AgentsPage() {
           <h3>Edit {editing.name}</h3>
           <div className="form-grid">
             <div>
-              <label className="field">Name</label>
-              <input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              <label className="field" htmlFor="agents-name">Name</label>
+              <input id="agents-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <div>
-              <label className="field">Hostname</label>
-              <input value={editHost} onChange={(e) => setEditHost(e.target.value)} />
+              <label className="field" htmlFor="agents-hostname">Hostname</label>
+              <input id="agents-hostname" value={editHost} onChange={(e) => setEditHost(e.target.value)} />
             </div>
             <div>
-              <label className="field">Port</label>
-              <input type="number" value={editPort} onChange={(e) => setEditPort(Number(e.target.value) || 22)} />
+              <label className="field" htmlFor="agents-port">Port</label>
+              <input id="agents-port" type="number" value={editPort} onChange={(e) => setEditPort(Number(e.target.value) || 22)} />
             </div>
           </div>
           <div className="row" style={{ marginTop: "0.75rem" }}>
@@ -229,89 +230,91 @@ export function AgentsPage() {
 
       <div className="card">
         <TableToolbar query={table.query} onQuery={table.setQuery} placeholder="Filter agents…" />
-        <table>
-          <thead>
-            <tr>
-              <SortTh label="Name" col="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Host" col="host" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Tunnel" col="tunnel" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="State" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <th>Last seen</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {processed.rows.map((m) => {
-              const up = connected.has(m.id) || connected.has(m.name);
-              const revoked = isRevoked(m);
-              const paused = isPaused(m);
-              const archived = tagStatus(m) === "archived";
-              let state = "registered";
-              if (revoked) state = "revoked";
-              else if (archived) state = "archived";
-              else if (paused) state = "paused";
-              else if (up) state = "online";
-              else state = "offline";
-              return (
-                <tr key={m.id}>
-                  <td>
-                    <strong>{m.name}</strong>
-                    <div className="mono muted" style={{ fontSize: ".72rem" }}>
-                      {shortId(m.id)}
-                    </div>
-                  </td>
-                  <td className="mono">
-                    {m.hostname}:{m.port}
-                  </td>
-                  <td>
-                    <Badge status={up ? "online" : "offline"}>{up ? "online" : "offline"}</Badge>
-                  </td>
-                  <td>
-                    <Badge status={state}>{state}</Badge>
-                  </td>
-                  <td className="mono">{fmtTime(m.last_seen_at)}</td>
-                  <td>
-                    <div className="row agent-actions">
-                      <button type="button" className="btn secondary sm" onClick={() => startEdit(m)}>
-                        Edit
-                      </button>
-                      {paused || (!m.is_active && !revoked && !archived) ? (
-                        <button type="button" className="btn secondary sm" onClick={() => void resume(m)}>
-                          Resume
+        <section className="table-scroll" tabIndex={0} aria-label="Agents">
+          <table>
+            <thead>
+              <tr>
+                <SortTh label="Name" col="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Host" col="host" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Tunnel" col="tunnel" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="State" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <th>Last seen</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {processed.rows.map((m) => {
+                const up = connected.has(m.id) || connected.has(m.name);
+                const revoked = isRevoked(m);
+                const paused = isPaused(m);
+                const archived = tagStatus(m) === "archived";
+                let state = "registered";
+                if (revoked) state = "revoked";
+                else if (archived) state = "archived";
+                else if (paused) state = "paused";
+                else if (up) state = "online";
+                else state = "offline";
+                return (
+                  <tr key={m.id}>
+                    <td>
+                      <strong>{m.name}</strong>
+                      <div className="mono muted" style={{ fontSize: ".72rem" }}>
+                        {shortId(m.id)}
+                      </div>
+                    </td>
+                    <td className="mono">
+                      {m.hostname}:{m.port}
+                    </td>
+                    <td>
+                      <Badge status={up ? "online" : "offline"}>{up ? "online" : "offline"}</Badge>
+                    </td>
+                    <td>
+                      <Badge status={state}>{state}</Badge>
+                    </td>
+                    <td className="mono">{fmtTime(m.last_seen_at)}</td>
+                    <td>
+                      <div className="row agent-actions">
+                        <button type="button" className="btn secondary sm" onClick={() => startEdit(m)}>
+                          Edit
                         </button>
-                      ) : (
-                        <button type="button" className="btn secondary sm" disabled={revoked || archived} onClick={() => void pause(m)}>
-                          Pause
+                        {paused || (!m.is_active && !revoked && !archived) ? (
+                          <button type="button" className="btn secondary sm" onClick={() => void resume(m)}>
+                            Resume
+                          </button>
+                        ) : (
+                          <button type="button" className="btn secondary sm" disabled={revoked || archived} onClick={() => void pause(m)}>
+                            Pause
+                          </button>
+                        )}
+                        <button type="button" className="btn secondary sm" disabled={!up} onClick={() => void disconnect(m.id)}>
+                          Disconnect
                         </button>
-                      )}
-                      <button type="button" className="btn secondary sm" disabled={!up} onClick={() => void disconnect(m.id)}>
-                        Disconnect
-                      </button>
-                      <button type="button" className="btn secondary sm" disabled={!up} onClick={() => void sendCommand(m.id, "orion:restart")}>
-                        Restart
-                      </button>
-                      <button type="button" className="btn secondary sm" disabled={revoked} onClick={() => void revoke(m)}>
-                        Revoke
-                      </button>
-                      <button type="button" className="btn secondary sm" disabled={archived} onClick={() => void archive(m)}>
-                        Archive
-                      </button>
-                      <button
-                        type="button"
-                        className="btn danger sm"
-                        disabled={!revoked && !archived}
-                        title={revoked || archived ? "Delete permanently" : "Revoke first"}
-                        onClick={() => void remove(m)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                        <button type="button" className="btn secondary sm" disabled={!up} onClick={() => void sendCommand(m.id, "orion:restart")}>
+                          Restart
+                        </button>
+                        <button type="button" className="btn secondary sm" disabled={revoked} onClick={() => void revoke(m)}>
+                          Revoke
+                        </button>
+                        <button type="button" className="btn secondary sm" disabled={archived} onClick={() => void archive(m)}>
+                          Archive
+                        </button>
+                        <button
+                          type="button"
+                          className="btn danger sm"
+                          disabled={!revoked && !archived}
+                          title={revoked || archived ? "Delete permanently" : "Revoke first"}
+                          onClick={() => void remove(m)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
         <Pagination
           page={processed.page}
           pageCount={processed.pageCount}
@@ -321,8 +324,12 @@ export function AgentsPage() {
         />
         {cmdOut ? (
           <div style={{ marginTop: "0.85rem" }}>
-            <label className="field">Last command output</label>
-            <pre className="code">{cmdOut}</pre>
+            <span className="field" id="agents-command-output">
+              Last command output
+            </span>
+            <pre className="code" aria-labelledby="agents-command-output">
+              {cmdOut}
+            </pre>
           </div>
         ) : null}
       </div>

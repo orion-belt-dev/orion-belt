@@ -536,7 +536,7 @@ func (c *SCPClient) uploadFile(session *ssh.Session, source, machine, remotePath
 	}()
 
 	// Run SCP command
-	scpCmd := fmt.Sprintf("%s scp -t %s", machine, remotePath)
+	scpCmd := fmt.Sprintf("%s scp -t %s", machine, shellWord(remotePath))
 	if err := session.Run(scpCmd); err != nil {
 		return fmt.Errorf("scp upload failed: %w", err)
 	}
@@ -556,7 +556,7 @@ func (c *SCPClient) downloadFile(session *ssh.Session, destination, machine, rem
 		return err
 	}
 
-	scpCmd := fmt.Sprintf("%s scp -f %s", machine, remotePath)
+	scpCmd := fmt.Sprintf("%s scp -f %s", machine, shellWord(remotePath))
 	if err := session.Start(scpCmd); err != nil {
 		return err
 	}
@@ -581,6 +581,13 @@ func (c *SCPClient) downloadFile(session *ssh.Session, destination, machine, rem
 	_, err = fmt.Sscanf(header, "C%s %d %s", &perms, &size, &filename)
 	if err != nil {
 		return fmt.Errorf("failed to parse SCP header '%s': %w", header, err)
+	}
+
+	// The name comes from the remote side. Like OpenSSH since CVE-2019-6111,
+	// accept only a plain file name: "../../.bashrc" or "/etc/x" would write
+	// outside the destination.
+	if !safeSCPName(filename) {
+		return fmt.Errorf("refusing unsafe file name %q from the remote side", filename)
 	}
 
 	finalLocalPath := destination
@@ -628,4 +635,26 @@ func splitMachinePath(spec string) []string {
 
 	// machine:path format
 	return []string{spec[:colonIndex], spec[colonIndex+1:]}
+}
+
+// safeSCPName reports whether name, sent by the remote in an scp header, is
+// a single plain file name.
+func safeSCPName(name string) bool {
+	return name != "" && name != "." && name != ".." &&
+		!strings.ContainsAny(name, "/\\\x00")
+}
+
+// shellWord quotes s for the remote /bin/sh, leaving plain paths as typed.
+func shellWord(s string) string {
+	plain := s != ""
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_./~:@%+=,-", r)) {
+			plain = false
+			break
+		}
+	}
+	if plain {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

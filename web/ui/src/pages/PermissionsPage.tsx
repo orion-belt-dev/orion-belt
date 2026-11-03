@@ -380,7 +380,7 @@ function GrantsTable({
         <div className="empty">No grants match. Change the filters, or grant access above.</div>
       ) : (
         <>
-          <div className="table-scroll" tabIndex={0} role="region" aria-label="Grants">
+          <section className="table-scroll" tabIndex={0} aria-label="Grants">
           <table>
             <thead>
               <tr>
@@ -438,7 +438,7 @@ function GrantsTable({
               ))}
             </tbody>
           </table>
-          </div>
+          </section>
           <Pagination
             page={page}
             pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))}
@@ -508,7 +508,7 @@ function EffectiveView({ users, machines }: { users: User[]; machines: Machine[]
       ) : rows.length === 0 ? (
         <div className="empty">No access. Grant some above, or approve an access request.</div>
       ) : (
-        <div className="table-scroll" tabIndex={0} role="region" aria-label="Effective access">
+        <section className="table-scroll" tabIndex={0} aria-label="Effective access">
         <table>
           <thead>
             <tr>
@@ -535,7 +535,7 @@ function EffectiveView({ users, machines }: { users: User[]; machines: Machine[]
             ))}
           </tbody>
         </table>
-        </div>
+        </section>
       )}
     </div>
   );

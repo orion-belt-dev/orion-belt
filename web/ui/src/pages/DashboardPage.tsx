@@ -20,6 +20,13 @@ type SetupStatus = {
   };
 };
 
+function fmtSeconds(seconds: number | undefined) {
+  if (!seconds || seconds <= 0) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
 export function DashboardPage() {
   const { user } = useAuth();
   const role = useRole();
@@ -73,13 +80,6 @@ export function DashboardPage() {
     if (windowHours % 24 === 0) return `${windowHours / 24}d`;
     return `${windowHours}h`;
   }, [windowHours]);
-
-  function fmtSeconds(seconds: number | undefined) {
-    if (!seconds || seconds <= 0) return "—";
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-    return `${(seconds / 3600).toFixed(1)}h`;
-  }
 
   return (
     <>
@@ -209,22 +209,24 @@ export function DashboardPage() {
           {usageTopTargets.length === 0 ? (
             <div className="empty">No target access activity in this window.</div>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Target</th>
-                  <th>Session starts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usageTopTargets.map((target) => (
-                  <tr key={target.machine_id}>
-                    <td>{target.machine_name}</td>
-                    <td className="mono">{target.session_count}</td>
+            <section className="table-scroll" tabIndex={0} aria-label="Most-accessed targets">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Target</th>
+                    <th>Session starts</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {usageTopTargets.map((target) => (
+                    <tr key={target.machine_id}>
+                      <td>{target.machine_name}</td>
+                      <td className="mono">{target.session_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           )}
           <p className="muted" style={{ marginTop: "0.65rem", marginBottom: 0 }}>
             Updated {fmtTime(usage.data?.generated_at)}
@@ -239,27 +241,29 @@ export function DashboardPage() {
             {machineList.length === 0 ? (
               <div className="empty">No machines yet.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Machine</th>
-                    <th>Tunnel</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {machineList.slice(0, 8).map((m) => {
-                    const up = connected.has(m.id) || connected.has(m.name);
-                    return (
-                      <tr key={m.id}>
-                        <td>{m.name}</td>
-                        <td>
-                          <Badge status={up ? "online" : "offline"}>{up ? "online" : "offline"}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <section className="table-scroll" tabIndex={0} aria-label="Agent health">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Machine</th>
+                      <th>Tunnel</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {machineList.slice(0, 8).map((m) => {
+                      const up = connected.has(m.id) || connected.has(m.name);
+                      return (
+                        <tr key={m.id}>
+                          <td>{m.name}</td>
+                          <td>
+                            <Badge status={up ? "online" : "offline"}>{up ? "online" : "offline"}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </section>
             )}
             {machineList.length > 8 ? (
               <p className="muted" style={{ marginTop: "0.65rem" }}>
@@ -275,26 +279,28 @@ export function DashboardPage() {
             {activeSessions.length === 0 ? (
               <div className="empty">Nothing active right now.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Started</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeSessions.slice(0, 8).map((s) => (
-                    <tr key={s.id}>
-                      <td className="mono">{shortId(s.id)}</td>
-                      <td className="mono">{fmtTime(s.start_time)}</td>
-                      <td>
-                        <Badge status={s.status}>{s.status || "active"}</Badge>
-                      </td>
+              <section className="table-scroll" tabIndex={0} aria-label="Active sessions">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Started</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {activeSessions.slice(0, 8).map((s) => (
+                      <tr key={s.id}>
+                        <td className="mono">{shortId(s.id)}</td>
+                        <td className="mono">{fmtTime(s.start_time)}</td>
+                        <td>
+                          <Badge status={s.status}>{s.status || "active"}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
             )}
             <Link className="btn secondary sm" to="/sessions" style={{ marginTop: "0.75rem" }}>
               View all sessions

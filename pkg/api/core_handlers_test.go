@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/orion-belt-dev/orion-belt/internal/pgtest"
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/recording"
@@ -149,7 +150,7 @@ func TestMachines_CRUD(t *testing.T) {
 	}
 }
 
-func TestMachines_HardDeleteRemovesAgentUserAndRecordings(t *testing.T) {
+func TestMachines_HardDeleteKeepsRecordingsAndAuditsSessions(t *testing.T) {
 	e := newEnv(t, nil)
 	ctx := context.Background()
 	agentUser := common.NewUser("web-01-agent", "a@x", testPubKey, false)
@@ -169,13 +170,60 @@ func TestMachines_HardDeleteRemovesAgentUserAndRecordings(t *testing.T) {
 	if _, err := e.store.GetUser(ctx, agentUser.ID); err == nil {
 		t.Error("agent user survived machine deletion")
 	}
+	// Only the retention sweep removes recordings.
 	for _, f := range []string{cast, cast + ".gz", cast + ".enc"} {
-		if _, err := os.Stat(f); !os.IsNotExist(err) {
-			t.Errorf("%s survived machine deletion", filepath.Base(f))
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("%s removed by machine deletion: %v", filepath.Base(f), err)
 		}
 	}
 	if len(e.agents.disconnected) != 1 || e.agents.disconnected[0] != e.machine.ID {
 		t.Errorf("agent not disconnected: %v", e.agents.disconnected)
+	}
+
+	logs := e.auditLogsFor("machine.delete")
+	if len(logs) != 1 {
+		t.Fatalf("machine.delete entries = %d, want 1", len(logs))
+	}
+	l := logs[0]
+	recs, _ := l.Metadata["sessions"].([]interface{})
+	if l.UserID != e.admin.ID || l.Metadata["name"] != "web-01" || l.Metadata["session_count"] != float64(1) || len(recs) != 1 {
+		t.Fatalf("machine.delete entry = %+v", l)
+	}
+	rec, _ := recs[0].(map[string]interface{})
+	if rec["id"] != sess.ID || rec["user_id"] != e.alice.ID || rec["remote_user"] != "root" || rec["recording_path"] != cast || rec["start_time"] == "" {
+		t.Errorf("audited session = %v", rec)
+	}
+}
+
+// If the session list cannot be put in the audit log, the machine and its
+// sessions stay.
+func TestMachines_HardDeleteRefusedWhenAuditFails(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	sess := common.NewSession(e.alice.ID, e.machine.ID, "root", t.TempDir())
+	_ = e.store.CreateSession(ctx, sess)
+
+	db, err := sqlOpen(pgtest.DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`ALTER TABLE audit_logs RENAME TO audit_logs_hidden`); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() { _, _ = db.Exec(`ALTER TABLE audit_logs_hidden RENAME TO audit_logs`) }
+	t.Cleanup(restore)
+
+	e.expect(e.do("DELETE", "/api/v1/admin/machines/"+e.machine.ID, e.adminKey, nil), 500)
+	restore()
+	if _, err := e.store.GetMachine(ctx, e.machine.ID); err != nil {
+		t.Errorf("machine deleted without an audit entry: %v", err)
+	}
+	if got, err := e.store.ListMachineSessions(ctx, e.machine.ID); err != nil || len(got) != 1 {
+		t.Errorf("sessions after refused delete = %v, %v", got, err)
+	}
+	if len(e.agents.disconnected) != 0 {
+		t.Errorf("agent disconnected by a refused delete: %v", e.agents.disconnected)
 	}
 }
 
@@ -261,6 +309,36 @@ func TestPermissions_GrantUpdateRevoke(t *testing.T) {
 	for _, a := range []string{"permission.grant", "permission.update", "permission.revoke"} {
 		if !e.audited(a) {
 			t.Errorf("%s not audited", a)
+		}
+	}
+}
+
+// The column has no time zone, so an expiry sent with an offset used to be
+// stored as its wall clock and outlive the approved instant by the offset.
+func TestPermissions_UpdateExpiresAtKeepsTheInstant(t *testing.T) {
+	e := newEnv(t, nil)
+	r := e.do("POST", "/api/v1/admin/permissions", e.adminKey, map[string]any{
+		"user_id": e.alice.ID, "machine_id": e.machine.ID, "access_type": "ssh", "remote_users": []string{"root"}, "duration_seconds": 600,
+	})
+	e.expect(r, 201)
+	id := r.obj(t)["id"].(string)
+
+	want := time.Now().Add(48 * time.Hour).Truncate(time.Second)
+	for _, zone := range []*time.Location{
+		time.FixedZone("+01:00", 3600),
+		time.FixedZone("+14:00", 14*3600),
+		time.FixedZone("-09:30", -(9*3600 + 1800)),
+	} {
+		sent := want.In(zone).Format(time.RFC3339)
+		e.expect(e.do("PATCH", "/api/v1/admin/permissions/"+id, e.adminKey, map[string]any{"expires_at": sent}), 200)
+
+		var perms []common.Permission
+		e.do("GET", "/api/v1/permissions/machine/"+e.machine.ID, e.adminKey, nil).json(t, &perms)
+		if len(perms) != 1 || perms[0].ExpiresAt == nil {
+			t.Fatalf("permissions after PATCH %s = %+v", sent, perms)
+		}
+		if got := *perms[0].ExpiresAt; !got.Equal(want) {
+			t.Errorf("PATCH expires_at=%s stored %s, want %s", sent, got.UTC().Format(time.RFC3339), want.UTC().Format(time.RFC3339))
 		}
 	}
 }
@@ -464,6 +542,20 @@ func TestRegisterAgent(t *testing.T) {
 	// The synthetic agent user name clashes: the machine is not created.
 	_ = e.store.CreateUser(context.Background(), common.NewUser("clash", "c@x", testPubKey, false))
 	e.expect(e.do("POST", "/api/v1/public/register/agent", e.adminKey, map[string]any{"name": "clash", "hostname": "h", "port": 22, "public_key": testPubKey}), 500)
+
+	// One entry for the one registration that succeeded, by its caller.
+	logs := e.auditLogsFor("agent.register")
+	if len(logs) != 1 {
+		t.Fatalf("agent.register entries = %d, want 1", len(logs))
+	}
+	machine, err := e.store.GetMachineByName(context.Background(), "app-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := logs[0]; l.UserID != e.operator.ID || l.Resource != "machine:"+machine.ID ||
+		l.Metadata["agent_name"] != "app-01" || l.Metadata["agent_user_id"] != machine.AgentID || l.Metadata["ssh_ca"] != false {
+		t.Errorf("agent.register entry = %+v", l)
+	}
 }
 
 func TestRegisterAgent_WithSSHCA(t *testing.T) {
@@ -488,6 +580,11 @@ func TestRegisterAgent_WithSSHCA(t *testing.T) {
 	e.expect(e.do("POST", "/api/v1/public/register/agent", e.adminKey, map[string]any{"name": "app-03", "hostname": "h", "port": 22, "public_key": "garbage"}), 400)
 	if _, err := e.store.GetMachineByName(context.Background(), "app-03"); err == nil {
 		t.Error("machine kept after a rejected registration")
+	}
+	logs := e.auditLogsFor("agent.register")
+	if len(logs) != 1 || logs[0].UserID != e.admin.ID || logs[0].Resource != "machine:"+got["machine_id"].(string) ||
+		logs[0].Metadata["ssh_ca"] != true || logs[0].Metadata["agent_user_id"] != nil {
+		t.Errorf("agent.register entries = %+v", logs)
 	}
 }
 

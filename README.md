@@ -144,7 +144,7 @@ scoop install https://pkgs.orion-belt.dev/scoop/orion-belt.json
 
 ### Gateway — per OS (pkgs.orion-belt.dev)
 
-Add the signed repo with the system package manager, install `orion-belt`, then configure and start. You need PostgreSQL reachable (or install it yourself). Set at least `database.connection_string`, `auth.jwt_secret`, and `server.public_url` in `/etc/orion-belt/server.yaml`.
+Add the signed repo with the system package manager, install `orion-belt`, then configure and start. You need PostgreSQL reachable (or install it yourself). Set at least `database.connection_string` and `server.public_url` in `/etc/orion-belt/server.yaml`; the install generates `auth.jwt_secret`.
 
 <details>
 <summary><b>Debian / Ubuntu</b> (apt)</summary>
@@ -157,7 +157,7 @@ sudo apt update
 sudo apt install orion-belt
 
 sudoedit /etc/orion-belt/server.yaml
-# database.connection_string, auth.jwt_secret, server.public_url
+# database.connection_string, server.public_url (auth.jwt_secret is generated)
 # (optional) server.public_ssh_host / public_ssh_port if agents dial a different host:port
 
 sudo systemctl enable --now orion-belt-server

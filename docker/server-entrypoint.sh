@@ -1,6 +1,29 @@
 #!/bin/sh
 set -eu
 
+# Run the server as orionbelt, not root. Started as root (the default), hand
+# the state directories to it when needed (volumes created by earlier images
+# are root-owned), copy a mounted config it may not be able to read, then
+# re-run this script as orionbelt. Started with --user, skip all of that.
+if [ "$(id -u)" = 0 ]; then
+  for d in /etc/orion-belt /var/lib/orion-belt /var/lib/orion-belt/recordings /var/log/orion-belt; do
+    mkdir -p "$d"
+    if [ "$(stat -c %U "$d")" != orionbelt ]; then
+      chown -R orionbelt:orionbelt "$d"
+    fi
+  done
+  if [ -n "${ORION_CONFIG_FILE:-}" ] && ! su-exec orionbelt test -r "$ORION_CONFIG_FILE"; then
+    install -d -m 0700 -o orionbelt -g orionbelt /run/orion-belt
+    install -m 0600 -o orionbelt -g orionbelt "$ORION_CONFIG_FILE" /run/orion-belt/config.yaml
+    ORION_CONFIG_FILE=/run/orion-belt/config.yaml
+    export ORION_CONFIG_FILE
+  fi
+  exec su-exec orionbelt "$0" "$@"
+fi
+
+# The generated config holds the database password and JWT secret.
+umask 077
+
 # Generate a unique SSH host key on first run and persist it in the mounted
 # volume. Never bake this into the image — a host key shared across every
 # container built from the same image defeats host-key verification entirely.

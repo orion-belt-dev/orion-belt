@@ -50,12 +50,11 @@ func TestNewRiskSignals(t *testing.T) {
 	}
 }
 
-func TestFromDBTimestampRestoresTheWrittenInstant(t *testing.T) {
-	written := time.Date(2026, 10, 23, 18, 30, 0, 0, time.Local)
-	// The column keeps the local wall clock; lib/pq labels it UTC.
-	stored := time.Date(written.Year(), written.Month(), written.Day(), written.Hour(), written.Minute(), 0, 0, time.UTC)
-	if got := FromDBTimestamp(stored); !got.Equal(written) || got.Location() != time.UTC {
-		t.Errorf("FromDBTimestamp = %v, want %v in UTC", got, written)
+func TestFromDBTimestampKeepsTheInstant(t *testing.T) {
+	// TIMESTAMPTZ values come back as the instant, in the session's zone.
+	read := time.Date(2026, 10, 23, 18, 30, 0, 0, time.FixedZone("CET", 3600))
+	if got := FromDBTimestamp(read); !got.Equal(read) || got.Location() != time.UTC {
+		t.Errorf("FromDBTimestamp = %v, want %v in UTC", got, read)
 	}
 }
 

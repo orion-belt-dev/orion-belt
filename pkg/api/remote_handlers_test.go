@@ -3,11 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +105,53 @@ func TestTerminalWS_ShellSessionIsRecordedAndAudited(t *testing.T) {
 	}
 }
 
+// Shutdown must end live web terminals and wait for their recordings;
+// http.Server.Shutdown alone ignores hijacked connections.
+func TestTerminalWS_ShutdownEndsSessionAndKeepsRecording(t *testing.T) {
+	e := newEnv(t, nil)
+	e.withAgentBridge(nil)
+	e.grant(e.alice, "deploy")
+
+	conn, _, err := e.dialWS("/api/v1/terminal/ws?machine=web-01&user=deploy", e.aliceKey)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	readUntil(t, conn, "welcome")
+	ctx := context.Background()
+	sessions, _ := e.store.ListUserSessions(ctx, e.alice.ID, 1, 0)
+	if len(sessions) != 1 {
+		t.Fatalf("sessions = %+v", sessions)
+	}
+	id := sessions[0].ID
+
+	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := e.srv.Shutdown(sctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if sctx.Err() != nil {
+		t.Fatal("Shutdown waited for its deadline instead of ending the session")
+	}
+	// Ended and recorded before Shutdown returned, not after.
+	if got, err := e.store.GetSession(ctx, id); err != nil || got.EndTime == nil {
+		t.Errorf("session after Shutdown = %+v, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(e.recorder.GetRecordingStoragePath(), id+".cast")); err != nil {
+		t.Errorf("recording not written: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			var ce *websocket.CloseError
+			if !errors.As(err, &ce) || !strings.Contains(ce.Text, "shutting down") {
+				t.Errorf("client saw %v, want a close giving the reason", err)
+			}
+			break
+		}
+	}
+	e.expect(e.do("GET", "/api/v1/terminal/ws?machine=web-01&user=deploy", e.aliceKey, nil), 503)
+}
+
 func TestTerminalWS_Refusals(t *testing.T) {
 	e := newEnv(t, nil)
 	e.withAgentBridge(nil)
@@ -140,6 +191,36 @@ func TestTerminalWS_Refusals(t *testing.T) {
 }
 
 // --- live session watch -----------------------------------------------------------------
+
+// A viewer leaving a session that prints nothing used to keep its handler,
+// connection and subscription until the session's next output.
+func TestSessionWatchWS_ViewerLeavingIdleSessionIsReleased(t *testing.T) {
+	e := newEnv(t, nil)
+	sess := common.NewSession(e.alice.ID, e.machine.ID, "root", "/r")
+	_ = e.store.CreateSession(context.Background(), sess)
+	if _, err := e.recorder.StartRecording(sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = e.recorder.StopRecording(sess.ID) })
+
+	conn, _, err := e.dialWS("/api/v1/sessions/"+sess.ID+"/watch", e.aliceKey)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	hub := e.recorder.Hub()
+	waitFor := func(want int) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); hub.Watchers(sess.ID) != want; {
+			if time.Now().After(deadline) {
+				t.Fatalf("watchers = %d, want %d", hub.Watchers(sess.ID), want)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitFor(1)
+	_ = conn.Close() // no output was ever sent
+	waitFor(0)
+}
 
 func TestSessionWatchWS(t *testing.T) {
 	e := newEnv(t, nil)
@@ -244,7 +325,7 @@ func TestFiles_ThroughAgent(t *testing.T) {
 	// Paths reach the agent shell-quoted, so a hostile name cannot break out.
 	var upload string
 	for _, c := range seen {
-		if strings.Contains(c, "base64 -d") {
+		if strings.HasPrefix(c, "cat > ") {
 			upload = c
 		}
 	}
@@ -296,6 +377,118 @@ func TestFiles_Failures(t *testing.T) {
 	}
 }
 
+// Uploads stream to the host on stdin. They used to travel as a base64
+// command-line argument, which failed above ~96 KB.
+func TestFiles_UploadLargeFileOverStdin(t *testing.T) {
+	e := newEnv(t, nil)
+	e.grant(e.alice, "root")
+	var gotCmd string
+	var got []byte
+	e.withAgentBridge(func(cmd string, stdin []byte) (string, uint32) {
+		if stdin != nil {
+			gotCmd, got = cmd, stdin
+		}
+		return "", 0
+	})
+	payload := bytes.Repeat([]byte("0123456789abcdef\x00\xff"), 3<<16) // ~3.4 MiB, binary
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("machine", "web-01")
+	_ = mw.WriteField("path", "/srv/big.bin")
+	fw, _ := mw.CreateFormFile("file", "big.bin")
+	_, _ = fw.Write(payload)
+	_ = mw.Close()
+
+	r := e.do("POST", "/api/v1/files/upload", e.aliceKey, body.String(), "Content-Type", mw.FormDataContentType())
+	e.expect(r, 200)
+	if r.obj(t)["size"] != float64(len(payload)) {
+		t.Errorf("upload response = %s", r.body)
+	}
+	if gotCmd != "cat > '/srv/big.bin'" || !bytes.Equal(got, payload) {
+		t.Errorf("host got %q with %d bytes, want cat to the path with all %d bytes", gotCmd, len(got), len(payload))
+	}
+	sum := sha256.Sum256(payload)
+	if m := e.lastAudit("files.upload").Metadata; m["sha256"] != hex.EncodeToString(sum[:]) || m["size"] != float64(len(payload)) {
+		t.Errorf("upload audit = %v", m)
+	}
+}
+
+// File browser actions run outside a recorded session, so each one, including
+// failed and refused attempts, must leave an audit entry with its outcome.
+func TestFiles_AuditsEveryAction(t *testing.T) {
+	e := newEnv(t, nil)
+	e.grant(e.alice, "root")
+	content := "127.0.0.1 localhost"
+	e.withAgentBridge(func(cmd string, _ []byte) (string, uint32) {
+		switch {
+		case strings.HasPrefix(cmd, "base64 ") && strings.Contains(cmd, "/missing"):
+			return "", 1
+		case strings.HasPrefix(cmd, "base64 "):
+			return base64.StdEncoding.EncodeToString([]byte(content)), 0
+		case strings.HasPrefix(cmd, "rm -rf") && strings.Contains(cmd, "/busy"):
+			return "", 1
+		default:
+			return "", 0
+		}
+	})
+	latest := func(action string) map[string]interface{} {
+		t.Helper()
+		logs := e.auditLogsFor(action)
+		if len(logs) == 0 {
+			t.Fatalf("no %s audit entry", action)
+		}
+		if logs[0].Resource != "machine:"+e.machine.ID {
+			t.Errorf("%s resource = %s", action, logs[0].Resource)
+		}
+		return logs[0].Metadata
+	}
+	sha := func(s string) string { d := sha256.Sum256([]byte(s)); return hex.EncodeToString(d[:]) }
+
+	e.expect(e.do("GET", "/api/v1/files/download?machine=web-01&path=/etc/hosts", e.aliceKey, nil), 200)
+	if m := latest("files.download"); m["outcome"] != "ok" || m["path"] != "/etc/hosts" || m["remote_user"] != "root" ||
+		m["sha256"] != sha(content) || m["size"] != float64(len(content)) || m["exit_status"] != float64(0) {
+		t.Errorf("download audit = %v", m)
+	}
+	// A failed read on the host is an error, not an empty file.
+	e.expect(e.do("GET", "/api/v1/files/download?machine=web-01&path=/missing", e.aliceKey, nil), 502)
+	if m := latest("files.download"); m["outcome"] != "failed" || m["exit_status"] != float64(1) {
+		t.Errorf("failed download audit = %v", m)
+	}
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("machine", "web-01")
+	_ = mw.WriteField("path", "/tmp/payload")
+	fw, _ := mw.CreateFormFile("file", "payload")
+	_, _ = fw.Write([]byte("payload"))
+	_ = mw.Close()
+	e.expect(e.do("POST", "/api/v1/files/upload", e.aliceKey, body.String(), "Content-Type", mw.FormDataContentType()), 200)
+	if m := latest("files.upload"); m["outcome"] != "ok" || m["path"] != "/tmp/payload" || m["sha256"] != sha("payload") || m["size"] != float64(7) {
+		t.Errorf("upload audit = %v", m)
+	}
+
+	e.expect(e.do("POST", "/api/v1/files/mkdir", e.aliceKey, map[string]any{"machine": "web-01", "path": "/tmp/d"}), 200)
+	if m := latest("files.mkdir"); m["outcome"] != "ok" || m["path"] != "/tmp/d" {
+		t.Errorf("mkdir audit = %v", m)
+	}
+	e.expect(e.do("DELETE", "/api/v1/files?machine=web-01&path=/tmp/d", e.aliceKey, nil), 200)
+	if m := latest("files.delete"); m["outcome"] != "ok" || m["path"] != "/tmp/d" {
+		t.Errorf("delete audit = %v", m)
+	}
+	// rm failing on the host used to answer "deleted".
+	e.expect(e.do("DELETE", "/api/v1/files?machine=web-01&path=/busy", e.aliceKey, nil), 502)
+	if m := latest("files.delete"); m["outcome"] != "failed" || m["exit_status"] != float64(1) {
+		t.Errorf("failed delete audit = %v", m)
+	}
+
+	// Bob holds no grant: refused, and recorded as denied against him.
+	e.expect(e.do("DELETE", "/api/v1/files?machine=web-01&path=/etc", e.bobKey, nil), 502)
+	logs := e.auditLogsFor("files.delete")
+	if logs[0].UserID != e.bob.ID || logs[0].Metadata["outcome"] != "denied" || logs[0].Metadata["path"] != "/etc" {
+		t.Errorf("denied delete audit = %+v", logs[0])
+	}
+}
+
 // --- SSH keys --------------------------------------------------------------------------
 
 func TestSSHKeys_OwnKeys(t *testing.T) {
@@ -316,6 +509,17 @@ func TestSSHKeys_OwnKeys(t *testing.T) {
 	}
 	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+key["id"].(string), e.aliceKey, nil), 200)
 	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+key["id"].(string), e.aliceKey, nil), 404)
+
+	pk, _, _, _, _ := ssh.ParseAuthorizedKey([]byte(testPubKey))
+	for _, action := range []string{"auth.ssh_key.add", "auth.ssh_key.delete"} {
+		l := e.lastAudit(action)
+		if l.UserID != e.alice.ID || l.Resource != "ssh_key:"+key["id"].(string) || l.Metadata["fingerprint"] != ssh.FingerprintSHA256(pk) || l.Metadata["name"] != "laptop" {
+			t.Errorf("%s audit = %+v", action, l)
+		}
+	}
+	if n := len(e.auditLogsFor("auth.ssh_key.delete")); n != 1 {
+		t.Errorf("auth.ssh_key.delete entries = %d", n)
+	}
 }
 
 // --- SSH certificate authority ----------------------------------------------------------
@@ -357,6 +561,9 @@ func TestSSHCA_Endpoints(t *testing.T) {
 	}
 	if cert := pub.(*ssh.Certificate); cert.KeyId != "alice" || cert.ValidPrincipals[0] != "alice" {
 		t.Errorf("cert key id %q principals %v", cert.KeyId, cert.ValidPrincipals)
+	}
+	if l := e.lastAudit("ssh_cert.issue"); l.UserID != e.alice.ID || l.Resource != "ssh_cert:"+issued["serial"].(string) || l.Metadata["fingerprint"] == nil {
+		t.Errorf("ssh_cert.issue audit = %+v", l)
 	}
 	_ = e.do("POST", "/api/v1/ssh-cert", e.bobKey, map[string]any{"public_key": testPubKey})
 
@@ -420,6 +627,28 @@ func TestAgentInstallScript(t *testing.T) {
 	m, err := e.store.GetMachineByName(context.Background(), "app-01")
 	if err != nil || m.Tags["os"] != "debian" || m.Tags["env"] != "prod" || m.Port != 22 {
 		t.Errorf("machine = %+v, %v", m, err)
+	}
+	if resp.UnsignedBuild || strings.Contains(resp.Script, "ORION_ALLOW_UNSIGNED_BUILD=1") {
+		t.Errorf("default script allows unsigned builds")
+	}
+
+	// A local snapshot build: allowed only on request, and audited as such.
+	r = e.do("POST", path, e.adminKey, body("name", "lab-01", "package_base_url", "http://127.0.0.1:8765", "allow_unsigned_build", true))
+	e.expect(r, 201)
+	var lab AgentInstallScriptResponse
+	r.json(t, &lab)
+	if !lab.UnsignedBuild || !strings.Contains(lab.Script, "ORION_ALLOW_UNSIGNED_BUILD=1") || !strings.Contains(lab.Message, "did not sign") {
+		t.Errorf("unsigned build install = %+v", lab)
+	}
+	audits := map[string]bool{}
+	for _, l := range e.auditLogsFor("agent.install_script") {
+		audits[l.Resource] = l.Metadata["allow_unsigned_build"] == true
+		if l.Resource == "machine:"+lab.MachineID && l.Metadata["package_base_url"] != "http://127.0.0.1:8765" {
+			t.Errorf("unsigned build audit = %+v", l.Metadata)
+		}
+	}
+	if !audits["machine:"+lab.MachineID] || audits["machine:"+resp.MachineID] {
+		t.Errorf("allow_unsigned_build audited as %v", audits)
 	}
 
 	authority, err := ca.New(common.SSHCAConfig{Enabled: true, MasterKey: "0123456789abcdef0123456789abcdef"}, e.store, nil)

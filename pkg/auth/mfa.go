@@ -89,10 +89,12 @@ func hashBackupCode(code string) string {
 }
 
 // ValidateMFACode accepts either a TOTP code or a backup code.
-// If a backup code is used, updatedHashStore is non-empty and should be persisted.
+// updatedHashStore is the backup code store after the check: unchanged for a
+// TOTP code, without the used code for a backup code (empty once the last
+// one is used). Callers persist it whenever it differs from the stored one.
 func ValidateMFACode(totpSecret, backupHashStore, code string) (updatedHashStore string, ok bool) {
 	if ValidateTOTP(totpSecret, code) {
-		return "", true
+		return backupHashStore, true
 	}
 	if backupHashStore == "" {
 		return "", false

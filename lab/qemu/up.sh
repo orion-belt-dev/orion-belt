@@ -42,6 +42,9 @@ make_seed() {
   fi
 }
 
+# A fresh JWT secret per lab run: the server refuses short or published ones.
+LAB_JWT_SECRET="$(openssl rand -hex 32)"
+
 render() {
   local src="$1" dest="$2"
   local pubkey
@@ -51,6 +54,7 @@ render() {
     -e "s|{{SSH_PUBKEY}}|${pubkey}|g" \
     -e "s|{{PKG_BASE_URL}}|${pkg_base}|g" \
     -e "s|{{VERSION}}|${VERSION}|g" \
+    -e "s|{{JWT_SECRET}}|${LAB_JWT_SECRET}|g" \
     -e "s|{{HOSTNAME}}|${HOSTNAME:-host}|g" \
     -e "s|{{LOGIN}}|${LOGIN:-ubuntu}|g" \
     -e "s|{{DISTRO}}|${DISTRO:-unknown}|g" \

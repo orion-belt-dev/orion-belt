@@ -53,6 +53,11 @@ func (s *APIServer) createAPIKey(c *gin.Context) {
 		return
 	}
 
+	s.recordAudit(c, "auth.api_key.create", "api_key:"+apiKey.ID, map[string]interface{}{
+		"name":       apiKey.Name,
+		"key_prefix": apiKey.KeyPrefix,
+		"expires_at": apiKey.ExpiresAt,
+	})
 	c.JSON(http.StatusCreated, CreateAPIKeyResponse{
 		ID:        apiKey.ID,
 		Name:      apiKey.Name,
@@ -103,6 +108,7 @@ func (s *APIServer) revokeAPIKey(c *gin.Context) {
 		return
 	}
 
+	s.recordAudit(c, "auth.api_key.revoke", "api_key:"+keyID, apiKeyAuditMeta(key))
 	c.JSON(http.StatusOK, gin.H{"message": "API key revoked successfully"})
 }
 
@@ -131,7 +137,14 @@ func (s *APIServer) deleteAPIKey(c *gin.Context) {
 		return
 	}
 
+	s.recordAudit(c, "auth.api_key.delete", "api_key:"+keyID, apiKeyAuditMeta(key))
 	c.JSON(http.StatusOK, gin.H{"message": "API key deleted successfully"})
+}
+
+// apiKeyAuditMeta names a key in an audit entry; owner_id shows when an
+// admin acts on someone else's key. Never the key itself.
+func apiKeyAuditMeta(key *common.APIKey) map[string]interface{} {
+	return map[string]interface{}{"name": key.Name, "key_prefix": key.KeyPrefix, "owner_id": key.UserID}
 }
 
 // LoginRequest represents a login request (SSH public key required).

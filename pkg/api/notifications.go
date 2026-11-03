@@ -205,6 +205,7 @@ func (s *APIServer) putNotificationPolicy(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
+	s.recordAudit(c, "notification_policy.update", "notification_policy", map[string]interface{}{"policy": policy})
 	c.JSON(http.StatusOK, policy)
 }
 

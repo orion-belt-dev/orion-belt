@@ -492,6 +492,8 @@ func TestNew_ConfigurationErrors(t *testing.T) {
 		// A missing key is created on start; one in a missing directory cannot be.
 		"unreadable host key": func(cfg *common.Config) { cfg.Server.SSHHostKey = filepath.Join(t.TempDir(), "absent", "ssh_host_key") },
 		"invalid host key":    func(cfg *common.Config) { cfg.Server.SSHHostKey = file },
+		"public jwt secret":   func(cfg *common.Config) { cfg.Auth.JWTSecret = "change-me-to-a-long-random-secret" },
+		"short jwt secret":    func(cfg *common.Config) { cfg.Auth.JWTSecret = "hunter2" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

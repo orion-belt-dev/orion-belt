@@ -63,6 +63,13 @@ func (h *SessionHub) Broadcast(sessionID string, data []byte) {
 	}
 }
 
+// Watchers returns how many viewers are subscribed to sessionID.
+func (h *SessionHub) Watchers(sessionID string) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.subs[sessionID])
+}
+
 // CloseSession unsubscribes all watchers for a finished session.
 func (h *SessionHub) CloseSession(sessionID string) {
 	h.mu.Lock()

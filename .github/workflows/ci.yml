@@ -87,6 +87,40 @@ jobs:
       - name: CVE check
         run: bash scripts/cve-check.sh
 
+  ui:
+    name: Web UI
+    runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
+    defaults:
+      run:
+        working-directory: web/ui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/ui/package-lock.json
+      # No dependency needs an install script; skipping them keeps a
+      # compromised package from running code at install time.
+      - name: Install
+        run: npm ci --ignore-scripts
+      # oxlint with the jsx-a11y, react-hooks and import rules (.oxlintrc.json);
+      # warnings fail the job so they cannot pile up.
+      - name: Lint
+        run: npm run lint
+      - name: Type-check and build
+        run: npm run build
+      # The server embeds web/static, so the committed bundle must be the one
+      # this source builds.
+      - name: Committed bundle is up to date
+        working-directory: .
+        run: |
+          if [ -n "$(git status --porcelain -- web/static)" ]; then
+            git status --short -- web/static
+            echo "web/static is stale: run 'npm run build' in web/ui and commit the result" >&2
+            exit 1
+          fi
+
   build:
     name: Build
     runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}

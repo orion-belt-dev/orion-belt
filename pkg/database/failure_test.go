@@ -56,8 +56,8 @@ func TestEveryMethodReportsDriverFailure(t *testing.T) {
 		"DeleteMachine":      func() error { return pg.DeleteMachine(ctx, "x") },
 		"ListMachines":       func() error { _, err := pg.ListMachines(ctx, 1, 0); return err },
 		"ListActiveMachines": func() error { _, err := pg.ListActiveMachines(ctx); return err },
-		"ListSessionRecordingPathsForMachine": func() error {
-			_, err := pg.ListSessionRecordingPathsForMachine(ctx, "x")
+		"ListMachineSessions": func() error {
+			_, err := pg.ListMachineSessions(ctx, "x")
 			return err
 		},
 		"CreateSession":      func() error { return pg.CreateSession(ctx, &common.Session{}) },

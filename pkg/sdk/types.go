@@ -300,6 +300,9 @@ type AgentInstallScriptRequest struct {
 	GatewayPort    int               `json:"gateway_port,omitempty"`
 	PackageBaseURL string            `json:"package_base_url"`
 	Version        string            `json:"version,omitempty"`
+	// AllowUnsignedBuild accepts packages the release key did not sign, for a
+	// local snapshot build. The server audits it.
+	AllowUnsignedBuild bool `json:"allow_unsigned_build,omitempty"`
 }
 
 // RegisterAgentRequest is the public payload for direct agent registration.
@@ -343,6 +346,8 @@ type AgentInstallScriptResponse struct {
 	PublicKey string `json:"public_key"`
 	Filename  string `json:"filename"`
 	Message   string `json:"message"`
+	// UnsignedBuild reports that the script may install unsigned packages.
+	UnsignedBuild bool `json:"unsigned_build,omitempty"`
 }
 
 // MFAEnrollResponse returns the enrollment challenge material.

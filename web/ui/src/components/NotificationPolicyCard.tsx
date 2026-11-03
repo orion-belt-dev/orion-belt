@@ -110,36 +110,40 @@ export function NotificationPolicyCard() {
       ) : (
         <>
           <div style={{ marginTop: "0.75rem" }}>
-            <label className="field">Channels users may enable</label>
-            <div className="row" style={{ gap: "1rem", flexWrap: "wrap" }}>
-              {knownChannels.map((channel) => {
-                const required = mandatoryChannels.has(channel);
-                return (
-                  <label
-                    key={channel}
-                    className="row"
-                    style={{ alignItems: "center", gap: "0.4rem" }}
-                    title={required ? "Required by a mandatory event below" : undefined}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={allowed.includes(channel) || required}
-                      disabled={required}
-                      onChange={(e) => toggleAllowed(channel, e.target.checked)}
-                    />
-                    {channelLabel(channel)}
-                  </label>
-                );
-              })}
-            </div>
+            <fieldset className="plain-group">
+              <legend className="field">Channels users may enable</legend>
+              <div className="row" style={{ gap: "1rem", flexWrap: "wrap" }}>
+                {knownChannels.map((channel) => {
+                  const required = mandatoryChannels.has(channel);
+                  return (
+                    <label
+                      key={channel}
+                      className="row"
+                      style={{ alignItems: "center", gap: "0.4rem" }}
+                      title={required ? "Required by a mandatory event below" : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allowed.includes(channel) || required}
+                        disabled={required}
+                        onChange={(e) => toggleAllowed(channel, e.target.checked)}
+                      />
+                      {channelLabel(channel)}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
           </div>
 
           <div style={{ marginTop: "1rem" }}>
-            <label className="field">Always deliver (users cannot turn these off)</label>
+            <span className="field" id="policy-mandatory">
+              Always deliver (users cannot turn these off)
+            </span>
             {knownEvents.length === 0 ? (
               <p className="muted">No event types reported by the server.</p>
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <section className="table-scroll" tabIndex={0} aria-labelledby="policy-mandatory">
                 <table>
                   <thead>
                     <tr>
@@ -169,7 +173,7 @@ export function NotificationPolicyCard() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </section>
             )}
           </div>
 

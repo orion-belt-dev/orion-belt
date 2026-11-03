@@ -93,6 +93,11 @@ func (s *APIServer) issueUserCert(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
+	s.recordAudit(c, "ssh_cert.issue", "ssh_cert:"+strconv.FormatUint(cert.Serial, 10), map[string]interface{}{
+		"principals":  cert.ValidPrincipals,
+		"fingerprint": ssh.FingerprintSHA256(pub),
+		"expires_at":  time.Unix(int64(cert.ValidBefore), 0).UTC().Format(time.RFC3339),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"certificate": string(ssh.MarshalAuthorizedKey(cert)),

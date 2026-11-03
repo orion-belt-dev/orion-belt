@@ -33,7 +33,16 @@ type HostKeyConfig struct {
 // that CA; any other host (or when it's unset) uses the TOFU/strict/
 // insecure behavior described by StrictHostKeyChecking.
 func NewHostKeyCallback(cfg HostKeyConfig, logger *Logger) (ssh.HostKeyCallback, error) {
-	legacy, err := buildLegacyHostKeyCallback(cfg, logger)
+	legacyCfg := cfg
+	// With a Host CA configured the gateway proves itself with a signed
+	// certificate. A host offering a plain key instead may only match a key
+	// already pinned in known_hosts: learning it on first use would let an
+	// impostor that simply omits the certificate be trusted, and an agent
+	// runs whatever its gateway sends, as root.
+	if cfg.HostCAPublicKey != "" && strings.ToLower(strings.TrimSpace(cfg.StrictHostKeyChecking)) != "no" {
+		legacyCfg.StrictHostKeyChecking = "yes"
+	}
+	legacy, err := buildLegacyHostKeyCallback(legacyCfg, logger)
 	if err != nil {
 		return nil, err
 	}

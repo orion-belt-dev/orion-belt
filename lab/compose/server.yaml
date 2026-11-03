@@ -13,7 +13,8 @@ database:
 auth:
   rebac_enabled: true
   allow_temp_access: true
-  jwt_secret: "lab-only-change-me"
+  # Lab only and public: never reuse it. The server needs 32+ bytes.
+  jwt_secret: "lab-only-public-not-secret-7f3a9c1e5b2d8f4a6c0e9b1d3f5a7c9e"
   jwt_expiry_hours: 24
   mfa_required: false
   rate_limit_per_minute: 600

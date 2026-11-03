@@ -37,6 +37,8 @@
 #   --disable-webauthn        Skip WebAuthn (SSH-key login still works)
 #   --package-base URL        Package mirror (default: GitHub Pages packages)
 #   --binary-only             Skip packages; install release tarball + unit files
+#   --allow-unsigned-build    Accept packages the release key did not sign (a local
+#                             snapshot build on --package-base); warns at each step
 #   --skip-start              Install + configure but do not enable/start
 #   --skip-setup              Do not run `orion-belt-server setup`
 #   --uninstall               Remove Orion Belt server (prompts for DB/logs/data)
@@ -80,6 +82,7 @@ WEBAUTHN_ENABLED=""   # empty = decide later; true/false once resolved
 WEBAUTHN_ORIGIN=""     # browser origin written to auth.webauthn.origins
 DISABLE_WEBAUTHN=0
 PKG_BASE="$PKG_BASE_DEFAULT"
+ORION_ALLOW_UNSIGNED_BUILD=0
 BINARY_ONLY=0
 SKIP_START=0
 SKIP_SETUP=0
@@ -529,6 +532,7 @@ while [ $# -gt 0 ]; do
     --disable-webauthn) DISABLE_WEBAUTHN=1 ;;
     --package-base) PKG_BASE="${2:?}"; shift ;;
     --binary-only) BINARY_ONLY=1 ;;
+    --allow-unsigned-build) ORION_ALLOW_UNSIGNED_BUILD=1 ;;
     --skip-start) SKIP_START=1 ;;
     --skip-setup) SKIP_SETUP=1 ;;
     --uninstall) DO_UNINSTALL=1 ;;
@@ -744,6 +748,140 @@ resolve_version() {
 
 VERSION=$(resolve_version "$VERSION")
 echo "   version: $VERSION"
+
+# ----------------------------------------------------------- verification
+# Every package and archive is checked against the release's checksums.txt,
+# whose signature must come from the release key below (pinned here, not
+# fetched, so whoever serves the packages cannot also vouch for them). The
+# key must match packaging/keys/orion-belt.asc, and the functions between the
+# markers must match agentInstallVerify in pkg/api/agent_install.go: a test
+# checks both.
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+RELEASE="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+ORION_RELEASE_FPR="F1E47F7B036D5202262E174F613B2217A8958DA9"
+cat > "$WORK/orion-belt.asc" <<'ORION_RELEASE_KEY'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBGpUDv4BEAC18HGxhqHTKOjGRSPvULL4MCGOuEnqgSCrjDKIP7wk0ijT+LKF
++t95CmRMI7NNY73KdYsOwuUHhOhqGEASaDn7C97fGkEmdlc3VxSOEEfpYQZi5jKL
+5xNxG0NZseh3AMs8KHh+JE2Z8HyiDKoBzopm6IhCR8gwnP5Uq3vsGWCw6A41PuHI
+nOXG91ELrWaEywvTkijAtesW9iSUaIGK3gw9YxTxeC6XKQXI7C3wjhXNP88YZ3RF
+5vL4qmX3bUcLiHsYPkai1L09D3NMlztiZUrbaAZFTckMh2W8ovve8tiwCkc21CrR
+2HrfEn+wK+FlTGPQzxoERrblY3XUhwUzw4ycmaLbzC70Ag0ATcTzkREyIoU+pah7
+HaVb49skIcxrwfkB9tXLEuf/IRKIEe5v59A7xW9Lnxnq2C6l4UPbqEz9R5SopKkb
+b7xZr+UnhFsy/KF/gQvq0WhaJZAMVN5ZgdTCQrODR0E2Fg2RyANdSF6T1xNqzrTu
+NGFhZ8fAvJccGMZhcLLOxA70Sz3i5F5MTSZ/KbiFXPJy9HopmJJOf4kwl1qUBRsg
+NKPhHxvebrzRH1+Er4sDZZm3B4f8mppIrkZZCqQk7r6PzBuBTc+b7N8+V3rWNYtq
+LppIv4PVzZNHwD5LzBbXOX81XnYztZtwo+NL9CQ5mWd+jGZGg9nVuQ6TAwARAQAB
+tDFPcmlvbiBCZWx0IFBhY2thZ2luZyA8bWFpbnRhaW5lcnNAb3Jpb24tYmVsdC5k
+ZXY+iQJUBBMBCgA+FiEE8eR/ewNtUgImLhdPYTsiF6iVjakFAmpUDv4CGwMFCQWj
+moAFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AACgkQYTsiF6iVjaktGQ//Z5VnJSSp
+kTpzFmN4oo9OT23z2SlUTf/X4ceKJHLsQi4jkISrqck1BY49+R/Nj/iamSoEkSA0
+fugfMXTHsMwHEnC5Ju9updANQNj0HenvwwUsN4hBujEy8hJuYw2JKtaWnZf8UBnn
+yiFbm8shCcF6/NhRLO6aKp2cGgqjMkKUQ/qK4iE+pRwRnWMejjom3nU3rrtt74eC
+h8iXRrKGKVWnDCA8QzZareSGERFfyBeNRFp+zJms9KtdZPLyJJb3FGesBWmTiKbJ
+dh2m/9+q4b4YUaSmDTAZq3+cIqUILyppLu/aXZbhZQX5v9CdZXfvN2/9BdwCHd+j
+N/vMysdSNZodbXAw1+OH5Q3furOMTvu5jUXbTx/grtErtcf3joTyaL9lSnRDaci7
+URqN+5rNERmOtJggFqzgRlpfF2Iu0IUpAHsx7xskVuHjytJFYRRx18XhH0DtMHdX
+ZS3bGchKk/UwfDde0FeUjGONNAbUXn6/OwQ/LgDexQhzfYyRC3N5w6lvjHk0iuCi
+6peyeNaywsPKSwrHq2zauecGG0+zXk41pEeIi7Ni1CkwA/M6lOagHIRi7DtqFRiO
+MAzSTgPxnl34/xQk29rKxnvZlfuYxvnAAXdrCCu51XjCCLrVAsX3nPYauq5nAi+F
+7QzyM+iLRQb4f5/6LrwzjvL0Kc8YlYIXrJQ=
+=2EH+
+-----END PGP PUBLIC KEY BLOCK-----
+ORION_RELEASE_KEY
+if [ "$ORION_ALLOW_UNSIGNED_BUILD" = 1 ]; then
+  echo "   WARNING: --allow-unsigned-build: packages the release key did not sign are accepted" >&2
+fi
+
+# BEGIN release-verify
+ensure_gpg() {
+  command -v gpg >/dev/null 2>&1 && return 0
+  echo "==> Installing gnupg to verify the release signature"
+  if command -v apt-get >/dev/null 2>&1; then apt-get update -y && apt-get install -y gnupg
+  elif command -v dnf >/dev/null 2>&1; then dnf install -y gnupg2
+  elif command -v yum >/dev/null 2>&1; then yum install -y gnupg2
+  elif command -v zypper >/dev/null 2>&1; then zypper -n install gpg2
+  elif command -v apk >/dev/null 2>&1; then apk add --no-cache gnupg
+  elif command -v pacman >/dev/null 2>&1; then pacman -S --noconfirm gnupg
+  fi
+  command -v gpg >/dev/null 2>&1 || { echo "gpg is required to verify the agent package" >&2; exit 1; }
+}
+
+# checksums_signed: true when $WORK/checksums.txt.sig is a good signature of
+# $WORK/checksums.txt by the pinned key (gpg's VALIDSIG names the primary
+# key's fingerprint last).
+checksums_signed() {
+  GNUPGHOME="$WORK/gnupg"
+  export GNUPGHOME
+  rm -rf "$GNUPGHOME" && mkdir -m 0700 "$GNUPGHOME"
+  gpg --batch --quiet --import "$WORK/orion-belt.asc" 2>/dev/null || return 1
+  gpg --batch --status-fd 1 --verify "$WORK/checksums.txt.sig" "$WORK/checksums.txt" 2>/dev/null |
+    awk -v fpr="$ORION_RELEASE_FPR" '$1 == "[GNUPG:]" && $2 == "VALIDSIG" && $NF == fpr { ok = 1 } END { exit !ok }'
+}
+
+load_checksums() {
+  [ -f "$WORK/checksums.ok" ] || [ -f "$WORK/checksums.none" ] && return 0
+  if [ "$ORION_ALLOW_UNSIGNED_BUILD" = 1 ] && ! command -v gpg >/dev/null 2>&1; then
+    echo "warning: gpg not found; not checking release signatures" >&2
+  else
+    ensure_gpg
+  fi
+  for base in "$PKG_BASE" "$RELEASE"; do
+    command -v gpg >/dev/null 2>&1 || break
+    rm -f "$WORK/checksums.txt" "$WORK/checksums.txt.sig"
+    curl -fsSL -o "$WORK/checksums.txt" "$base/checksums.txt" 2>/dev/null || continue
+    curl -fsSL -o "$WORK/checksums.txt.sig" "$base/checksums.txt.sig" 2>/dev/null || continue
+    if checksums_signed; then
+      echo "==> Release checksums verified ($base)"
+      touch "$WORK/checksums.ok"
+      return 0
+    fi
+    echo "warning: checksums.txt from $base is not signed by the release key; ignoring it" >&2
+  done
+  if [ "$ORION_ALLOW_UNSIGNED_BUILD" = 1 ]; then
+    if curl -fsSL -o "$WORK/checksums.txt" "$PKG_BASE/checksums.txt" 2>/dev/null; then
+      echo "WARNING: using UNSIGNED checksums.txt from $PKG_BASE (allow_unsigned_build)" >&2
+      touch "$WORK/checksums.ok"
+    else
+      echo "WARNING: no checksums.txt at $PKG_BASE; installing WITHOUT any verification (allow_unsigned_build)" >&2
+      touch "$WORK/checksums.none"
+    fi
+    return 0
+  fi
+  echo "no signed checksums.txt for v$VERSION at $PKG_BASE or $RELEASE" >&2
+  exit 1
+}
+
+fetch_verified() { # fetch_verified DEST RELEASE_NAME URL...: the first URL whose file matches RELEASE_NAME in checksums.txt
+  dest=$1; name=$2; shift 2
+  load_checksums
+  if [ -f "$WORK/checksums.none" ]; then
+    for u in "$@"; do
+      if curl -fsSL -o "$dest" "$u" 2>/dev/null; then
+        echo "WARNING: installing $u unverified (allow_unsigned_build)" >&2
+        return 0
+      fi
+    done
+    return 1
+  fi
+  want=$(awk -v f="$name" '$2 == f || $2 == "*"f { print $1 }' "$WORK/checksums.txt")
+  if [ -z "$want" ]; then
+    echo "warning: $name is not in the release checksums" >&2
+    return 1
+  fi
+  for u in "$@"; do
+    rm -f "$dest"
+    curl -fsSL -o "$dest" "$u" 2>/dev/null || continue
+    if [ "$(sha256sum "$dest" | cut -d' ' -f1)" = "$want" ]; then return 0; fi
+    echo "warning: $u does not match the signed checksum for $name; skipping it" >&2
+  done
+  rm -f "$dest"
+  return 1
+}
+
+# END release-verify
 
 # -------------------------------------------------------------- postgres
 postgres_installed() {
@@ -1239,47 +1377,47 @@ install_via_package() {
   local gh="https://github.com/${GITHUB_REPO}/releases/download/v${ver}"
   local base="${PKG_BASE%/}"
 
-  try_deb() {
-    for cand in "$@"; do
-      if curl -fsSL -o "$tmp/orion-belt.deb" "$cand" 2>/dev/null; then
-        echo "   installing $cand"
+  try_deb() { # try_deb RELEASE_NAME URL...: install the first URL that matches the signed checksum
+    local name=$1; shift
+    if fetch_verified "$tmp/orion-belt.deb" "$name" "$@"; then
+        echo "   installing $name (verified)"
         # Avoid interactive conffile prompts when a previous run left server.yaml.
         DEBIAN_FRONTEND=noninteractive dpkg \
           --force-confdef --force-confold \
           -i "$tmp/orion-belt.deb" \
           || DEBIAN_FRONTEND=noninteractive apt-get install -f -y -o Dpkg::Options::=--force-confold
         return 0
-      fi
-    done
+    fi
     return 1
   }
-  try_rpm() {
-    for cand in "$@"; do
-      if curl -fsSL -o "$tmp/orion-belt.rpm" "$cand" 2>/dev/null; then
-        echo "   installing $cand"
+  try_rpm() { # try_rpm RELEASE_NAME URL...
+    local name=$1; shift
+    if fetch_verified "$tmp/orion-belt.rpm" "$name" "$@"; then
+        echo "   installing $name (verified)"
+        # The rpm is signed with the pinned release key; let rpm know it.
+        rpm --import "$WORK/orion-belt.asc"
         if have dnf; then dnf -y install "$tmp/orion-belt.rpm"
         elif have yum; then yum -y install "$tmp/orion-belt.rpm"
         else rpm -Uvh "$tmp/orion-belt.rpm"
         fi
         return 0
-      fi
-    done
+    fi
     return 1
   }
-  try_apk() {
-    for cand in "$@"; do
-      if curl -fsSL -o "$tmp/orion-belt.apk" "$cand" 2>/dev/null; then
-        echo "   installing $cand"
+  try_apk() { # try_apk RELEASE_NAME URL...
+    local name=$1; shift
+    if fetch_verified "$tmp/orion-belt.apk" "$name" "$@"; then
+        echo "   installing $name (verified)"
+        # Checked against the signed checksums above, so apk need not trust it.
         apk add --allow-untrusted "$tmp/orion-belt.apk"
         return 0
-      fi
-    done
+    fi
     return 1
   }
 
   case "$OS_ID" in
     debian|ubuntu|raspbian)
-      try_deb \
+      try_deb "orion-belt_${dv}_${DEB_ARCH}.deb" \
         "${gh}/orion-belt_${dv}_${DEB_ARCH}.deb" \
         "${base}/orion-belt_${dv}_${DEB_ARCH}.deb" \
         "${gh}/orion-belt_${ver}_linux_${ARCH}.deb" \
@@ -1288,7 +1426,7 @@ install_via_package() {
       return $?
       ;;
     rhel|centos|rocky|almalinux|fedora|ol|opensuse*|sles)
-      try_rpm \
+      try_rpm "orion-belt-${rv}-1.${RPM_ARCH}.rpm" \
         "${gh}/orion-belt-${rv}-1.${RPM_ARCH}.rpm" \
         "${gh}/orion-belt_${ver}_linux_${ARCH}.rpm" \
         "${gh}/orion-belt_${ver}_linux_${RPM_ARCH}.rpm" \
@@ -1298,7 +1436,7 @@ install_via_package() {
       return $?
       ;;
     alpine)
-      try_apk \
+      try_apk "orion-belt_${av}_${APK_ARCH}.apk" \
         "${gh}/orion-belt_${av}_${APK_ARCH}.apk" \
         "${gh}/orion-belt_${ver}_linux_${ARCH}.apk" \
         "${base}/orion-belt_${ver}_linux_${ARCH}.apk" \
@@ -1317,7 +1455,8 @@ install_via_binary() {
   # GitHub release asset: orion-belt_<ver>_linux_<arch>.tar.gz
   url="https://github.com/${GITHUB_REPO}/releases/download/v${ver}/orion-belt_${ver}_linux_${ARCH}.tar.gz"
   echo "   downloading $url"
-  curl -fsSL -o "$tmp/orion.tgz" "$url" || die "failed to download release archive"
+  fetch_verified "$tmp/orion.tgz" "orion-belt_${ver}_linux_${ARCH}.tar.gz" "$url" \
+    || die "no verified release archive orion-belt_${ver}_linux_${ARCH}.tar.gz"
   tar -xzf "$tmp/orion.tgz" -C "$tmp"
   install -m 0755 "$tmp/orion-belt-server" "$BIN_PATH"
 
@@ -1413,46 +1552,46 @@ install_tools_package() {
   local gh="https://github.com/${GITHUB_REPO}/releases/download/v${ver}"
   local base="${PKG_BASE%/}"
 
-  try_tools_deb() {
-    for cand in "$@"; do
-      if curl -fsSL -o "$tmp/orion-belt-tools.deb" "$cand" 2>/dev/null; then
-        echo "   installing $cand"
+  try_tools_deb() { # try_tools_deb RELEASE_NAME URL...: install the first URL that matches the signed checksum
+    local name=$1; shift
+    if fetch_verified "$tmp/orion-belt-tools.deb" "$name" "$@"; then
+        echo "   installing $name (verified)"
         DEBIAN_FRONTEND=noninteractive dpkg \
           --force-confdef --force-confold \
           -i "$tmp/orion-belt-tools.deb" \
           || DEBIAN_FRONTEND=noninteractive apt-get install -f -y -o Dpkg::Options::=--force-confold
         return 0
-      fi
-    done
+    fi
     return 1
   }
-  try_tools_rpm() {
-    for cand in "$@"; do
-      if curl -fsSL -o "$tmp/orion-belt-tools.rpm" "$cand" 2>/dev/null; then
-        echo "   installing $cand"
+  try_tools_rpm() { # try_tools_rpm RELEASE_NAME URL...
+    local name=$1; shift
+    if fetch_verified "$tmp/orion-belt-tools.rpm" "$name" "$@"; then
+        echo "   installing $name (verified)"
+        # The rpm is signed with the pinned release key; let rpm know it.
+        rpm --import "$WORK/orion-belt.asc"
         if have dnf; then dnf -y install "$tmp/orion-belt-tools.rpm"
         elif have yum; then yum -y install "$tmp/orion-belt-tools.rpm"
         else rpm -Uvh "$tmp/orion-belt-tools.rpm"
         fi
         return 0
-      fi
-    done
+    fi
     return 1
   }
-  try_tools_apk() {
-    for cand in "$@"; do
-      if curl -fsSL -o "$tmp/orion-belt-tools.apk" "$cand" 2>/dev/null; then
-        echo "   installing $cand"
+  try_tools_apk() { # try_tools_apk RELEASE_NAME URL...
+    local name=$1; shift
+    if fetch_verified "$tmp/orion-belt-tools.apk" "$name" "$@"; then
+        echo "   installing $name (verified)"
+        # Checked against the signed checksums above, so apk need not trust it.
         apk add --allow-untrusted "$tmp/orion-belt-tools.apk"
         return 0
-      fi
-    done
+    fi
     return 1
   }
 
   case "$OS_ID" in
     debian|ubuntu|raspbian)
-      try_tools_deb \
+      try_tools_deb "orion-belt-tools_${dv}_${DEB_ARCH}.deb" \
         "${gh}/orion-belt-tools_${dv}_${DEB_ARCH}.deb" \
         "${base}/orion-belt-tools_${dv}_${DEB_ARCH}.deb" \
         "${gh}/orion-belt-tools_${ver}_linux_${ARCH}.deb" \
@@ -1463,7 +1602,7 @@ install_tools_package() {
       return $?
       ;;
     rhel|centos|rocky|almalinux|fedora|ol|opensuse*|sles)
-      try_tools_rpm \
+      try_tools_rpm "orion-belt-tools-${rv}-1.${RPM_ARCH}.rpm" \
         "${gh}/orion-belt-tools-${rv}-1.${RPM_ARCH}.rpm" \
         "${gh}/orion-belt-tools_${ver}_linux_${ARCH}.rpm" \
         "${gh}/orion-belt-tools_${ver}_linux_${RPM_ARCH}.rpm" \
@@ -1473,7 +1612,7 @@ install_tools_package() {
       return $?
       ;;
     alpine)
-      try_tools_apk \
+      try_tools_apk "orion-belt-tools_${av}_${APK_ARCH}.apk" \
         "${gh}/orion-belt-tools_${av}_${APK_ARCH}.apk" \
         "${gh}/orion-belt-tools_${ver}_linux_${ARCH}.apk" \
         "${base}/orion-belt-tools_${ver}_linux_${ARCH}.apk"

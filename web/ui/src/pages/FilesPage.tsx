@@ -154,8 +154,8 @@ export function FilesPage() {
       <div className="card">
         <div className="term-toolbar">
           <div>
-            <label className="field">Machine</label>
-            <select value={machine} onChange={(e) => setMachine(e.target.value)}>
+            <label className="field" htmlFor="files-machine">Machine</label>
+            <select id="files-machine" value={machine} onChange={(e) => setMachine(e.target.value)}>
               {(machinesQ.data || []).map((m) => (
                 <option key={m.id} value={m.name}>
                   {m.name}
@@ -164,11 +164,13 @@ export function FilesPage() {
             </select>
           </div>
           <div>
-            <label className="field">Remote user</label>
-            <input list="remoteUserListFiles" value={user} onChange={(e) => setUser(e.target.value)} />
+            <label className="field" htmlFor="files-remote-user">Remote user</label>
+            <input id="files-remote-user" list="remoteUserListFiles" value={user} onChange={(e) => setUser(e.target.value)} />
             <datalist id="remoteUserListFiles">
               {REMOTE_USERS.map((u) => (
-                <option key={u} value={u} />
+                <option key={u} value={u}>
+                  {u}
+                </option>
               ))}
             </datalist>
           </div>
@@ -180,7 +182,12 @@ export function FilesPage() {
           <button type="button" className="btn secondary sm" onClick={() => void load(parentPath(path))} disabled={path === "/"}>
             ↑ Up
           </button>
-          <input value={pathInput} onChange={(e) => setPathInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void load(pathInput)} />
+          <input
+            aria-label="Path"
+            value={pathInput}
+            onChange={(e) => setPathInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void load(pathInput)}
+          />
           <button type="button" className="btn sm" onClick={() => void load(pathInput)}>
             Go
           </button>
@@ -203,50 +210,52 @@ export function FilesPage() {
         {err ? <div className="err">{err}</div> : null}
         {loading ? <p className="muted">Loading…</p> : null}
         <TableToolbar query={table.query} onQuery={table.setQuery} placeholder="Filter files…" />
-        <table>
-          <thead>
-            <tr>
-              <SortTh label="Name" col="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Size" col="size" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Modified" col="mtime" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {processed.rows.length === 0 && !loading ? (
+        <section className="table-scroll" tabIndex={0} aria-label="Files">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={4} className="empty">
-                  Empty directory.
-                </td>
+                <SortTh label="Name" col="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Size" col="size" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Modified" col="mtime" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <th><span className="sr-only">Actions</span></th>
               </tr>
-            ) : null}
-            {processed.rows.map((ent) => (
-              <tr key={ent.path}>
-                <td>
-                  {ent.is_dir ? (
-                    <button type="button" className="file-row-name dir" onClick={() => void load(ent.path)}>
-                      {ent.name}/
+            </thead>
+            <tbody>
+              {processed.rows.length === 0 && !loading ? (
+                <tr>
+                  <td colSpan={4} className="empty">
+                    Empty directory.
+                  </td>
+                </tr>
+              ) : null}
+              {processed.rows.map((ent) => (
+                <tr key={ent.path}>
+                  <td>
+                    {ent.is_dir ? (
+                      <button type="button" className="file-row-name dir" onClick={() => void load(ent.path)}>
+                        {ent.name}/
+                      </button>
+                    ) : (
+                      <span className="mono">{ent.name}</span>
+                    )}
+                  </td>
+                  <td className="mono">{ent.is_dir ? "—" : fmtSize(ent.size)}</td>
+                  <td className="mono">{ent.mtime ? fmtTime(new Date(ent.mtime * 1000).toISOString()) : "—"}</td>
+                  <td className="row">
+                    {!ent.is_dir ? (
+                      <button type="button" className="btn secondary sm" onClick={() => void download(ent.path)}>
+                        Download
+                      </button>
+                    ) : null}
+                    <button type="button" className="btn danger sm" onClick={() => void remove(ent.path)}>
+                      Delete
                     </button>
-                  ) : (
-                    <span className="mono">{ent.name}</span>
-                  )}
-                </td>
-                <td className="mono">{ent.is_dir ? "—" : fmtSize(ent.size)}</td>
-                <td className="mono">{ent.mtime ? fmtTime(new Date(ent.mtime * 1000).toISOString()) : "—"}</td>
-                <td className="row">
-                  {!ent.is_dir ? (
-                    <button type="button" className="btn secondary sm" onClick={() => void download(ent.path)}>
-                      Download
-                    </button>
-                  ) : null}
-                  <button type="button" className="btn danger sm" onClick={() => void remove(ent.path)}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
         <Pagination
           page={processed.page}
           pageCount={processed.pageCount}

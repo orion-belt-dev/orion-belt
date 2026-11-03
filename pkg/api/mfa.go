@@ -98,6 +98,7 @@ func (s *APIServer) mfaConfirm(c *gin.Context) {
 	}
 	pendingEnrollments.Delete(userID.(string))
 
+	s.recordAudit(c, "auth.mfa.enable", "user:"+user.ID, nil)
 	c.JSON(http.StatusOK, gin.H{"message": "mfa enabled", "mfa_enabled": true})
 }
 
@@ -128,9 +129,16 @@ func (s *APIServer) mfaDisable(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid mfa code"})
 		return
 	}
-	_ = newHashes
-
 	if user.HasPassword() {
+		// The code was good, so a backup code is spent even though the
+		// disable is refused; otherwise it could be presented again.
+		if newHashes != user.BackupCodesHash {
+			user.BackupCodesHash = newHashes
+			if err := s.store.UpdateUser(ctx, user); err != nil {
+				s.fail(c, err)
+				return
+			}
+		}
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "cannot disable totp while a password is set; clear the password first",
 		})
@@ -144,6 +152,7 @@ func (s *APIServer) mfaDisable(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable mfa"})
 		return
 	}
+	s.recordAudit(c, "auth.mfa.disable", "user:"+user.ID, nil)
 	c.JSON(http.StatusOK, gin.H{"message": "mfa disabled", "mfa_enabled": false})
 }
 
@@ -196,7 +205,7 @@ func (s *APIServer) enforceMFAAfterPubkey(c *gin.Context, userID string, totpCod
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid mfa code"})
 		return false
 	}
-	if newHashes != "" {
+	if newHashes != user.BackupCodesHash {
 		user.BackupCodesHash = newHashes
 		_ = s.store.UpdateUser(ctx, user)
 	}

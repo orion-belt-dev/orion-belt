@@ -40,8 +40,9 @@ export function MachinesPage() {
     create.mutate();
   }
 
+  const processRows = table.process;
   const processed = useMemo(() => {
-    return table.process(
+    return processRows(
       q.data || [],
       (m, key) => {
         if (key === "name") return m.name;
@@ -51,7 +52,7 @@ export function MachinesPage() {
       },
       (m) => `${m.name} ${m.hostname} ${m.port} ${m.id}`,
     );
-  }, [q.data, table.query, table.sortKey, table.sortDir, table.page, table.pageSize]);
+  }, [q.data, processRows]);
 
   return (
     <>
@@ -66,16 +67,16 @@ export function MachinesPage() {
           <h3>Create machine</h3>
           <div className="form-grid">
             <div>
-              <label className="field">Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} required />
+              <label className="field" htmlFor="machines-name">Name</label>
+              <input id="machines-name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div>
-              <label className="field">Hostname</label>
-              <input value={hostname} onChange={(e) => setHostname(e.target.value)} />
+              <label className="field" htmlFor="machines-hostname">Hostname</label>
+              <input id="machines-hostname" value={hostname} onChange={(e) => setHostname(e.target.value)} />
             </div>
             <div>
-              <label className="field">Port</label>
-              <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} />
+              <label className="field" htmlFor="machines-port">Port</label>
+              <input id="machines-port" type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} />
             </div>
           </div>
           <button className="btn sm" type="submit" style={{ marginTop: "0.75rem" }}>
@@ -85,28 +86,30 @@ export function MachinesPage() {
       ) : null}
       <div className="card">
         <TableToolbar query={table.query} onQuery={table.setQuery} placeholder="Filter machines…" />
-        <table>
-          <thead>
-            <tr>
-              <SortTh label="Name" col="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Host" col="host" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {processed.rows.map((m) => (
-              <tr key={m.id}>
-                <td>{m.name}</td>
-                <td className="mono">
-                  {m.hostname}:{m.port}
-                </td>
-                <td>
-                  <Badge status={m.is_active ? "online" : "offline"}>{m.is_active ? "online" : "offline"}</Badge>
-                </td>
+        <section className="table-scroll" tabIndex={0} aria-label="Machines">
+          <table>
+            <thead>
+              <tr>
+                <SortTh label="Name" col="name" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Host" col="host" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Status" col="status" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {processed.rows.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.name}</td>
+                  <td className="mono">
+                    {m.hostname}:{m.port}
+                  </td>
+                  <td>
+                    <Badge status={m.is_active ? "online" : "offline"}>{m.is_active ? "online" : "offline"}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
         <Pagination
           page={processed.page}
           pageCount={processed.pageCount}
