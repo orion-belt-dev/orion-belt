@@ -308,3 +308,39 @@ func TestAgentInstallVerify(t *testing.T) {
 		}
 	})
 }
+
+// scripts/install-server.sh carries its own copy of the verification code
+// (it is fetched and run on its own). It must stay identical to the agent
+// script's, which the tests above exercise, and pin the same key.
+func TestInstallServerScriptSharesVerification(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "scripts", "install-server.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(raw)
+	const begin, end = "# BEGIN release-verify\n", "# END release-verify\n"
+	i, j := strings.Index(script, begin), strings.Index(script, end)
+	if i < 0 || j < i {
+		t.Fatal("release-verify markers missing from install-server.sh")
+	}
+	if got := script[i+len(begin) : j]; got != agentInstallVerify {
+		t.Error("install-server.sh release-verify block differs from agentInstallVerify; copy it over")
+	}
+	if !strings.Contains(script, `ORION_RELEASE_FPR="`+keys.ReleaseFingerprint()+`"`) {
+		t.Error("install-server.sh does not pin the release fingerprint")
+	}
+	if !strings.Contains(script, strings.TrimSpace(keys.ReleaseKey())) {
+		t.Error("install-server.sh does not embed packaging/keys/orion-belt.asc")
+	}
+	// Nothing is downloaded outside the verified path.
+	for n, line := range strings.Split(script[:i]+script[j:], "\n") {
+		if strings.Contains(line, "curl -fsSL -o") {
+			t.Errorf("install-server.sh line %d downloads outside fetch_verified: %s", n+1, strings.TrimSpace(line))
+		}
+	}
+	if bash, err := exec.LookPath("bash"); err == nil {
+		if out, err := exec.Command(bash, "-n", filepath.Join("..", "..", "scripts", "install-server.sh")).CombinedOutput(); err != nil {
+			t.Errorf("bash -n: %v\n%s", err, out)
+		}
+	}
+}

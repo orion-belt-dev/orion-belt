@@ -2,7 +2,11 @@
 
 This guide takes a new server from package installation to a first recorded
 session. It assumes you installed the `orion-belt` package or ran
-[`scripts/install-server.sh`](../scripts/install-server.sh).
+[`scripts/install-server.sh`](../scripts/install-server.sh). That script
+checks every package and archive against the release's signed
+`checksums.txt` before installing it, as the agent install script does (see
+[Install script](#install-script-recommended)); `--allow-unsigned-build`
+accepts a local snapshot build on `--package-base`.
 
 ## 1. Configure the server
 
