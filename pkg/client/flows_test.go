@@ -706,3 +706,44 @@ func TestFormatDuration(t *testing.T) {
 		}
 	}
 }
+
+// The file name in an scp header comes from the remote side; a malicious
+// agent must not be able to write outside the destination directory.
+func TestCopy_DownloadRefusesUnsafeNames(t *testing.T) {
+	for _, name := range []string{"../escape", "../../.bashrc", "/etc/passwd", "..", ".", `..\escape`, "sub/dir"} {
+		t.Run(name, func(t *testing.T) {
+			g := startGateway(t, scpSource(name, "owned"))
+			cfg, _ := clientConfig(t, g, nil)
+			s, _ := NewSCPClient(cfg, quietLogger)
+			parent := t.TempDir()
+			dest := filepath.Join(parent, "dest")
+			if err := os.Mkdir(dest, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			err := s.Copy("alice", "web-01:/f", dest, false)
+			if err == nil || !strings.Contains(err.Error(), "unsafe file name") {
+				t.Fatalf("Copy = %v, want a refusal", err)
+			}
+			for _, dir := range []string{dest, parent} {
+				if entries, _ := os.ReadDir(dir); dir == dest && len(entries) != 0 || dir == parent && len(entries) != 1 {
+					t.Errorf("%s holds %v after a refused download", dir, entries)
+				}
+			}
+		})
+	}
+}
+
+func TestCopy_QuotesRemotePaths(t *testing.T) {
+	g := startGateway(t, func(_ string, ch ssh.Channel) uint32 { _, _ = io.Copy(io.Discard, ch); return 0 })
+	cfg, _ := clientConfig(t, g, nil)
+	s, _ := NewSCPClient(cfg, quietLogger)
+	src := filepath.Join(t.TempDir(), "f")
+	_ = os.WriteFile(src, []byte("x"), 0o600)
+	if err := s.Copy("alice", src, "web-01:/srv/it's a file; rm -rf ~", true); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	_, cmds, _ := g.snapshot()
+	if want := `web-01 scp -t '/srv/it'\''s a file; rm -rf ~'`; len(cmds) != 1 || cmds[0] != want {
+		t.Errorf("command = %v, want %q", cmds, want)
+	}
+}
