@@ -542,6 +542,20 @@ func TestRegisterAgent(t *testing.T) {
 	// The synthetic agent user name clashes: the machine is not created.
 	_ = e.store.CreateUser(context.Background(), common.NewUser("clash", "c@x", testPubKey, false))
 	e.expect(e.do("POST", "/api/v1/public/register/agent", e.adminKey, map[string]any{"name": "clash", "hostname": "h", "port": 22, "public_key": testPubKey}), 500)
+
+	// One entry for the one registration that succeeded, by its caller.
+	logs := e.auditLogsFor("agent.register")
+	if len(logs) != 1 {
+		t.Fatalf("agent.register entries = %d, want 1", len(logs))
+	}
+	machine, err := e.store.GetMachineByName(context.Background(), "app-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := logs[0]; l.UserID != e.operator.ID || l.Resource != "machine:"+machine.ID ||
+		l.Metadata["agent_name"] != "app-01" || l.Metadata["agent_user_id"] != machine.AgentID || l.Metadata["ssh_ca"] != false {
+		t.Errorf("agent.register entry = %+v", l)
+	}
 }
 
 func TestRegisterAgent_WithSSHCA(t *testing.T) {
@@ -566,6 +580,11 @@ func TestRegisterAgent_WithSSHCA(t *testing.T) {
 	e.expect(e.do("POST", "/api/v1/public/register/agent", e.adminKey, map[string]any{"name": "app-03", "hostname": "h", "port": 22, "public_key": "garbage"}), 400)
 	if _, err := e.store.GetMachineByName(context.Background(), "app-03"); err == nil {
 		t.Error("machine kept after a rejected registration")
+	}
+	logs := e.auditLogsFor("agent.register")
+	if len(logs) != 1 || logs[0].UserID != e.admin.ID || logs[0].Resource != "machine:"+got["machine_id"].(string) ||
+		logs[0].Metadata["ssh_ca"] != true || logs[0].Metadata["agent_user_id"] != nil {
+		t.Errorf("agent.register entries = %+v", logs)
 	}
 }
 

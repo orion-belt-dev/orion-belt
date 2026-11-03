@@ -484,7 +484,7 @@ func (s *APIServer) registerAgent(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	existingMachine, _ := s.store.GetMachineByName(ctx, req.Name)
 	if existingMachine != nil {
@@ -515,6 +515,7 @@ func (s *APIServer) registerAgent(c *gin.Context) {
 		}
 		_, hostCA := s.ca.ExportPublicKeys()
 		s.logger.Info("Agent registered with Host CA: %s (machine_id=%s)", req.Name, machine.ID)
+		s.auditAgentRegistration(c, caller, machine, "")
 		c.JSON(http.StatusCreated, RegisterAgentResponse{
 			MachineID:       machine.ID,
 			HostCertificate: string(ssh.MarshalAuthorizedKey(hostCert)),
@@ -541,12 +542,29 @@ func (s *APIServer) registerAgent(c *gin.Context) {
 	}
 
 	s.logger.Info("Agent registered: %s (user_id=%s, machine_id=%s)", req.Name, agentUser.ID, machine.ID)
+	s.auditAgentRegistration(c, caller, machine, agentUser.ID)
 
 	c.JSON(http.StatusCreated, RegisterAgentResponse{
 		UserID:    agentUser.ID,
 		MachineID: machine.ID,
 		Message:   "Agent registered successfully",
 	})
+}
+
+// auditAgentRegistration records a machine joining through the registration
+// API, as the install script path does, so the fleet has no unaudited way in.
+// The route is public, so the caller is passed in rather than read from the
+// request context.
+func (s *APIServer) auditAgentRegistration(c *gin.Context, caller *common.User, machine *common.Machine, agentUserID string) {
+	meta := map[string]interface{}{
+		"agent_name": machine.Name,
+		"hostname":   machine.Hostname,
+		"ssh_ca":     s.ca != nil,
+	}
+	if agentUserID != "" {
+		meta["agent_user_id"] = agentUserID
+	}
+	s.recordAuditAs(c, caller.ID, "agent.register", "machine:"+machine.ID, meta)
 }
 
 // RegisterClientRequest represents a client registration request
