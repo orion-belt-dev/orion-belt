@@ -18,12 +18,18 @@ func (s *APIServer) metricsMiddleware() gin.HandlerFunc {
 	}
 }
 
-// rateLimiter is a simple per-key token bucket.
+// rateLimiter is a simple per-key sliding window.
 type rateLimiter struct {
 	mu       sync.Mutex
 	limit    int
 	window   time.Duration
 	requests map[string][]time.Time
+	// lastSweep is when keys with no request in the window were last
+	// dropped. Keys are client IPs on the public routes, so without the
+	// sweep the map grew with every address that ever called (unbounded
+	// for an IPv6 client choosing a new address per request).
+	lastSweep time.Time
+	now       func() time.Time
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
@@ -31,6 +37,7 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 		limit:    limit,
 		window:   window,
 		requests: make(map[string][]time.Time),
+		now:      time.Now,
 	}
 }
 
@@ -38,8 +45,12 @@ func (r *rateLimiter) allow(key string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	now := time.Now()
+	now := r.now()
 	cutoff := now.Add(-r.window)
+	if now.Sub(r.lastSweep) >= r.window {
+		r.sweepLocked(cutoff)
+		r.lastSweep = now
+	}
 	times := r.requests[key]
 	filtered := times[:0]
 	for _, t := range times {
@@ -53,6 +64,16 @@ func (r *rateLimiter) allow(key string) bool {
 	}
 	r.requests[key] = append(filtered, now)
 	return true
+}
+
+// sweepLocked drops keys whose newest request is older than cutoff. Run at
+// most once per window, so the cost is amortised over the requests.
+func (r *rateLimiter) sweepLocked(cutoff time.Time) {
+	for key, times := range r.requests {
+		if len(times) == 0 || !times[len(times)-1].After(cutoff) {
+			delete(r.requests, key)
+		}
+	}
 }
 
 func (s *APIServer) rateLimitMiddleware() gin.HandlerFunc {
