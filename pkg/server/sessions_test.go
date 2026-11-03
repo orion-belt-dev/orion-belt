@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/database"
+	"golang.org/x/crypto/ssh"
 )
 
 // Recordings are written when a session ends. Stopping the server used to
@@ -78,5 +80,53 @@ func TestStop_EndsLiveSessionsAndKeepsTheirRecordings(t *testing.T) {
 	// Stop is idempotent: the harness calls it again on cleanup.
 	if err := h.srv.Stop(context.Background()); err != nil {
 		t.Errorf("second Stop: %v", err)
+	}
+}
+
+// Once shutdown has begun, a client still connected cannot start a session:
+// it would never be waited for, so its recording could be lost.
+func TestStop_RefusesNewSessionsDuringShutdown(t *testing.T) {
+	h := startHarness(t, nil)
+	h.connectAgent(t)
+	h.grant(t, "deploy")
+	c, err := h.dial(t, "alice+deploy%web-01", h.aliceKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.srv.sessions.Drain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := c.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	sess.Stdout = &out
+	err = sess.Run("uptime")
+	var exit *ssh.ExitError
+	if !errors.As(err, &exit) || exit.ExitStatus() != 1 || !strings.Contains(out.String(), "shutting down") {
+		t.Errorf("session during shutdown: err=%v out=%q", err, out.String())
+	}
+	if list, _ := h.srv.store.ListUserSessions(context.Background(), h.alice.ID, 5, 0); len(list) != 0 {
+		t.Errorf("a refused session was recorded: %+v", list)
+	}
+}
+
+// Stop does not hang past its deadline when a session cannot finish in time.
+func TestStop_GivesUpAtDeadline(t *testing.T) {
+	h := startHarness(t, nil)
+	release := make(chan struct{})
+	h.srv.sessions.Begin("stuck", func() {}) // ends only when released
+	go func() { <-release; h.srv.sessions.End("stuck") }()
+	defer close(release)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if err := h.srv.Stop(ctx); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Error("Stop waited well past its deadline")
 	}
 }
