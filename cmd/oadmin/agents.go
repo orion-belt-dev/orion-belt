@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/cliflags"
@@ -78,6 +79,7 @@ func newAgentsCmd() *cobra.Command {
 		packageBaseURL string
 		agentVersion   string
 		output         string
+		allowUnsigned  bool
 	)
 	installScript := &cobra.Command{
 		Use:   "install-script [name]",
@@ -103,6 +105,8 @@ channel you trust.`,
 				GatewayPort:    gatewayPort,
 				PackageBaseURL: packageBaseURL,
 				Version:        agentVersion,
+
+				AllowUnsignedBuild: allowUnsigned,
 			})
 			if err != nil {
 				cliflags.Fatalf("generating install script: %v", err)
@@ -111,6 +115,9 @@ channel you trust.`,
 			if flags.JSON {
 				cliflags.MustPrintJSON(resp)
 				return
+			}
+			if resp.UnsignedBuild {
+				fmt.Fprintln(os.Stderr, "warning: this installer accepts packages the release key did not sign (--allow-unsigned-build); use it only with a local build you trust")
 			}
 			if output == "" {
 				cliflags.Print("%s", resp.Script)
@@ -133,6 +140,8 @@ channel you trust.`,
 		"base URL the installer downloads agent packages from")
 	installScript.Flags().StringVar(&agentVersion, "agent-version", "", "agent version to install (default: server's choice)")
 	installScript.Flags().StringVarP(&output, "output", "o", "", "write the script to this file instead of stdout")
+	installScript.Flags().BoolVar(&allowUnsigned, "allow-unsigned-build", false,
+		"accept packages the release key did not sign, for a local snapshot build (audited)")
 	_ = installScript.MarkFlagRequired("gateway-host")
 	agents.AddCommand(installScript)
 	agents.AddCommand(newAgentManageCmds()...)
