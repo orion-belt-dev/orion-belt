@@ -347,9 +347,19 @@ func TestDeleteMachine_RemovesDependentsAndListsRecordings(t *testing.T) {
 		}
 	}
 
-	paths, err := f.pg.ListSessionRecordingPathsForMachine(f.ctx, f.machine.ID)
-	if err != nil || len(paths) != 1 || paths[0] != s1.RecordingPath {
-		t.Errorf("recording paths = %v, %v; want only the non-empty one", paths, err)
+	sessions, err := f.pg.ListMachineSessions(f.ctx, f.machine.ID)
+	if err != nil || len(sessions) != 2 {
+		t.Fatalf("machine sessions = %v, %v; want both", sessions, err)
+	}
+	byID := map[string]*common.Session{sessions[0].ID: sessions[0], sessions[1].ID: sessions[1]}
+	if got := byID[s1.ID]; got == nil || got.RecordingPath != s1.RecordingPath || got.UserID != f.alice.ID || got.RemoteUser != "root" {
+		t.Errorf("session s1 = %+v", got)
+	}
+	if got := byID[s2.ID]; got == nil || got.RecordingPath != "" {
+		t.Errorf("session s2 = %+v", got)
+	}
+	if other, err := f.pg.ListMachineSessions(f.ctx, "no-such-machine"); err != nil || len(other) != 0 {
+		t.Errorf("sessions of an unknown machine = %v, %v", other, err)
 	}
 
 	if err := f.pg.DeleteMachine(f.ctx, f.machine.ID); err != nil {

@@ -836,25 +836,26 @@ func (s *PostgresStore) DeleteMachine(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListSessionRecordingPathsForMachine returns recording_path values for a machine.
-func (s *PostgresStore) ListSessionRecordingPathsForMachine(ctx context.Context, machineID string) ([]string, error) {
+// ListMachineSessions returns every session on machineID, oldest first.
+func (s *PostgresStore) ListMachineSessions(ctx context.Context, machineID string) ([]*common.Session, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT recording_path FROM sessions WHERE machine_id = $1 AND recording_path <> ''`, machineID)
+		`SELECT id, user_id, machine_id, remote_user, COALESCE(source, 'ssh'), start_time, end_time, recording_path, status, created_at
+		 FROM sessions WHERE machine_id = $1 ORDER BY start_time`, machineID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list session recordings: %w", err)
+		return nil, fmt.Errorf("failed to list sessions for machine %s: %w", machineID, err)
 	}
 	defer rows.Close()
-	var paths []string
+	sessions := make([]*common.Session, 0)
 	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, fmt.Errorf("failed to scan recording path: %w", err)
+		session := &common.Session{}
+		if err := rows.Scan(&session.ID, &session.UserID, &session.MachineID, &session.RemoteUser, &session.Source,
+			&session.StartTime, &session.EndTime, &session.RecordingPath,
+			&session.Status, &session.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
 		}
-		if p != "" {
-			paths = append(paths, p)
-		}
+		sessions = append(sessions, session)
 	}
-	return paths, rows.Err()
+	return sessions, rows.Err()
 }
 
 // ListMachines lists machines with pagination

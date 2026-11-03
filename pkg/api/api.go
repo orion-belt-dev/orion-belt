@@ -1263,8 +1263,28 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 		return
 	}
 
-	// Best-effort: gather recording paths before cascading session rows away.
-	recordingPaths, _ := s.store.ListSessionRecordingPathsForMachine(ctx, id)
+	// Session rows cascade away with the machine, so they are copied into the
+	// audit entry first, and the delete stops if that entry cannot be written.
+	// Recording files stay on disk: only the recording.retention_days sweep
+	// removes them, so one admin action (or a stolen admin key) cannot destroy
+	// session evidence.
+	sessions, err := s.store.ListMachineSessions(ctx, id)
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(string)
+	entry := common.NewAuditLog(uid, "machine.delete", "machine:"+id, c.ClientIP(), map[string]interface{}{
+		"name":          machine.Name,
+		"hostname":      machine.Hostname,
+		"session_count": len(sessions),
+		"sessions":      deletedSessionRecords(sessions),
+	})
+	if err := s.store.CreateAuditLog(ctx, entry); err != nil {
+		s.fail(c, fmt.Errorf("audit machine %s delete: %w", id, err))
+		return
+	}
 
 	if s.agentCommander != nil {
 		_ = s.agentCommander.DisconnectAgent(id)
@@ -1283,18 +1303,30 @@ func (s *APIServer) deleteMachine(c *gin.Context) {
 			}
 		}
 	}
-	for _, path := range recordingPaths {
-		if path == "" {
-			continue
-		}
-		_ = os.Remove(path)
-		_ = os.Remove(path + ".enc")
-		if strings.HasSuffix(path, ".cast") {
-			_ = os.Remove(path + ".gz")
-		}
-	}
-	s.recordAudit(c, "machine.delete", "machine:"+id, map[string]interface{}{"name": machine.Name})
 	c.JSON(http.StatusOK, gin.H{"message": "machine deleted"})
+}
+
+// deletedSessionRecords is what a machine.delete audit entry keeps of each
+// session: enough to find its recording on disk and to show who was on the
+// host, and when.
+func deletedSessionRecords(sessions []*common.Session) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(sessions))
+	for _, sess := range sessions {
+		rec := map[string]interface{}{
+			"id":             sess.ID,
+			"user_id":        sess.UserID,
+			"remote_user":    sess.RemoteUser,
+			"source":         sess.Source,
+			"status":         sess.Status,
+			"start_time":     common.FromDBTimestamp(sess.StartTime).Format(time.RFC3339),
+			"recording_path": sess.RecordingPath,
+		}
+		if sess.EndTime != nil {
+			rec["end_time"] = common.FromDBTimestamp(*sess.EndTime).Format(time.RFC3339)
+		}
+		out = append(out, rec)
+	}
+	return out
 }
 
 func (s *APIServer) grantPermission(c *gin.Context) {

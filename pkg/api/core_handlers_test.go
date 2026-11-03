@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/orion-belt-dev/orion-belt/internal/pgtest"
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/recording"
@@ -149,7 +150,7 @@ func TestMachines_CRUD(t *testing.T) {
 	}
 }
 
-func TestMachines_HardDeleteRemovesAgentUserAndRecordings(t *testing.T) {
+func TestMachines_HardDeleteKeepsRecordingsAndAuditsSessions(t *testing.T) {
 	e := newEnv(t, nil)
 	ctx := context.Background()
 	agentUser := common.NewUser("web-01-agent", "a@x", testPubKey, false)
@@ -169,13 +170,60 @@ func TestMachines_HardDeleteRemovesAgentUserAndRecordings(t *testing.T) {
 	if _, err := e.store.GetUser(ctx, agentUser.ID); err == nil {
 		t.Error("agent user survived machine deletion")
 	}
+	// Only the retention sweep removes recordings.
 	for _, f := range []string{cast, cast + ".gz", cast + ".enc"} {
-		if _, err := os.Stat(f); !os.IsNotExist(err) {
-			t.Errorf("%s survived machine deletion", filepath.Base(f))
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("%s removed by machine deletion: %v", filepath.Base(f), err)
 		}
 	}
 	if len(e.agents.disconnected) != 1 || e.agents.disconnected[0] != e.machine.ID {
 		t.Errorf("agent not disconnected: %v", e.agents.disconnected)
+	}
+
+	logs := e.auditLogsFor("machine.delete")
+	if len(logs) != 1 {
+		t.Fatalf("machine.delete entries = %d, want 1", len(logs))
+	}
+	l := logs[0]
+	recs, _ := l.Metadata["sessions"].([]interface{})
+	if l.UserID != e.admin.ID || l.Metadata["name"] != "web-01" || l.Metadata["session_count"] != float64(1) || len(recs) != 1 {
+		t.Fatalf("machine.delete entry = %+v", l)
+	}
+	rec, _ := recs[0].(map[string]interface{})
+	if rec["id"] != sess.ID || rec["user_id"] != e.alice.ID || rec["remote_user"] != "root" || rec["recording_path"] != cast || rec["start_time"] == "" {
+		t.Errorf("audited session = %v", rec)
+	}
+}
+
+// If the session list cannot be put in the audit log, the machine and its
+// sessions stay.
+func TestMachines_HardDeleteRefusedWhenAuditFails(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	sess := common.NewSession(e.alice.ID, e.machine.ID, "root", t.TempDir())
+	_ = e.store.CreateSession(ctx, sess)
+
+	db, err := sqlOpen(pgtest.DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`ALTER TABLE audit_logs RENAME TO audit_logs_hidden`); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() { _, _ = db.Exec(`ALTER TABLE audit_logs_hidden RENAME TO audit_logs`) }
+	t.Cleanup(restore)
+
+	e.expect(e.do("DELETE", "/api/v1/admin/machines/"+e.machine.ID, e.adminKey, nil), 500)
+	restore()
+	if _, err := e.store.GetMachine(ctx, e.machine.ID); err != nil {
+		t.Errorf("machine deleted without an audit entry: %v", err)
+	}
+	if got, err := e.store.ListMachineSessions(ctx, e.machine.ID); err != nil || len(got) != 1 {
+		t.Errorf("sessions after refused delete = %v, %v", got, err)
+	}
+	if len(e.agents.disconnected) != 0 {
+		t.Errorf("agent disconnected by a refused delete: %v", e.agents.disconnected)
 	}
 }
 

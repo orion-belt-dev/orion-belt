@@ -225,6 +225,22 @@ func (e *env) auditActions() []string {
 	return out
 }
 
+// auditLogsFor returns the audit entries recorded for action, newest first.
+func (e *env) auditLogsFor(action string) []*common.AuditLog {
+	e.t.Helper()
+	logs, err := e.store.ListAuditLogs(context.Background(), 200, 0, nil)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	var out []*common.AuditLog
+	for _, l := range logs {
+		if l.Action == action {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 func (e *env) audited(action string) bool {
 	for _, a := range e.auditActions() {
 		if a == action {
