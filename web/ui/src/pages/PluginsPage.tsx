@@ -321,8 +321,8 @@ function PluginCard({ plugin }: { plugin: PluginInfo }) {
             <SchemaGroup fields={plugin.schema!} values={formValues} onFieldChange={(k, v) => setFormValues((prev) => setPath(prev, [k], v))} />
           ) : (
             <>
-              <label className="field">Config (JSON)</label>
-              <textarea className="mono" rows={14} value={rawText} onChange={(e) => setRawText(e.target.value)} spellCheck={false} />
+              <label className="field" htmlFor="plugins-config-json">Config (JSON)</label>
+              <textarea id="plugins-config-json" className="mono" rows={14} value={rawText} onChange={(e) => setRawText(e.target.value)} spellCheck={false} />
             </>
           )}
 
@@ -344,7 +344,7 @@ export function PluginsPage() {
     queryKey: ["plugins"],
     queryFn: () => api<{ plugins: PluginInfo[] }>("/admin/plugins"),
   });
-  const plugins = [...(q.data?.plugins || [])].sort((a, b) => a.name.localeCompare(b.name));
+  const plugins = (q.data?.plugins || []).toSorted((a, b) => a.name.localeCompare(b.name));
 
   return (
     <>

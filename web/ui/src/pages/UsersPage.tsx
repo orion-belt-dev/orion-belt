@@ -137,16 +137,16 @@ export function UsersPage() {
           <h3>Create user</h3>
           <div className="form-grid">
             <div>
-              <label className="field">Username</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+              <label className="field" htmlFor="users-username">Username</label>
+              <input id="users-username" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </div>
             <div>
-              <label className="field">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <label className="field" htmlFor="users-email">Email</label>
+              <input id="users-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div>
-              <label className="field">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <label className="field" htmlFor="users-role">Role</label>
+              <select id="users-role" value={role} onChange={(e) => setRole(e.target.value)}>
                 <option value="user">user</option>
                 <option value="auditor">auditor</option>
                 <option value="operator">operator</option>
@@ -154,10 +154,10 @@ export function UsersPage() {
               </select>
             </div>
           </div>
-          <label className="field" style={{ marginTop: "0.75rem" }}>
+          <label className="field" htmlFor="users-public-key-optional" style={{ marginTop: "0.75rem" }}>
             Public key (optional)
           </label>
-          <textarea rows={3} value={pubkey} onChange={(e) => setPubkey(e.target.value)} />
+          <textarea id="users-public-key-optional" rows={3} value={pubkey} onChange={(e) => setPubkey(e.target.value)} />
           <button className="btn sm" type="submit" style={{ marginTop: "0.75rem" }}>
             Create
           </button>
@@ -165,66 +165,79 @@ export function UsersPage() {
       ) : null}
       <div className="card">
         <TableToolbar query={table.query} onQuery={table.setQuery} placeholder="Filter users…" />
-        <table>
-          <thead>
-            <tr>
-              <SortTh label="Username" col="username" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Email" col="email" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Role" col="role" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="MFA" col="mfa" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <th>WebAuthn</th>
-              {manage ? <th /> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {processed.rows.map((u) => {
-              const r = u.role || (u.is_admin ? "admin" : "user");
-              const d = draftFor(u);
-              return (
-                <tr key={u.id}>
-                  <td>
-                    <strong>{u.username}</strong>
-                    <div className="mono muted" style={{ fontSize: ".72rem" }}>
-                      {shortId(u.id)}
-                    </div>
-                  </td>
-                  <td>
-                    {manage ? (
-                      <input value={d.email} onChange={(e) => setDraft(u.id, { email: e.target.value })} style={{ minWidth: 160 }} />
-                    ) : (
-                      u.email
-                    )}
-                  </td>
-                  <td>
-                    {manage ? (
-                      <select value={d.role} onChange={(e) => setDraft(u.id, { role: e.target.value })}>
-                        {["user", "auditor", "operator", "admin"].map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Badge status={r}>{r}</Badge>
-                    )}
-                  </td>
-                  <td>{u.mfa_enabled ? "on" : "off"}</td>
-                  <td>{u.webauthn_enabled ? "on" : "off"}</td>
-                  {manage ? (
-                    <td className="row">
-                      <button type="button" className="btn secondary sm" onClick={() => void saveUser(u.id)}>
-                        Save
-                      </button>
-                      <button type="button" className="btn danger sm" onClick={() => void deleteUser(u.id, u.username)}>
-                        Delete
-                      </button>
+        <section className="table-scroll" tabIndex={0} aria-label="Users">
+          <table>
+            <thead>
+              <tr>
+                <SortTh label="Username" col="username" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Email" col="email" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Role" col="role" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="MFA" col="mfa" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <th>WebAuthn</th>
+                {manage ? (
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {processed.rows.map((u) => {
+                const r = u.role || (u.is_admin ? "admin" : "user");
+                const d = draftFor(u);
+                return (
+                  <tr key={u.id}>
+                    <td>
+                      <strong>{u.username}</strong>
+                      <div className="mono muted" style={{ fontSize: ".72rem" }}>
+                        {shortId(u.id)}
+                      </div>
                     </td>
-                  ) : null}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td>
+                      {manage ? (
+                        <input
+                          aria-label={`Email for ${u.username}`}
+                          type="email"
+                          autoComplete="off"
+                          value={d.email}
+                          onChange={(e) => setDraft(u.id, { email: e.target.value })}
+                          style={{ minWidth: 160 }}
+                        />
+                      ) : (
+                        u.email
+                      )}
+                    </td>
+                    <td>
+                      {manage ? (
+                        <select aria-label={`Role for ${u.username}`} value={d.role} onChange={(e) => setDraft(u.id, { role: e.target.value })}>
+                          {["user", "auditor", "operator", "admin"].map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Badge status={r}>{r}</Badge>
+                      )}
+                    </td>
+                    <td>{u.mfa_enabled ? "on" : "off"}</td>
+                    <td>{u.webauthn_enabled ? "on" : "off"}</td>
+                    {manage ? (
+                      <td className="row">
+                        <button type="button" className="btn secondary sm" onClick={() => void saveUser(u.id)}>
+                          Save
+                        </button>
+                        <button type="button" className="btn danger sm" onClick={() => void deleteUser(u.id, u.username)}>
+                          Delete
+                        </button>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
         <Pagination
           page={processed.page}
           pageCount={processed.pageCount}

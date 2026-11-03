@@ -196,54 +196,61 @@ export function AddAgentPage() {
         <h3>Target</h3>
         <div className="form-grid">
           <div>
-            <label className="field">Agent name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="web-01" />
+            <label className="field" htmlFor="addagent-agent-name">Agent name</label>
+            <input id="addagent-agent-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="web-01" />
           </div>
           <div>
-            <label className="field">Hostname</label>
-            <input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="defaults to agent name" />
+            <label className="field" htmlFor="addagent-hostname">Hostname</label>
+            <input id="addagent-hostname" value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="defaults to agent name" />
           </div>
           <div>
-            <label className="field">Host SSH port</label>
-            <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} />
+            <label className="field" htmlFor="addagent-host-ssh-port">Host SSH port</label>
+            <input id="addagent-host-ssh-port" type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} />
           </div>
           <div>
-            <label className="field">Environment tag</label>
-            <input value={env} onChange={(e) => setEnv(e.target.value)} />
+            <label className="field" htmlFor="addagent-environment-tag">Environment tag</label>
+            <input id="addagent-environment-tag" value={env} onChange={(e) => setEnv(e.target.value)} />
           </div>
         </div>
-        <label className="field" style={{ marginTop: "0.85rem" }}>
-          Operating system
-        </label>
-        <div className="os-picker">
-          {OS_OPTIONS.map((o) => (
-            <button key={o.id} type="button" className={`os-card${os === o.id ? " active" : ""}`} onClick={() => setOs(o.id)}>
-              <span className="os-logos">
-                {o.logos.map((src, i) => (
-                  <img key={i} src={src} alt="" width={28} height={28} />
-                ))}
-              </span>
-              <strong>{o.label}</strong>
-              <span className="muted">{o.hint}</span>
-            </button>
-          ))}
-        </div>
+        <fieldset className="plain-group" style={{ marginTop: "0.85rem" }}>
+          <legend className="field">Operating system</legend>
+          <div className="os-picker">
+            {OS_OPTIONS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                className={`os-card${os === o.id ? " active" : ""}`}
+                aria-pressed={os === o.id}
+                onClick={() => setOs(o.id)}
+              >
+                <span className="os-logos">
+                  {o.logos.map((src, i) => (
+                    <img key={i} src={src} alt="" width={28} height={28} />
+                  ))}
+                </span>
+                <strong>{o.label}</strong>
+                <span className="muted">{o.hint}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <p className="muted os-versions">
           Supported: <strong>{selected.versions}</strong>
         </p>
         <h3 style={{ marginTop: "1.25rem" }}>Connection &amp; packages</h3>
         <div className="form-grid">
           <div>
-            <label className="field">Gateway host</label>
-            <input value={gw} onChange={(e) => setGw(e.target.value)} />
+            <label className="field" htmlFor="addagent-gateway-host">Gateway host</label>
+            <input id="addagent-gateway-host" value={gw} onChange={(e) => setGw(e.target.value)} />
           </div>
           <div>
-            <label className="field">Gateway SSH port</label>
-            <input type="number" value={gwPort} onChange={(e) => setGwPort(Number(e.target.value) || 2222)} />
+            <label className="field" htmlFor="addagent-gateway-ssh-port">Gateway SSH port</label>
+            <input id="addagent-gateway-ssh-port" type="number" value={gwPort} onChange={(e) => setGwPort(Number(e.target.value) || 2222)} />
           </div>
           <div>
-            <label className="field">Package base URL</label>
+            <label className="field" htmlFor="addagent-package-base-url">Package base URL</label>
             <input
+              id="addagent-package-base-url"
               value={pkg}
               onChange={(e) => setPkg(e.target.value)}
               placeholder={DEFAULT_PACKAGE_BASE_URL}
@@ -255,8 +262,9 @@ export function AddAgentPage() {
             </p>
           </div>
           <div>
-            <label className="field">Package version</label>
+            <label className="field" htmlFor="addagent-package-version">Package version</label>
             <input
+              id="addagent-package-version"
               value={ver}
               onChange={(e) => {
                 setVer(e.target.value);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiDownload } from "../lib/api";
 import type { AuditLog } from "../lib/types";
@@ -24,15 +24,18 @@ export function AuditPage() {
   const canExportCompliance = role === "admin" || role === "operator" || role === "auditor";
   const table = useTableState<AuditLog>({ pageSize: 25 });
 
-  const userName = (id?: string) => {
-    if (!id) return "—";
-    return users.data?.find((u) => u.id === id)?.username || shortId(id);
-  };
+  const userName = useCallback(
+    (id?: string) => {
+      if (!id) return "—";
+      return users.data?.find((u) => u.id === id)?.username || shortId(id);
+    },
+    [users.data],
+  );
 
   const actions = useMemo(() => {
     const set = new Set<string>();
     for (const l of logs.data || []) if (l.action) set.add(l.action);
-    return [...set].sort();
+    return [...set].toSorted();
   }, [logs.data]);
 
   const filtered = useMemo(() => {
@@ -45,10 +48,11 @@ export function AuditPage() {
       });
     }
     return rows;
-  }, [logs.data, actionFilter, actorFilter, users.data]);
+  }, [logs.data, actionFilter, actorFilter, userName]);
 
+  const processRows = table.process;
   const processed = useMemo(() => {
-    return table.process(
+    return processRows(
       filtered,
       (l, key) => {
         if (key === "time") return l.timestamp ? new Date(l.timestamp).getTime() : 0;
@@ -60,7 +64,7 @@ export function AuditPage() {
       },
       (l) => `${userName(l.user_id)} ${l.action} ${l.resource || ""} ${l.ip_address || ""} ${l.id}`,
     );
-  }, [filtered, table.query, table.sortKey, table.sortDir, table.page, table.pageSize, users.data]);
+  }, [filtered, processRows, userName]);
 
   async function exportAudit(format: "pdf" | "csv" | "json") {
     setExportErr("");
@@ -109,7 +113,14 @@ export function AuditPage() {
             onChange={(e) => table.setQuery(e.target.value)}
             placeholder="Search logs…"
           />
-          <select value={actionFilter} onChange={(e) => { setActionFilter(e.target.value); table.setPage(0); }}>
+          <select
+            aria-label="Filter by action"
+            value={actionFilter}
+            onChange={(e) => {
+              setActionFilter(e.target.value);
+              table.setPage(0);
+            }}
+          >
             <option value="">All actions</option>
             {actions.map((a) => (
               <option key={a} value={a}>
@@ -123,43 +134,45 @@ export function AuditPage() {
             placeholder="Actor…"
             style={{ maxWidth: 160 }}
           />
-          <select value={limit} onChange={(e) => setLimit(Number(e.target.value) || 200)}>
+          <select aria-label="Entries to load" value={limit} onChange={(e) => setLimit(Number(e.target.value) || 200)}>
             <option value={50}>50</option>
             <option value={100}>100</option>
             <option value={200}>200</option>
             <option value={500}>500</option>
           </select>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <SortTh label="Time" col="time" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Actor" col="actor" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Action" col="action" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="Resource" col="resource" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-              <SortTh label="IP" col="ip" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {processed.rows.length === 0 ? (
+        <section className="table-scroll" tabIndex={0} aria-label="Audit log">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={5} className="empty">
-                  No audit events.
-                </td>
+                <SortTh label="Time" col="time" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Actor" col="actor" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Action" col="action" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="Resource" col="resource" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
+                <SortTh label="IP" col="ip" sortKey={table.sortKey} sortDir={table.sortDir} onSort={table.toggleSort} />
               </tr>
-            ) : (
-              processed.rows.map((l) => (
-                <tr key={l.id}>
-                  <td className="mono">{fmtTime(l.timestamp)}</td>
-                  <td>{userName(l.user_id)}</td>
-                  <td className="mono">{l.action}</td>
-                  <td className="mono">{l.resource || "—"}</td>
-                  <td className="mono">{l.ip_address || "—"}</td>
+            </thead>
+            <tbody>
+              {processed.rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="empty">
+                    No audit events.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                processed.rows.map((l) => (
+                  <tr key={l.id}>
+                    <td className="mono">{fmtTime(l.timestamp)}</td>
+                    <td>{userName(l.user_id)}</td>
+                    <td className="mono">{l.action}</td>
+                    <td className="mono">{l.resource || "—"}</td>
+                    <td className="mono">{l.ip_address || "—"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
         <Pagination
           page={processed.page}
           pageCount={processed.pageCount}

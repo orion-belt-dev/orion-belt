@@ -8,9 +8,15 @@
   --line: #22324a;
   --line-soft: rgba(34, 50, 74, 0.6);
   --text: #f4f8fc;
-  --muted: #64748b;
-  --faint: #4b5a70;
+  --muted: #8a99ae;
+  --faint: #7a8aa0;
   --accent: #146ef5;
+  /* Text in brand and status colours: each passes WCAG AA (4.5:1) on every
+     surface of its theme. The base colours stay for fills and borders. */
+  --accent-text: #4d94ff;
+  --ok-text: #22c55e;
+  --warn-text: #f59e0b;
+  --danger-text: #f87171;
   --accent-electric: #33b8ff;
   --accent-soft: rgba(20, 110, 245, 0.14);
   --accent-glow: rgba(20, 110, 245, 0.32);
@@ -39,7 +45,11 @@
   --line-soft: rgba(34, 50, 74, 0.14);
   --text: #08111f;
   --muted: #56657b;
-  --faint: #8393a8;
+  --faint: #556579;
+  --accent-text: #0d5bd1;
+  --ok-text: #166534;
+  --warn-text: #92400e;
+  --danger-text: #b91c1c;
   --accent-soft: rgba(20, 110, 245, 0.09);
   --accent-glow: rgba(20, 110, 245, 0.22);
   --shadow: 0 10px 30px rgba(8, 17, 31, 0.08);
@@ -73,11 +83,11 @@ body {
 }
 h1, h2, .nav-brand, .login-brand, .card h3 { font-family: var(--font-head); letter-spacing: -0.01em; }
 button, input, textarea, select { font: inherit; color: inherit; }
-a { color: var(--accent); }
+a { color: var(--accent-text); }
 .mono { font-family: var(--mono); font-size: 0.84rem; }
 .muted { color: var(--muted); }
-.err { color: var(--danger); margin: 0.5rem 0; }
-.okmsg { color: var(--ok); margin: 0.5rem 0; }
+.err { color: var(--danger-text); margin: 0.5rem 0; }
+.okmsg { color: var(--ok-text); margin: 0.5rem 0; }
 
 .btn {
   display: inline-flex;
@@ -171,10 +181,13 @@ input:focus, textarea:focus, select:focus {
   background: var(--bg-panel);
   border: 1px solid var(--line);
 }
-.badge.ok { color: var(--ok); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.1); }
-.badge.warn { color: var(--warn); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
-.badge.danger { color: var(--danger); border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.1); }
+.badge.ok { color: var(--ok-text); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.1); }
+.badge.warn { color: var(--warn-text); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.1); }
+.badge.danger { color: var(--danger-text); border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.1); }
 .badge.neutral { color: var(--muted); }
+/* A <fieldset> grouping related controls without the browser's box. */
+.plain-group { border: 0; margin: 0; padding: 0; min-width: 0; }
+.plain-group > legend { padding: 0; }
 /* A checkbox beside a label that may wrap: the box stays on the first line. */
 .check-row { display: flex; gap: 0.5rem; align-items: flex-start; }
 .check-row input { margin-top: 0.2rem; flex: none; width: auto; }
@@ -254,7 +267,7 @@ nav.side {
 }
 .nav-brand em {
   font-style: normal;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .nav-collapse-btn {
   flex-shrink: 0;
@@ -424,7 +437,7 @@ nav.side a.nav-item.active {
   padding: 0.2rem 0.45rem;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .login-stage {
@@ -469,7 +482,7 @@ nav.side a.nav-item.active {
   margin: 0 0 0.35rem;
   letter-spacing: -0.02em;
 }
-.login-brand em { color: var(--accent); font-style: normal; font-weight: 600; }
+.login-brand em { color: var(--accent-text); font-style: normal; font-weight: 600; }
 .login-tag { color: var(--muted); margin: 0 0 1.25rem; }
 
 .os-picker {
@@ -649,7 +662,7 @@ pre.code, pre.session {
   padding: 0;
   font: inherit;
 }
-.file-row-name:hover { color: var(--accent); }
+.file-row-name:hover { color: var(--accent-text); }
 .file-row-name.dir { font-weight: 600; }
 
 .table-toolbar {
@@ -676,7 +689,7 @@ pre.code, pre.session {
   align-items: center;
   gap: 0.35rem;
 }
-.th-sort.active { color: var(--accent); }
+.th-sort.active { color: var(--accent-text); }
 .th-ind { font-size: 0.7rem; opacity: 0.7; }
 .pager {
   display: flex;
@@ -792,21 +805,15 @@ pre.code, pre.session {
   background: var(--bg-panel);
 }
 
-:root[data-theme="light"] .palette-backdrop { background: rgba(8, 17, 31, 0.35); }
-.palette-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: rgba(4, 10, 12, 0.62);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 12vh 1rem 2rem;
-  backdrop-filter: blur(2px);
-}
+/* Native modal <dialog>: the browser traps focus and handles Esc. */
+.palette::backdrop { background: rgba(4, 10, 12, 0.62); backdrop-filter: blur(2px); }
+:root[data-theme="light"] .palette::backdrop { background: rgba(8, 17, 31, 0.35); }
 .palette {
-  width: min(560px, 100%);
+  width: min(560px, calc(100% - 2rem));
+  max-width: none;
+  margin: 12vh auto auto;
   padding: 0;
+  color: inherit;
   overflow: hidden;
   animation: palette-in 0.16s var(--ease);
 }

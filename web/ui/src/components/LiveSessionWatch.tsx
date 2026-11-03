@@ -38,8 +38,8 @@ export function LiveSessionWatch({ sessionId, onClose }: { sessionId: string; on
     if (jwt) q.set("access_token", jwt);
     const ws = new WebSocket(`${proto}://${location.host}/api/v1/sessions/${encodeURIComponent(sessionId)}/watch?${q}`);
     ws.binaryType = "arraybuffer";
-    ws.onopen = () => setStatus("live");
-    ws.onmessage = (ev) => {
+    ws.addEventListener("open", () => setStatus("live"));
+    ws.addEventListener("message", (ev) => {
       if (typeof ev.data === "string") {
         term.write(ev.data);
         return;
@@ -49,9 +49,9 @@ export function LiveSessionWatch({ sessionId, onClose }: { sessionId: string; on
         return;
       }
       term.write(new Uint8Array(ev.data as ArrayBuffer));
-    };
-    ws.onerror = () => setStatus("error");
-    ws.onclose = () => setStatus("ended");
+    });
+    ws.addEventListener("error", () => setStatus("error"));
+    ws.addEventListener("close", () => setStatus("ended"));
 
     const onResize = () => {
       try {

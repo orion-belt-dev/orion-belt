@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth, useHomePath } from "../auth/AuthContext";
@@ -44,6 +44,12 @@ export function LoginPage() {
   const [totp, setTotp] = useState("");
   const [ticket, setTicket] = useState("");
   const [needTotp, setNeedTotp] = useState(false);
+  const totpRef = useRef<HTMLInputElement>(null);
+  // The code field appears after the password step is submitted; move focus
+  // to it so keyboard and screen-reader users land on the new field.
+  useEffect(() => {
+    if (needTotp) totpRef.current?.focus();
+  }, [needTotp]);
   const [code, setCode] = useState(searchParams.get("code") || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -197,8 +203,8 @@ export function LoginPage() {
 
         {method !== "device" ? (
           <>
-            <label className="field">Username</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+            <label className="field" htmlFor="login-username">Username</label>
+            <input id="login-username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
           </>
         ) : null}
 
@@ -210,8 +216,9 @@ export function LoginPage() {
 
         {method === "password" ? (
           <form onSubmit={(e) => void onPassword(e)}>
-            <label className="field">Password</label>
+            <label className="field" htmlFor="login-password">Password</label>
             <input
+              id="login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -221,14 +228,15 @@ export function LoginPage() {
             />
             {needTotp ? (
               <>
-                <label className="field">Authenticator code</label>
+                <label className="field" htmlFor="login-authenticator-code">Authenticator code</label>
                 <input
+                  id="login-authenticator-code"
                   value={totp}
                   onChange={(e) => setTotp(e.target.value)}
                   autoComplete="one-time-code"
                   inputMode="numeric"
                   required
-                  autoFocus
+                  ref={totpRef}
                 />
               </>
             ) : null}
@@ -243,8 +251,9 @@ export function LoginPage() {
             <p className="muted" style={{ margin: "0 0 0.75rem", fontSize: "0.85rem" }}>
               On your laptop run <code>osh login</code>, then paste the code (or open the printed URL).
             </p>
-            <label className="field">Sign-in code</label>
+            <label className="field" htmlFor="login-sign-in-code">Sign-in code</label>
             <input
+              id="login-sign-in-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="e.g. 7K4M9PQRXZ"

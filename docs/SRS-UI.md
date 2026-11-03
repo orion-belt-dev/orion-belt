@@ -26,7 +26,8 @@ This SRS is the acceptance baseline for UI regressions and for matching OpenAPI 
 - First-class login with SSH pubkey, optional TOTP, and WebAuthn/FIDO2
 - Live PTY terminal over WebSocket with session recording (`source=web`)
 - Timed cast session playback (xterm), audit log browser, user/machine admin CRUD
-- **Add agent** install-script generator (OS-specific)
+- **Add agent** install-script generator (OS-specific); the script installs only packages matching the release's signed checksums unless **Allow an unsigned local build** is ticked, which warns and is audited
+- Accessible to WCAG 2.2 AA in both themes: labelled controls, keyboard-scrollable tables, the command palette is a modal `<dialog>` (focus trapped, Esc closes)
 - Dashboard usage analytics with selectable window and auto-refresh
 - Visible **build version** so operators can confirm shipped features
 - In-app **notification bell** (access-request approvals and similar)
@@ -141,7 +142,7 @@ Parity with the original console FRs remains the Phase 1 bar:
 2. Open `/ui/` — login brand + version visible
 3. Admin login shows **Add agent** under Agents
 4. Terminal connect → disconnect → Sessions playback works for `.cast`
-5. Add agent generates install script (`POST /admin/agents/install-script`)
+5. Add agent generates install script (`POST /admin/agents/install-script`); with **Allow an unsigned local build** ticked the script is flagged and the audit entry records `allow_unsigned_build`
 6. Role `user` cannot open `/add-agent` or `/agents`
 7. `/catalog` lists only capabilities tied to the signed-in user; **Request** on a row files the access request and the row turns *pending*
 

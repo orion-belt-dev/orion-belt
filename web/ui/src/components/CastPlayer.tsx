@@ -210,6 +210,7 @@ export function CastPlayer({ sessionId, text }: { sessionId: string; text: strin
           {fmtCastTime(clock)} / {fmtCastTime(duration)}
         </span>
         <select
+          aria-label="Playback speed"
           value={speed}
           onChange={(e) => {
             const spd = Number(e.target.value) || 1;
