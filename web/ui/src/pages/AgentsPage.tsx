@@ -156,7 +156,7 @@ export function AgentsPage() {
     }
     if (
       !confirm(
-        `Permanently delete ${m.name}?\n\nThis removes related permissions, access requests, session history, and recordings for this agent.\n\nIf you need to keep those records, cancel and Archive the agent instead.`,
+        `Permanently delete ${m.name}?\n\nThis removes related permissions, access requests, and session history for this agent. The session list is kept in the audit log, and recordings stay on disk until the recording retention period ends.\n\nIf you need to keep those records, cancel and Archive the agent instead.`,
       )
     ) {
       return;

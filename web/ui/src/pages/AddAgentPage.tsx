@@ -82,6 +82,7 @@ type ScriptResp = {
   filename: string;
   message?: string;
   machine_id?: string;
+  unsigned_build?: boolean;
 };
 
 export function AddAgentPage() {
@@ -106,6 +107,8 @@ export function AddAgentPage() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [allowUnsigned, setAllowUnsigned] = useState(false);
+  const [unsignedScript, setUnsignedScript] = useState(false);
 
   // Prefer the server's advertised public SSH address over window.location
   // (which is wrong behind a reverse proxy or when the UI is on a different host).
@@ -165,10 +168,12 @@ export function AddAgentPage() {
           gateway_port: gwPort,
           package_base_url: pkg.trim(),
           version: ver.trim(),
+          allow_unsigned_build: allowUnsigned,
           tags: { os, environment: env.trim() || "production" },
         }),
       });
       setScript(res.script || "");
+      setUnsignedScript(Boolean(res.unsigned_build));
       setFilename(res.filename || `orion-belt-install-${name.trim()}.sh`);
       setMsg(res.message || "Script ready.");
       toast("Agent registered — run the script on the host");
@@ -265,6 +270,27 @@ export function AddAgentPage() {
             </p>
           </div>
         </div>
+        <label className="check-row" style={{ marginTop: "0.85rem" }}>
+          <input
+            type="checkbox"
+            checked={allowUnsigned}
+            onChange={(e) => setAllowUnsigned(e.target.checked)}
+            aria-describedby="unsigned-build-help"
+          />
+          <span>
+            Allow an unsigned local build
+            <span id="unsigned-build-help" className="muted" style={{ display: "block", fontSize: "0.85em" }}>
+              Off: the script installs only packages that match the release's signed checksums. On: it also accepts a
+              local snapshot build (<code>make serve-packages</code>) the release key did not sign. Recorded in the audit
+              log.
+            </span>
+          </span>
+        </label>
+        {allowUnsigned ? (
+          <p className="notice warn" role="note">
+            Unsigned packages can be swapped by anyone between this host and the package base URL. Use only a build you trust.
+          </p>
+        ) : null}
         {err ? <div className="err">{err}</div> : null}
         <div className="row" style={{ marginTop: "1rem" }}>
           <button className="btn" type="submit" disabled={busy}>
@@ -292,6 +318,11 @@ export function AddAgentPage() {
               </a>
             </div>
           </div>
+          {unsignedScript ? (
+            <p className="notice warn" role="alert">
+              This script accepts unsigned packages (allow unsigned local build).
+            </p>
+          ) : null}
           <p className="muted">{msg}</p>
           <pre className="code">{script}</pre>
         </div>
