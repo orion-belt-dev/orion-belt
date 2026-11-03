@@ -68,6 +68,10 @@ type AgentConnection struct {
 
 // New creates a new Orion-Belt server
 func New(config *common.Config, logger *common.Logger) (*Server, error) {
+	if err := common.ValidateJWTSecret(config.Auth.JWTSecret); err != nil {
+		return nil, err
+	}
+
 	// Initialize database
 	store, err := database.NewStore(config.Database.Driver, config.Database.ConnectionString)
 	if err != nil {

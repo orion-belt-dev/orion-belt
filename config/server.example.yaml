@@ -22,6 +22,8 @@ database:
 auth:
   rebac_enabled: true
   allow_temp_access: true
+  # Required for browser and token sign-in. The server refuses to start with
+  # this placeholder or anything under 32 bytes: openssl rand -hex 32
   jwt_secret: "change-me-to-a-long-random-secret"
   jwt_expiry_hours: 24
   mfa_required: false
