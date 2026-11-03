@@ -977,8 +977,9 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 	// finaliser below to write each recording.
 	var agentMu sync.Mutex
 	var agentCh ssh.Channel
+	// Close only: writing a notice here would race the proxy's own
+	// CloseWrite on the same channel, which x/crypto/ssh does not allow.
 	stop := func() {
-		_, _ = clientChannel.Write([]byte("\r\nOrion Belt gateway is shutting down; session ended.\r\n"))
 		_ = clientChannel.Close()
 		agentMu.Lock()
 		if agentCh != nil {

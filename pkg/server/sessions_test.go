@@ -61,9 +61,6 @@ func TestStop_EndsLiveSessionsAndKeepsTheirRecordings(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("client session still open after Stop")
 	}
-	if !strings.Contains(out.String(), "shutting down") {
-		t.Errorf("client output = %q, want the shutdown notice", out.String())
-	}
 	if _, err := os.Stat(filepath.Join(h.cfg.Recording.StoragePath, id+".cast")); err != nil {
 		t.Errorf("recording not written before Stop returned: %v", err)
 	}
