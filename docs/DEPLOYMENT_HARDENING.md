@@ -84,6 +84,21 @@ network, and again before tagging a release (see
       [OBSERVABILITY.md](OBSERVABILITY.md) are a starting point.
 - [ ] Apply package updates promptly, and run `make cve` in CI.
 
+### Upgrading to TIMESTAMPTZ columns
+
+Databases created by earlier releases store times without a time zone, as
+the server's local wall clock, so grant expiry drifted when the server and
+Postgres ran in different zones. On its first start after the upgrade the
+server converts those columns to `TIMESTAMPTZ`. Each Orion Belt table is
+rewritten once under an exclusive lock, so expect a pause on a large
+`audit_logs` table and plan the upgrade for a quiet period.
+
+The conversion needs the zone the old server ran in. It is `UTC` on a UTC
+host (containers and the packaged service), otherwise `TZ` or the
+`/etc/localtime` link. If none of those settles it, the server stops with an
+error: set `ORION_DB_LEGACY_TIMEZONE` (for example `Europe/Paris`) and start
+it again. The variable is read only while unconverted columns remain.
+
 ## Drills
 
 - [ ] Offboard a user: revoke their grants, API keys and SSH certificates,

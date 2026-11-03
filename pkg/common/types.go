@@ -194,12 +194,11 @@ type Permission struct {
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
-// FromDBTimestamp turns a value read from a TIMESTAMP (without time zone)
-// column back into the instant that was written. Writers store the server's
-// local wall clock and lib/pq returns it labelled UTC; on a UTC host this is
-// a no-op.
+// FromDBTimestamp normalises a time read from the database to UTC. Columns
+// are TIMESTAMPTZ, so the value is already the instant that was written;
+// before that they held the server's wall clock, which this used to undo.
 func FromDBTimestamp(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.Local).UTC()
+	return t.UTC()
 }
 
 // Why a grant version stopped applying (PermissionVersion.EndReason).
