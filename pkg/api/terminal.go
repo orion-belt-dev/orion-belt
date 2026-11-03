@@ -25,6 +25,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// wsWriteTimeout bounds one write to a browser WebSocket.
+const wsWriteTimeout = 10 * time.Second
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
@@ -209,7 +212,13 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 				if sessionRecorder != nil {
 					_ = sessionRecorder.Write(buf[:n])
 				}
-				_ = conn.WriteMessage(websocket.BinaryMessage, buf[:n])
+				// A browser that stops reading must not stall this loop
+				// (and the session's recording) forever.
+				_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+				if werr := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); werr != nil {
+					_ = conn.Close()
+					return
+				}
 			}
 			if err != nil {
 				// Agent side ended first — unblock the WS read loop.

@@ -143,6 +143,36 @@ func TestTerminalWS_Refusals(t *testing.T) {
 
 // --- live session watch -----------------------------------------------------------------
 
+// A viewer leaving a session that prints nothing used to keep its handler,
+// connection and subscription until the session's next output.
+func TestSessionWatchWS_ViewerLeavingIdleSessionIsReleased(t *testing.T) {
+	e := newEnv(t, nil)
+	sess := common.NewSession(e.alice.ID, e.machine.ID, "root", "/r")
+	_ = e.store.CreateSession(context.Background(), sess)
+	if _, err := e.recorder.StartRecording(sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = e.recorder.StopRecording(sess.ID) })
+
+	conn, _, err := e.dialWS("/api/v1/sessions/"+sess.ID+"/watch", e.aliceKey)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	hub := e.recorder.Hub()
+	waitFor := func(want int) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); hub.Watchers(sess.ID) != want; {
+			if time.Now().After(deadline) {
+				t.Fatalf("watchers = %d, want %d", hub.Watchers(sess.ID), want)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitFor(1)
+	_ = conn.Close() // no output was ever sent
+	waitFor(0)
+}
+
 func TestSessionWatchWS(t *testing.T) {
 	e := newEnv(t, nil)
 	ctx := context.Background()
