@@ -20,7 +20,7 @@ Set at least these values:
 |---|---|
 | `server.public_url` | The origin browsers and API clients use, such as `https://orion.example.com`. This is not the bind address. Agents connect to this URL's host on port 2222 unless `public_ssh_host` or `public_ssh_port` say otherwise. |
 | `database.connection_string` | PostgreSQL connection string. |
-| `auth.jwt_secret` | A long random string, for example from `openssl rand -hex 32`. Do not keep the example value. |
+| `auth.jwt_secret` | Generated on package install (and by `orion-belt-server setup`) when the file still has the example value. Set your own with `openssl rand -hex 32`; the server refuses the example value or anything under 32 bytes. |
 
 The install script and `orion-belt-server setup` both ask for the public URL
 and write it for you.

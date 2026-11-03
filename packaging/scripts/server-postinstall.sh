@@ -20,6 +20,20 @@ mkdir -p /var/lib/orion-belt/recordings /var/log/orion-belt /etc/orion-belt
 # covering these three trees — ownership must match or startup/setup fail.
 chown -R orionbelt:orionbelt /var/lib/orion-belt /var/log/orion-belt /etc/orion-belt 2>/dev/null || true
 chmod 750 /var/lib/orion-belt /var/log/orion-belt /etc/orion-belt 2>/dev/null || true
+# The shipped server.yaml carries a placeholder jwt_secret, which is public
+# (it is in the repository), and the server refuses to start with it. Replace
+# it with a random secret, on install and on upgrade alike, so a server still
+# on the placeholder is fixed rather than left unable to start. Tokens signed
+# with the old value stop working. A secret already set is never touched.
+cfg=/etc/orion-belt/server.yaml
+if [ -f "$cfg" ] && grep -Eq '^[[:space:]]*jwt_secret:[[:space:]]*"?change-me-to-a-long-random-secret"?[[:space:]]*$' "$cfg"; then
+  secret=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+  if [ ${#secret} -eq 64 ]; then
+    sed -i -E "s|^([[:space:]]*jwt_secret:[[:space:]]*).*\$|\1\"$secret\"|" "$cfg"
+    echo "Generated a random auth.jwt_secret in $cfg"
+  fi
+fi
+
 # server.yaml may have been unpacked as root:root 644 from the package; tighten.
 if [ -f /etc/orion-belt/server.yaml ]; then
   chown orionbelt:orionbelt /etc/orion-belt/server.yaml 2>/dev/null || true
@@ -50,7 +64,7 @@ Next steps (setup wizard):
      - server.public_url          (UI/API origin agents and browsers use)
      - server.public_ssh_host/port (optional; defaults from public_url)
      - database.connection_string
-     - auth.jwt_secret
+     (auth.jwt_secret was generated for you)
 
   2. Enable and start the service:
 $("$svc" hint 2>/dev/null || true)

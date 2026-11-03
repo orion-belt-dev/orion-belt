@@ -56,9 +56,11 @@ network, and again before tagging a release (see
       real secrets.
 - [ ] Keep the recording encryption key, database password, JWT secret and
       webhook URLs in a secret store or a restricted `EnvironmentFile`.
-- [ ] Set `auth.jwt_secret` to a random value (`openssl rand -hex 32`). The
-      server refuses to start with the example placeholder or a secret under
-      32 bytes, since anyone could forge an admin token with either.
+- [ ] Check `auth.jwt_secret` is a random value (`openssl rand -hex 32`). The
+      package install and `orion-belt-server setup` replace the example
+      placeholder with one; the server refuses to start with the placeholder
+      or a secret under 32 bytes, since anyone could forge an admin token with
+      either. Replacing the secret signs everyone out.
 - [ ] Rotate webhooks and API keys when people leave. Revoke unused keys under
       **Security > API keys**.
 - [ ] Protect `ssh_ca.master_key` and the CA private keys as the most
