@@ -47,6 +47,8 @@ type Server struct {
 	agents        map[string]*AgentConnection
 	agentsMu      sync.RWMutex
 	shutdown      chan struct{}
+	stopOnce      sync.Once
+	sessions      liveSessions
 	ca            *ca.Authority
 	kubeLocks     kubeLocks
 	kubeInterval  time.Duration // kubeReconcileInterval, read once at New
@@ -966,6 +968,26 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 	recordingPath := s.recorder.GetRecordingStoragePath()
 	session := common.NewSession(userID, machine.ID, remoteUser, recordingPath)
 
+	// Shutdown ends live sessions through stop, then waits for the deferred
+	// finaliser below to write each recording.
+	var agentMu sync.Mutex
+	var agentCh ssh.Channel
+	stop := func() {
+		_, _ = clientChannel.Write([]byte("\r\nOrion Belt gateway is shutting down; session ended.\r\n"))
+		_ = clientChannel.Close()
+		agentMu.Lock()
+		if agentCh != nil {
+			_ = agentCh.Close()
+		}
+		agentMu.Unlock()
+	}
+	if !s.sessions.begin(session.ID, stop) {
+		clientChannel.Write([]byte("Orion Belt gateway is shutting down\n"))
+		clientChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 1})
+		return
+	}
+	defer s.sessions.end(session.ID)
+
 	// TODO(security): fail closed when the session record or recording cannot
 	// be created. Today both errors are logged and the session still starts,
 	// so an SSH session can run with no audit trail (e.g. recording disk full
@@ -989,6 +1011,18 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 	if err != nil {
 		s.logger.Error("Failed to start recording: %v", err)
 	}
+	// Deferred so every way out, including a failed agent channel, closes
+	// the record and writes the recording (it was left in memory before).
+	// WithoutCancel: shutdown must not cancel the final writes.
+	endCtx := context.WithoutCancel(ctx)
+	defer func() {
+		if err := s.store.EndSession(endCtx, session.ID, time.Now()); err != nil {
+			s.logger.Error("Failed to close session record %s: %v", session.ID, err)
+		}
+		if sessionRecorder != nil {
+			_ = s.recorder.StopRecording(session.ID)
+		}
+	}()
 
 	// Trigger session start hook
 	hookCtx := &plugin.HookContext{
@@ -1022,6 +1056,9 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 		return
 	}
 	openSpan.End()
+	agentMu.Lock()
+	agentCh = agentChannel
+	agentMu.Unlock()
 
 	s.logger.Info("Successfully opened session channel to agent")
 
@@ -1075,10 +1112,6 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 		s.startInteractiveShell(clientChannel, agentChannel, agentReqs, sessionRecorder, remoteUser)
 		shellSpan.End()
 	}
-
-	endTime := time.Now()
-	s.store.EndSession(ctx, session.ID, endTime)
-	s.recorder.StopRecording(session.ID)
 
 	s.pluginManager.TriggerHook(ctx, plugin.HookSessionEnd, hookCtx)
 	metrics.Default.SessionEnded()
@@ -1137,6 +1170,8 @@ func (s *Server) executeCommand(clientChannel, agentChannel ssh.Channel, agentRe
 	select {
 	case <-exitStatusReceived:
 		s.logger.Info("Exit status received and forwarded successfully")
+	case <-s.shutdown:
+		// Shutdown closed the agent channel; no status is coming.
 	case <-time.After(5 * time.Second):
 		s.logger.Warn("Timeout waiting for exit status")
 		clientChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 1})
@@ -1251,7 +1286,16 @@ func (s *Server) proxyConnection(client, agent ssh.Channel, recorder *recording.
 const shellOutputDrain = time.Second
 
 // Stop stops the SSH server
+// Stop shuts the server down: no new connections or sessions, live sessions
+// are ended and given until ctx expires to write their recordings, then the
+// plugins and the store close. Calling it again is a no-op.
 func (s *Server) Stop(ctx context.Context) error {
+	var err error
+	s.stopOnce.Do(func() { err = s.stop(ctx) })
+	return err
+}
+
+func (s *Server) stop(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
 
 	close(s.shutdown)
@@ -1261,6 +1305,10 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.listener.Close()
 	}
 	s.listenerMu.Unlock()
+
+	if err := s.sessions.drain(ctx); err != nil {
+		s.logger.Warn("Shutdown did not wait for every session to finish its recording: %v", err)
+	}
 
 	if err := s.pluginManager.ShutdownAll(ctx); err != nil {
 		s.logger.Error("Failed to shutdown plugins: %v", err)
