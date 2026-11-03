@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,11 @@ type APIServer struct {
 	bootstrap       *bootstrapStore
 	passwordTickets *passwordTicketStore
 	serverCfg       common.ServerConfig
+
+	// The HTTP server Start runs, kept for Shutdown.
+	httpMu     sync.Mutex
+	httpSrv    *http.Server
+	httpClosed bool
 }
 
 // AgentCommander sends control commands to connected agents.
@@ -134,6 +140,8 @@ func NewAPIServer(store database.Store, authService *auth.AuthService, logger *c
 	}
 
 	api.router.Use(gin.Recovery())
+	api.router.Use(securityHeadersMiddleware(opt.Server.PublicURL))
+	api.router.Use(bodyLimitMiddleware())
 	api.router.Use(api.loggingMiddleware())
 	api.router.Use(api.metricsMiddleware())
 	api.setupRoutes(opt.MetricsEnabled)

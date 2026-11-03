@@ -1309,6 +1309,11 @@ func (s *Server) stop(ctx context.Context) error {
 	if err := s.sessions.drain(ctx); err != nil {
 		s.logger.Warn("Shutdown did not wait for every session to finish its recording: %v", err)
 	}
+	if s.apiServer != nil {
+		if err := s.apiServer.Shutdown(ctx); err != nil {
+			s.logger.Warn("API server shutdown: %v", err)
+		}
+	}
 
 	if err := s.pluginManager.ShutdownAll(ctx); err != nil {
 		s.logger.Error("Failed to shutdown plugins: %v", err)

@@ -269,11 +269,6 @@ func hashSessionToken(token string) string {
 }
 
 // Start starts the API server
-func (s *APIServer) Start(addr string) error {
-	s.logger.Info("Starting API server on %s", addr)
-	return s.router.Run(addr)
-}
-
 // Router returns the Gin router
 func (s *APIServer) Router() *gin.Engine {
 	return s.router
