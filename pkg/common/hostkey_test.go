@@ -3,6 +3,7 @@ package common
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"os"
 	"path/filepath"
 	"testing"
@@ -136,7 +137,9 @@ func TestHostKeyCallbackRejectsUntrustedCASignedCert(t *testing.T) {
 	}
 }
 
-func TestHostKeyCallbackFallsBackToTOFUForRawKeyWhenCAConfigured(t *testing.T) {
+// With a Host CA, a raw key is accepted only if already pinned; an unknown
+// one is refused rather than learned (an impostor could omit the cert).
+func TestHostKeyCallbackRawKeyWhenCAConfigured(t *testing.T) {
 	dir := t.TempDir()
 	kh := filepath.Join(dir, "known_hosts")
 
@@ -151,11 +154,25 @@ func TestHostKeyCallbackFallsBackToTOFUForRawKeyWhenCAConfigured(t *testing.T) {
 		t.Fatalf("NewHostKeyCallback: %v", err)
 	}
 
-	// A host presenting a raw (non-cert) key — e.g. not yet migrated to the
-	// Host CA — should still be verifiable via the legacy TOFU fallback.
 	rawKey := mustTestPublicKey(t)
-	if err := cb("legacy-host.example.com:2222", &mockAddr{s: "127.0.0.1:2222"}, rawKey); err != nil {
-		t.Fatalf("expected TOFU fallback to accept an unmigrated host's raw key, got: %v", err)
+	addr := &mockAddr{s: "127.0.0.1:2222"}
+	if err := cb("impostor.example.com:2222", addr, rawKey); err == nil {
+		t.Fatal("unknown raw key accepted although a Host CA is configured")
+	}
+	pinned := knownhosts.Line([]string{knownhosts.Normalize("legacy-host.example.com:2222")}, rawKey)
+	if err := os.WriteFile(kh, []byte(pinned+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cb, err = NewHostKeyCallback(HostKeyConfig{
+		KnownHosts:            kh,
+		StrictHostKeyChecking: "ask",
+		HostCAPublicKey:       string(ssh.MarshalAuthorizedKey(hostCA.PublicKey())),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cb("legacy-host.example.com:2222", addr, rawKey); err != nil {
+		t.Errorf("pinned raw key refused: %v", err)
 	}
 }
 
