@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -131,6 +132,30 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 	ctx := c.Request.Context()
 	storagePath := s.recorder.GetRecordingStoragePath()
 	session := common.NewSessionWithSource(uid, m.ID, remoteUser, storagePath, "web")
+
+	// Shutdown ends the session through stop and waits for the deferred
+	// finaliser below to write its recording and close its record.
+	var liveMu sync.Mutex
+	var liveConn *websocket.Conn
+	var liveCh ssh.Channel
+	stop := func() {
+		liveMu.Lock()
+		defer liveMu.Unlock()
+		if liveConn != nil {
+			msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "gateway is shutting down; session ended")
+			_ = liveConn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(time.Second))
+			_ = liveConn.Close()
+		}
+		if liveCh != nil {
+			_ = liveCh.Close()
+		}
+	}
+	if !s.webSessions.Begin(session.ID, stop) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "server is shutting down"})
+		return
+	}
+	defer s.webSessions.End(session.ID)
+
 	if err := s.store.CreateSession(ctx, session); err != nil {
 		s.logger.Error("Failed to create web terminal session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session record"})
@@ -169,6 +194,9 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 		return
 	}
 	defer conn.Close()
+	liveMu.Lock()
+	liveConn = conn
+	liveMu.Unlock()
 	defer func() {
 		endTime := time.Now()
 		bg := context.Background()
@@ -189,6 +217,9 @@ func (s *APIServer) terminalWS(c *gin.Context) {
 		return
 	}
 	defer channel.Close()
+	liveMu.Lock()
+	liveCh = channel
+	liveMu.Unlock()
 	go ssh.DiscardRequests(reqs)
 
 	ptyPayload := struct {

@@ -2,49 +2,14 @@ package server
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/orion-belt-dev/orion-belt/pkg/database"
 )
-
-func TestLiveSessions_DrainEndsAndWaits(t *testing.T) {
-	var l liveSessions
-	var stopped atomic.Int32
-	release := make(chan struct{})
-	if !l.begin("a", func() { stopped.Add(1); close(release) }) {
-		t.Fatal("begin refused before shutdown")
-	}
-	// The session finishes (writes its recording) only once stopped.
-	go func() {
-		<-release
-		l.end("a")
-	}()
-	if err := l.drain(context.Background()); err != nil {
-		t.Fatalf("drain: %v", err)
-	}
-	if stopped.Load() != 1 {
-		t.Errorf("stop called %d times, want 1", stopped.Load())
-	}
-	if l.begin("b", func() {}) {
-		t.Error("begin accepted a session after shutdown started")
-	}
-}
-
-func TestLiveSessions_DrainGivesUpAtDeadline(t *testing.T) {
-	var l liveSessions
-	l.begin("stuck", func() {}) // never ends
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if err := l.drain(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("drain = %v, want the deadline", err)
-	}
-}
 
 // Recordings are written when a session ends. Stopping the server used to
 // close the store and return while sessions were open, so their recordings

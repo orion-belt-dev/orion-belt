@@ -52,9 +52,14 @@ func (s *APIServer) Start(addr string) error {
 	return nil
 }
 
-// Shutdown stops accepting requests and waits for those in flight, until
-// ctx expires. Hijacked WebSocket connections are not waited for.
+// Shutdown ends live web terminal sessions and waits for them to write
+// their recordings, then stops accepting requests and waits for those in
+// flight, all until ctx expires. http.Server.Shutdown alone does not wait
+// for hijacked (WebSocket) connections.
 func (s *APIServer) Shutdown(ctx context.Context) error {
+	if err := s.webSessions.Drain(ctx); err != nil {
+		s.logger.Warn("Shutdown did not wait for every web terminal to finish its recording: %v", err)
+	}
 	s.httpMu.Lock()
 	s.httpClosed = true
 	srv := s.httpSrv

@@ -10,6 +10,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +103,53 @@ func TestTerminalWS_ShellSessionIsRecordedAndAudited(t *testing.T) {
 	if !e.audited("session.web_terminal.start") {
 		t.Error("terminal start not audited")
 	}
+}
+
+// Shutdown must end live web terminals and wait for their recordings;
+// http.Server.Shutdown alone ignores hijacked connections.
+func TestTerminalWS_ShutdownEndsSessionAndKeepsRecording(t *testing.T) {
+	e := newEnv(t, nil)
+	e.withAgentBridge(nil)
+	e.grant(e.alice, "deploy")
+
+	conn, _, err := e.dialWS("/api/v1/terminal/ws?machine=web-01&user=deploy", e.aliceKey)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	readUntil(t, conn, "welcome")
+	ctx := context.Background()
+	sessions, _ := e.store.ListUserSessions(ctx, e.alice.ID, 1, 0)
+	if len(sessions) != 1 {
+		t.Fatalf("sessions = %+v", sessions)
+	}
+	id := sessions[0].ID
+
+	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := e.srv.Shutdown(sctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if sctx.Err() != nil {
+		t.Fatal("Shutdown waited for its deadline instead of ending the session")
+	}
+	// Ended and recorded before Shutdown returned, not after.
+	if got, err := e.store.GetSession(ctx, id); err != nil || got.EndTime == nil {
+		t.Errorf("session after Shutdown = %+v, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(e.recorder.GetRecordingStoragePath(), id+".cast")); err != nil {
+		t.Errorf("recording not written: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			var ce *websocket.CloseError
+			if !errors.As(err, &ce) || !strings.Contains(ce.Text, "shutting down") {
+				t.Errorf("client saw %v, want a close giving the reason", err)
+			}
+			break
+		}
+	}
+	e.expect(e.do("GET", "/api/v1/terminal/ws?machine=web-01&user=deploy", e.aliceKey, nil), 503)
 }
 
 func TestTerminalWS_Refusals(t *testing.T) {

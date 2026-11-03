@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/orion-belt-dev/orion-belt/docs/openapi"
+	"github.com/orion-belt-dev/orion-belt/internal/livesessions"
 	"github.com/orion-belt-dev/orion-belt/pkg/auth"
 	"github.com/orion-belt-dev/orion-belt/pkg/ca"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
@@ -53,6 +54,10 @@ type APIServer struct {
 	bootstrap       *bootstrapStore
 	passwordTickets *passwordTicketStore
 	serverCfg       common.ServerConfig
+
+	// webSessions are the live web terminals, ended and waited for on
+	// Shutdown.
+	webSessions livesessions.Tracker
 
 	// The HTTP server Start runs, kept for Shutdown.
 	httpMu     sync.Mutex

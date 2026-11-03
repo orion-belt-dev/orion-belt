@@ -11,6 +11,7 @@ import (
 	"time"
 
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
+	"github.com/orion-belt-dev/orion-belt/internal/livesessions"
 	"github.com/orion-belt-dev/orion-belt/pkg/anomaly"
 	"github.com/orion-belt-dev/orion-belt/pkg/api"
 	"github.com/orion-belt-dev/orion-belt/pkg/auth"
@@ -48,7 +49,7 @@ type Server struct {
 	agentsMu      sync.RWMutex
 	shutdown      chan struct{}
 	stopOnce      sync.Once
-	sessions      liveSessions
+	sessions      livesessions.Tracker
 	ca            *ca.Authority
 	kubeLocks     kubeLocks
 	kubeInterval  time.Duration // kubeReconcileInterval, read once at New
@@ -985,12 +986,12 @@ func (s *Server) proxyToTarget(clientChannel ssh.Channel, remoteUser, machineNam
 		}
 		agentMu.Unlock()
 	}
-	if !s.sessions.begin(session.ID, stop) {
+	if !s.sessions.Begin(session.ID, stop) {
 		clientChannel.Write([]byte("Orion Belt gateway is shutting down\n"))
 		clientChannel.SendRequest("exit-status", false, []byte{0, 0, 0, 1})
 		return
 	}
-	defer s.sessions.end(session.ID)
+	defer s.sessions.End(session.ID)
 
 	// TODO(security): fail closed when the session record or recording cannot
 	// be created. Today both errors are logged and the session still starts,
@@ -1310,7 +1311,7 @@ func (s *Server) stop(ctx context.Context) error {
 	}
 	s.listenerMu.Unlock()
 
-	if err := s.sessions.drain(ctx); err != nil {
+	if err := s.sessions.Drain(ctx); err != nil {
 		s.logger.Warn("Shutdown did not wait for every session to finish its recording: %v", err)
 	}
 	if s.apiServer != nil {
