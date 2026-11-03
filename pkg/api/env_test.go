@@ -241,6 +241,23 @@ func (e *env) auditLogsFor(action string) []*common.AuditLog {
 	return out
 }
 
+// lastAudit returns the newest entry for action, failing the test when
+// there is none or when its metadata contains any of secrets.
+func (e *env) lastAudit(action string, secrets ...string) *common.AuditLog {
+	e.t.Helper()
+	logs := e.auditLogsFor(action)
+	if len(logs) == 0 {
+		e.t.Fatalf("no %s audit entry", action)
+	}
+	raw, _ := json.Marshal(logs[0].Metadata)
+	for _, s := range secrets {
+		if s != "" && strings.Contains(string(raw), s) {
+			e.t.Errorf("%s audit metadata leaks a secret: %s", action, raw)
+		}
+	}
+	return logs[0]
+}
+
 func (e *env) audited(action string) bool {
 	for _, a := range e.auditActions() {
 		if a == action {

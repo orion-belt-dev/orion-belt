@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"mime/multipart"
 	"net/http"
@@ -244,7 +246,7 @@ func TestFiles_ThroughAgent(t *testing.T) {
 	// Paths reach the agent shell-quoted, so a hostile name cannot break out.
 	var upload string
 	for _, c := range seen {
-		if strings.Contains(c, "base64 -d") {
+		if strings.HasPrefix(c, "cat > ") {
 			upload = c
 		}
 	}
@@ -293,6 +295,118 @@ func TestFiles_Failures(t *testing.T) {
 	e.srv.terminalBridge = nil
 	if r := e.do("DELETE", "/api/v1/files?machine=web-01&path=/x", e.aliceKey, nil); !strings.Contains(string(r.body), "bridge unavailable") {
 		t.Errorf("no bridge = %s", r.body)
+	}
+}
+
+// Uploads stream to the host on stdin. They used to travel as a base64
+// command-line argument, which failed above ~96 KB.
+func TestFiles_UploadLargeFileOverStdin(t *testing.T) {
+	e := newEnv(t, nil)
+	e.grant(e.alice, "root")
+	var gotCmd string
+	var got []byte
+	e.withAgentBridge(func(cmd string, stdin []byte) (string, uint32) {
+		if stdin != nil {
+			gotCmd, got = cmd, stdin
+		}
+		return "", 0
+	})
+	payload := bytes.Repeat([]byte("0123456789abcdef\x00\xff"), 3<<16) // ~3.4 MiB, binary
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("machine", "web-01")
+	_ = mw.WriteField("path", "/srv/big.bin")
+	fw, _ := mw.CreateFormFile("file", "big.bin")
+	_, _ = fw.Write(payload)
+	_ = mw.Close()
+
+	r := e.do("POST", "/api/v1/files/upload", e.aliceKey, body.String(), "Content-Type", mw.FormDataContentType())
+	e.expect(r, 200)
+	if r.obj(t)["size"] != float64(len(payload)) {
+		t.Errorf("upload response = %s", r.body)
+	}
+	if gotCmd != "cat > '/srv/big.bin'" || !bytes.Equal(got, payload) {
+		t.Errorf("host got %q with %d bytes, want cat to the path with all %d bytes", gotCmd, len(got), len(payload))
+	}
+	sum := sha256.Sum256(payload)
+	if m := e.lastAudit("files.upload").Metadata; m["sha256"] != hex.EncodeToString(sum[:]) || m["size"] != float64(len(payload)) {
+		t.Errorf("upload audit = %v", m)
+	}
+}
+
+// File browser actions run outside a recorded session, so each one, including
+// failed and refused attempts, must leave an audit entry with its outcome.
+func TestFiles_AuditsEveryAction(t *testing.T) {
+	e := newEnv(t, nil)
+	e.grant(e.alice, "root")
+	content := "127.0.0.1 localhost"
+	e.withAgentBridge(func(cmd string, _ []byte) (string, uint32) {
+		switch {
+		case strings.HasPrefix(cmd, "base64 ") && strings.Contains(cmd, "/missing"):
+			return "", 1
+		case strings.HasPrefix(cmd, "base64 "):
+			return base64.StdEncoding.EncodeToString([]byte(content)), 0
+		case strings.HasPrefix(cmd, "rm -rf") && strings.Contains(cmd, "/busy"):
+			return "", 1
+		default:
+			return "", 0
+		}
+	})
+	latest := func(action string) map[string]interface{} {
+		t.Helper()
+		logs := e.auditLogsFor(action)
+		if len(logs) == 0 {
+			t.Fatalf("no %s audit entry", action)
+		}
+		if logs[0].Resource != "machine:"+e.machine.ID {
+			t.Errorf("%s resource = %s", action, logs[0].Resource)
+		}
+		return logs[0].Metadata
+	}
+	sha := func(s string) string { d := sha256.Sum256([]byte(s)); return hex.EncodeToString(d[:]) }
+
+	e.expect(e.do("GET", "/api/v1/files/download?machine=web-01&path=/etc/hosts", e.aliceKey, nil), 200)
+	if m := latest("files.download"); m["outcome"] != "ok" || m["path"] != "/etc/hosts" || m["remote_user"] != "root" ||
+		m["sha256"] != sha(content) || m["size"] != float64(len(content)) || m["exit_status"] != float64(0) {
+		t.Errorf("download audit = %v", m)
+	}
+	// A failed read on the host is an error, not an empty file.
+	e.expect(e.do("GET", "/api/v1/files/download?machine=web-01&path=/missing", e.aliceKey, nil), 502)
+	if m := latest("files.download"); m["outcome"] != "failed" || m["exit_status"] != float64(1) {
+		t.Errorf("failed download audit = %v", m)
+	}
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = mw.WriteField("machine", "web-01")
+	_ = mw.WriteField("path", "/tmp/payload")
+	fw, _ := mw.CreateFormFile("file", "payload")
+	_, _ = fw.Write([]byte("payload"))
+	_ = mw.Close()
+	e.expect(e.do("POST", "/api/v1/files/upload", e.aliceKey, body.String(), "Content-Type", mw.FormDataContentType()), 200)
+	if m := latest("files.upload"); m["outcome"] != "ok" || m["path"] != "/tmp/payload" || m["sha256"] != sha("payload") || m["size"] != float64(7) {
+		t.Errorf("upload audit = %v", m)
+	}
+
+	e.expect(e.do("POST", "/api/v1/files/mkdir", e.aliceKey, map[string]any{"machine": "web-01", "path": "/tmp/d"}), 200)
+	if m := latest("files.mkdir"); m["outcome"] != "ok" || m["path"] != "/tmp/d" {
+		t.Errorf("mkdir audit = %v", m)
+	}
+	e.expect(e.do("DELETE", "/api/v1/files?machine=web-01&path=/tmp/d", e.aliceKey, nil), 200)
+	if m := latest("files.delete"); m["outcome"] != "ok" || m["path"] != "/tmp/d" {
+		t.Errorf("delete audit = %v", m)
+	}
+	// rm failing on the host used to answer "deleted".
+	e.expect(e.do("DELETE", "/api/v1/files?machine=web-01&path=/busy", e.aliceKey, nil), 502)
+	if m := latest("files.delete"); m["outcome"] != "failed" || m["exit_status"] != float64(1) {
+		t.Errorf("failed delete audit = %v", m)
+	}
+
+	// Bob holds no grant: refused, and recorded as denied against him.
+	e.expect(e.do("DELETE", "/api/v1/files?machine=web-01&path=/etc", e.bobKey, nil), 502)
+	logs := e.auditLogsFor("files.delete")
+	if logs[0].UserID != e.bob.ID || logs[0].Metadata["outcome"] != "denied" || logs[0].Metadata["path"] != "/etc" {
+		t.Errorf("denied delete audit = %+v", logs[0])
 	}
 }
 

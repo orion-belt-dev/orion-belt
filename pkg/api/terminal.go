@@ -2,8 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -260,17 +264,17 @@ try:
 except Exception as e:
   print(json.dumps({"error":str(e)})); sys.exit(1)
 print(json.dumps({"path":p,"entries":entries}))' %s`, shellQuote(path))
-	out, err := s.execOnMachine(c, machine, remoteUser, cmd)
+	res, err := s.execOnMachine(c, machine, remoteUser, nil, cmd)
 	if err != nil {
-		out, err = s.execOnMachine(c, machine, remoteUser, fmt.Sprintf("ls -la %s", shellQuote(path)))
+		res, err = s.execOnMachine(c, machine, remoteUser, nil, fmt.Sprintf("ls -la %s", shellQuote(path)))
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"path": path, "raw": string(out)})
+		c.JSON(http.StatusOK, gin.H{"path": path, "raw": string(res.out)})
 		return
 	}
-	c.Data(http.StatusOK, "application/json", out)
+	c.Data(http.StatusOK, "application/json", res.out)
 }
 
 func (s *APIServer) filesDownload(c *gin.Context) {
@@ -278,16 +282,22 @@ func (s *APIServer) filesDownload(c *gin.Context) {
 	path := c.Query("path")
 	remoteUser := c.DefaultQuery("user", "root")
 	q := shellQuote(path)
-	out, err := s.execOnMachine(c, machine, remoteUser, fmt.Sprintf("base64 -w0 %s 2>/dev/null || base64 %s", q, q))
+	res, err := s.execOnMachine(c, machine, remoteUser, nil, fmt.Sprintf("base64 -w0 %s 2>/dev/null || base64 %s", q, q))
+	if err == nil && res.status != 0 {
+		err = res.failure()
+	}
 	if err != nil {
+		s.auditFileOp(c, "files.download", machine, remoteUser, path, res, err, nil)
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(out)))
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(res.out)))
 	if err != nil {
+		s.auditFileOp(c, "files.download", machine, remoteUser, path, res, errors.New("decode failed"), nil)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "decode failed"})
 		return
 	}
+	s.auditFileOp(c, "files.download", machine, remoteUser, path, res, nil, contentMeta(raw))
 	c.Header("Content-Disposition", "attachment; filename="+baseName(path))
 	c.Data(http.StatusOK, "application/octet-stream", raw)
 }
@@ -307,18 +317,22 @@ func (s *APIServer) filesUpload(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// The file goes to the remote cat on stdin, hashed on the way. It used to
+	// be a base64 command-line argument, which failed past ~96 KB (ARG_MAX).
+	sum := sha256.New()
+	counted := &countingReader{r: io.TeeReader(f, sum)}
+	res, err := s.execOnMachine(c, machine, remoteUser, counted, fmt.Sprintf("cat > %s", shellQuote(path)))
+	if err == nil && res.status != 0 {
+		err = res.failure()
 	}
-	b64 := base64.StdEncoding.EncodeToString(data)
-	cmd := fmt.Sprintf("echo %s | base64 -d > %s", shellQuote(b64), shellQuote(path))
-	if _, err := s.execOnMachine(c, machine, remoteUser, cmd); err != nil {
+	s.auditFileOp(c, "files.upload", machine, remoteUser, path, res, err, map[string]interface{}{
+		"size": counted.n, "sha256": hex.EncodeToString(sum.Sum(nil)),
+	})
+	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "uploaded", "path": path, "size": len(data)})
+	c.JSON(http.StatusOK, gin.H{"message": "uploaded", "path": path, "size": counted.n})
 }
 
 func (s *APIServer) filesMkdir(c *gin.Context) {
@@ -334,7 +348,12 @@ func (s *APIServer) filesMkdir(c *gin.Context) {
 	if req.User == "" {
 		req.User = "root"
 	}
-	if _, err := s.execOnMachine(c, req.Machine, req.User, fmt.Sprintf("mkdir -p %s", shellQuote(req.Path))); err != nil {
+	res, err := s.execOnMachine(c, req.Machine, req.User, nil, fmt.Sprintf("mkdir -p %s", shellQuote(req.Path)))
+	if err == nil && res.status != 0 {
+		err = res.failure()
+	}
+	s.auditFileOp(c, "files.mkdir", req.Machine, req.User, req.Path, res, err, nil)
+	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
@@ -345,39 +364,146 @@ func (s *APIServer) filesDelete(c *gin.Context) {
 	machine := c.Query("machine")
 	path := c.Query("path")
 	remoteUser := c.DefaultQuery("user", "root")
-	if _, err := s.execOnMachine(c, machine, remoteUser, fmt.Sprintf("rm -rf %s", shellQuote(path))); err != nil {
+	res, err := s.execOnMachine(c, machine, remoteUser, nil, fmt.Sprintf("rm -rf %s", shellQuote(path)))
+	if err == nil && res.status != 0 {
+		err = res.failure()
+	}
+	s.auditFileOp(c, "files.delete", machine, remoteUser, path, res, err, nil)
+	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
-func (s *APIServer) execOnMachine(c *gin.Context, machineName, remoteUser, command string) ([]byte, error) {
+// execResult is what a command run on a machine for the file browser
+// returned. status is the remote exit status, or -1 when the agent sent none.
+type execResult struct {
+	out       []byte
+	status    int
+	machineID string
+}
+
+func (r execResult) failure() error {
+	return fmt.Errorf("command failed on the host (exit status %d)", r.status)
+}
+
+// errExecDenied is returned when the caller holds no ssh grant for the
+// machine and remote user; the audit entry records it as denied.
+var errExecDenied = errors.New("permission denied")
+
+// countingReader counts the bytes read through it.
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// execOnMachine runs command on the machine as remoteUser, feeding it stdin
+// (nil for none; EOF is sent either way) and collecting its output.
+func (s *APIServer) execOnMachine(c *gin.Context, machineName, remoteUser string, stdin io.Reader, command string) (execResult, error) {
+	res := execResult{status: -1}
 	if s.terminalBridge == nil {
-		return nil, fmt.Errorf("bridge unavailable")
+		return res, fmt.Errorf("bridge unavailable")
 	}
 	userID, _ := c.Get("user_id")
 	m, err := s.terminalBridge.ResolveMachine(machineName)
 	if err != nil {
-		return nil, fmt.Errorf("machine not found")
+		return res, fmt.Errorf("machine not found")
 	}
+	res.machineID = m.ID
 	if err := s.authService.CheckPermissionWithRemoteUser(c.Request.Context(), userID.(string), m.ID, "ssh", remoteUser); err != nil {
-		return nil, fmt.Errorf("permission denied")
+		return res, errExecDenied
 	}
 	channel, reqs, err := s.terminalBridge.OpenAgentSession(m.ID, remoteUser)
 	if err != nil {
-		return nil, err
+		return res, err
 	}
 	defer channel.Close()
-	go ssh.DiscardRequests(reqs)
+
+	// exit-status arrives as a channel request; reqs is closed once the
+	// channel is, which is when the status is known to have been seen.
+	statusDone := make(chan int, 1)
+	go func() {
+		status := -1
+		for req := range reqs {
+			if req.Type == "exit-status" && len(req.Payload) >= 4 {
+				status = int(binary.BigEndian.Uint32(req.Payload))
+			}
+			if req.WantReply {
+				_ = req.Reply(false, nil)
+			}
+		}
+		statusDone <- status
+	}()
 
 	ok, err := channel.SendRequest("exec", true, ssh.Marshal(&struct{ Command, User string }{command, remoteUser}))
 	if err != nil || !ok {
-		return nil, fmt.Errorf("exec rejected")
+		return res, fmt.Errorf("exec rejected")
 	}
+	// Output is read while stdin is written, so a chatty command cannot
+	// stall a large upload.
 	var buf strings.Builder
-	_, _ = io.Copy(&buf, channel)
-	return []byte(buf.String()), nil
+	outDone := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&buf, channel)
+		close(outDone)
+	}()
+	var writeErr error
+	if stdin != nil {
+		_, writeErr = io.Copy(channel, stdin)
+	}
+	_ = channel.CloseWrite()
+	<-outDone
+	_ = channel.Close()
+	res.out = []byte(buf.String())
+	res.status = <-statusDone
+	if writeErr != nil {
+		return res, fmt.Errorf("sending data to the host: %w", writeErr)
+	}
+	return res, nil
+}
+
+// auditFileOp records a file browser action on a machine, including failed
+// and refused attempts: these run outside a recorded session, so the audit
+// log is their only record.
+func (s *APIServer) auditFileOp(c *gin.Context, action, machine, remoteUser, path string, res execResult, opErr error, extra map[string]interface{}) {
+	meta := map[string]interface{}{
+		"machine":     machine,
+		"remote_user": remoteUser,
+		"path":        path,
+		"outcome":     "ok",
+	}
+	if res.status >= 0 {
+		meta["exit_status"] = res.status
+	}
+	switch {
+	case errors.Is(opErr, errExecDenied):
+		meta["outcome"] = "denied"
+	case opErr != nil:
+		meta["outcome"] = "failed"
+		meta["error"] = opErr.Error()
+	}
+	for k, v := range extra {
+		meta[k] = v
+	}
+	resource := "machine:" + res.machineID
+	if res.machineID == "" {
+		resource = "machine:" + machine
+	}
+	s.recordAudit(c, action, resource, meta)
+}
+
+// contentMeta identifies transferred content in an audit entry without
+// storing it.
+func contentMeta(b []byte) map[string]interface{} {
+	sum := sha256.Sum256(b)
+	return map[string]interface{}{"size": len(b), "sha256": hex.EncodeToString(sum[:])}
 }
 
 func (s *APIServer) listSSHKeys(c *gin.Context) {

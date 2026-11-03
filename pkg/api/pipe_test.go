@@ -108,12 +108,17 @@ func servePipeSession(ch ssh.Channel, reqs <-chan *ssh.Request, handle func(stri
 				_ = req.Reply(false, nil)
 				continue
 			}
-			out, status := handle(p.Command, nil)
-			if out == rejectExec {
+			// The client sends stdin only once the exec is accepted, so the
+			// handler first decides on the command alone (a rejectExec
+			// answer refuses it), then answers with the stdin, which ends
+			// at the EOF the API always sends.
+			if out, _ := handle(p.Command, nil); out == rejectExec {
 				_ = req.Reply(false, nil)
 				continue
 			}
 			_ = req.Reply(true, nil)
+			stdin, _ := io.ReadAll(ch)
+			out, status := handle(p.Command, stdin)
 			_, _ = io.WriteString(ch, out)
 			var b [4]byte
 			binary.BigEndian.PutUint32(b[:], status)
