@@ -33,3 +33,11 @@ Findings left in place, with a review date. Scanner ignore files are not used.
 - Why: the agent starts each session as the requested local user (setuid/setgid drop), which needs root, as the packaged agent service does. It opens no listening port; it only dials out to the gateway, which it authenticates by host key or Host CA certificate.
 - Owner: mdarguechi
 - Review by: 2027-02-01
+
+## gitleaks (history)
+
+- Files: `.gitleaksignore` (66 exact fingerprints)
+- Check: gitleaks `generic-api-key` and `private-key` over the git history
+- Why: reviewed 2026-11-03 without printing values; none is a credential. 42 are base64 data blobs (64-symbol alphabet, 1-1.5 KB) inside the built docs bundles under `assets/js/`; 17 are the test placeholder `0123456789abcdef…` and similar in `*_test.go`; 3 are "private keys" in `pkg/api/agent_install_test.go` history that do not parse as keys; 2 are a fake Slack-style string in `pkg/plugin/manager_test.go` that does not match the token format; 2 more are dummy test values. The ignore file lists exact fingerprints, so any new finding still fails the scan.
+- Owner: mdarguechi
+- Review by: 2027-02-01
