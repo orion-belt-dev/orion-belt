@@ -741,7 +741,7 @@ func (s *APIServer) createAccessRequest(c *gin.Context) {
 // getAccessRequest gets a specific access request by ID
 func (s *APIServer) getAccessRequest(c *gin.Context) {
 	requestID := c.Param("id")
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	request, err := s.store.GetAccessRequest(ctx, requestID)
 	if err != nil {
@@ -899,7 +899,7 @@ func (s *APIServer) rejectAccessRequest(c *gin.Context) {
 
 // listPendingAccessRequests lists all pending access requests
 func (s *APIServer) listPendingAccessRequests(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	requests, err := s.store.ListPendingAccessRequests(ctx)
 	if err != nil {
@@ -915,7 +915,7 @@ func (s *APIServer) listPendingAccessRequests(c *gin.Context) {
 // roles (admin/operator/auditor) see every request; a plain user only sees
 // their own request history (all statuses).
 func (s *APIServer) listAccessRequests(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	var (
 		requests []*common.AccessRequest
 		err      error
@@ -1059,7 +1059,7 @@ func (s *APIServer) deleteUser(c *gin.Context) {
 }
 
 func (s *APIServer) listMachines(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	machines, err := s.store.ListMachines(ctx, 100, 0)
 	if err != nil {
 		s.fail(c, err)
@@ -1069,7 +1069,7 @@ func (s *APIServer) listMachines(c *gin.Context) {
 }
 
 func (s *APIServer) getMachine(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	machine, err := s.store.GetMachine(ctx, c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "machine not found"})
