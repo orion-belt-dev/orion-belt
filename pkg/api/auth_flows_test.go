@@ -236,8 +236,13 @@ func TestMFA_EnrollConfirmDisable(t *testing.T) {
 	u.PasswordHash, _ = auth.HashPassword("correct horse battery")
 	_ = e.store.UpdateUser(context.Background(), u)
 	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": code(t, secret)}), 409)
+	// A backup code presented to a refused disable is spent all the same.
+	backup := enroll["backup_codes"].([]any)[0].(string)
+	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": backup}), 409)
+	u, _ = e.store.GetUser(context.Background(), e.alice.ID)
 	u.PasswordHash = ""
 	_ = e.store.UpdateUser(context.Background(), u)
+	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": backup}), 401)
 
 	e.expect(e.do("POST", "/api/v1/mfa/disable", e.aliceKey, map[string]any{"code": code(t, secret)}), 200)
 	if u, _ := e.store.GetUser(context.Background(), e.alice.ID); u.MFAEnabled || u.TOTPSecret != "" {

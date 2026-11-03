@@ -111,9 +111,7 @@ func (s *APIServer) setPassword(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid totp code", "mfa_required": true})
 			return
 		}
-		if newHashes != "" {
-			user.BackupCodesHash = newHashes
-		}
+		user.BackupCodesHash = newHashes
 	} else {
 		raw, ok := pendingEnrollments.Load(userID)
 		if !ok {
@@ -181,9 +179,7 @@ func (s *APIServer) clearPassword(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid totp code"})
 		return
 	}
-	if newHashes != "" {
-		user.BackupCodesHash = newHashes
-	}
+	user.BackupCodesHash = newHashes
 	user.PasswordHash = ""
 	if err := s.store.UpdateUser(ctx, user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear password"})
@@ -258,7 +254,7 @@ func (s *APIServer) loginWithPassword(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid totp code", "mfa_required": true})
 		return
 	}
-	if newHashes != "" && newHashes != user.BackupCodesHash {
+	if newHashes != user.BackupCodesHash {
 		user.BackupCodesHash = newHashes
 		_ = s.store.UpdateUser(ctx, user)
 	}
