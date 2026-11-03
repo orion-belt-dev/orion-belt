@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/orion-belt-dev/orion-belt/packaging/keys"
 	"github.com/orion-belt-dev/orion-belt/pkg/auth"
 	"github.com/orion-belt-dev/orion-belt/pkg/common"
 	"github.com/orion-belt-dev/orion-belt/pkg/version"
@@ -25,6 +26,10 @@ type AgentInstallScriptRequest struct {
 	GatewayPort    int               `json:"gateway_port"`
 	PackageBaseURL string            `json:"package_base_url" binding:"required"`
 	Version        string            `json:"version"`
+	// AllowUnsignedBuild lets the script install a local snapshot build that
+	// the release key did not sign (make packages && make serve-packages).
+	// It is audited and the script warns on every unverified step.
+	AllowUnsignedBuild bool `json:"allow_unsigned_build"`
 }
 
 // AgentInstallScriptResponse is returned to the UI for copy/paste on the target host.
@@ -36,6 +41,9 @@ type AgentInstallScriptResponse struct {
 	PublicKey string `json:"public_key"`
 	Filename  string `json:"filename"`
 	Message   string `json:"message"`
+	// UnsignedBuild is true when the script may install packages the release
+	// key did not sign.
+	UnsignedBuild bool `json:"unsigned_build"`
 }
 
 func (s *APIServer) generateAgentInstallScript(c *gin.Context) {
@@ -171,16 +179,23 @@ func (s *APIServer) generateAgentInstallScript(c *gin.Context) {
 		}
 	}
 
-	script := buildAgentInstallScript(osID, name, gwHost, gwPort, pkgBase, ver, privPEM, hostCertLine, hostCAPublicKey, tags)
+	script := buildAgentInstallScript(osID, name, gwHost, gwPort, pkgBase, ver, privPEM, hostCertLine, hostCAPublicKey, tags, req.AllowUnsignedBuild)
 
 	uid, _ := c.Get("user_id")
 	uidStr, _ := uid.(string)
 	s.recordAudit(c, "agent.install_script", "machine:"+machine.ID, map[string]interface{}{
 		"agent_name": name,
 		"os":         osID,
-		"user_id":    uidStr,
-		"ssh_ca":     s.ca != nil,
+		"user_id":              uidStr,
+		"ssh_ca":               s.ca != nil,
+		"package_base_url":     pkgBase,
+		"version":              ver,
+		"allow_unsigned_build": req.AllowUnsignedBuild,
 	})
+	message := "Agent registered. Run the script on the target host as root."
+	if req.AllowUnsignedBuild {
+		message = "Agent registered. This script may install packages the release key did not sign: use it only with a local build you trust. Run it on the target host as root."
+	}
 
 	c.JSON(http.StatusCreated, AgentInstallScriptResponse{
 		Script:    script,
@@ -188,12 +203,13 @@ func (s *APIServer) generateAgentInstallScript(c *gin.Context) {
 		UserID:    agentUserID,
 		AgentName: name,
 		PublicKey: pubKey,
-		Filename:  fmt.Sprintf("orion-belt-install-%s.sh", name),
-		Message:   "Agent registered. Run the script on the target host as root.",
+		Filename:      fmt.Sprintf("orion-belt-install-%s.sh", name),
+		Message:       message,
+		UnsignedBuild: req.AllowUnsignedBuild,
 	})
 }
 
-func buildAgentInstallScript(osID, name, gwHost string, gwPort int, pkgBase, ver, privPEM, hostCertLine, hostCAPublicKey string, tags map[string]string) string {
+func buildAgentInstallScript(osID, name, gwHost string, gwPort int, pkgBase, ver, privPEM, hostCertLine, hostCAPublicKey string, tags map[string]string, allowUnsigned bool) string {
 	var tagLines strings.Builder
 	wrote := false
 	for k, v := range tags {
@@ -246,61 +262,86 @@ agent:
 	b.WriteString("mkdir -p /etc/orion-belt\n")
 	b.WriteString("chmod 0750 /etc/orion-belt\n\n")
 
+	// Downloads go to a private directory: under a shared /tmp another local
+	// user could pre-create the file and change it after it is verified.
+	b.WriteString("WORK=$(mktemp -d)\n")
+	b.WriteString("trap 'rm -rf \"$WORK\"' EXIT\n\n")
+
 	b.WriteString(fmt.Sprintf("PKG_BASE=%q\n", pkgBase))
 	b.WriteString(fmt.Sprintf("VERSION=%q\n\n", ver))
+
+	// The release key is pinned here rather than fetched, so whoever serves
+	// the packages cannot also supply the key that vouches for them.
+	b.WriteString(fmt.Sprintf("ORION_RELEASE_FPR=%q\n", keys.ReleaseFingerprint()))
+	if allowUnsigned {
+		b.WriteString("# Generated with allow_unsigned_build: packages the release key did not sign\n")
+		b.WriteString("# are accepted (local snapshot builds). The server audit log records this.\n")
+		b.WriteString("ORION_ALLOW_UNSIGNED_BUILD=1\n")
+		b.WriteString("ZYPPER_UNSIGNED=--allow-unsigned-rpm\n")
+		b.WriteString("echo \"WARNING: this installer accepts unsigned local builds of orion-belt-agent\" >&2\n")
+	} else {
+		b.WriteString("ORION_ALLOW_UNSIGNED_BUILD=0\n")
+		b.WriteString("ZYPPER_UNSIGNED=\n")
+	}
+	b.WriteString("cat > \"$WORK/orion-belt.asc\" <<'ORION_RELEASE_KEY'\n")
+	b.WriteString(strings.TrimSpace(keys.ReleaseKey()))
+	b.WriteString("\nORION_RELEASE_KEY\n\n")
 
 	// The package for this host's architecture, under the names the package
 	// site and release use (pkgs.orion-belt.dev, or a mirror of dist/).
 	b.WriteString(agentInstallArch)
+	b.WriteString(agentInstallVerify)
+	// Each package is checked against the signed checksums.txt before it is
+	// installed, which is what makes apk's --allow-untrusted safe: apk is not
+	// asked to trust the file on its own.
 	switch osID {
 	case "debian":
 		b.WriteString(`echo "==> Installing orion-belt-agent (deb, $DEB_ARCH)"
-if fetch_first /tmp/orion-belt-agent.deb \
+if fetch_verified "$WORK/orion-belt-agent.deb" "orion-belt-agent_${DEB_V}_${DEB_ARCH}.deb" \
   "$PKG_BASE/orion-belt-agent_${DEB_V}_${DEB_ARCH}.deb" \
   "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.deb" \
   "$RELEASE/orion-belt-agent_${DEB_V}_${DEB_ARCH}.deb"; then
-  dpkg -i /tmp/orion-belt-agent.deb || apt-get install -f -y
-  rm -f /tmp/orion-belt-agent.deb
+  dpkg -i "$WORK/orion-belt-agent.deb" || apt-get install -f -y
 else
   install_agent_archive
 fi
 `)
 	case "rhel", "suse":
 		b.WriteString(`echo "==> Installing orion-belt-agent (rpm, $RPM_ARCH)"
-if fetch_first /tmp/orion-belt-agent.rpm \
+if fetch_verified "$WORK/orion-belt-agent.rpm" "orion-belt-agent-${RPM_V}-1.${RPM_ARCH}.rpm" \
   "$PKG_BASE/orion-belt-agent-${RPM_V}-1.${RPM_ARCH}.rpm" \
   "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.rpm" \
   "$RELEASE/orion-belt-agent-${RPM_V}-1.${RPM_ARCH}.rpm"; then
-  if command -v dnf >/dev/null 2>&1; then dnf -y install /tmp/orion-belt-agent.rpm
-  elif command -v zypper >/dev/null 2>&1; then zypper -n install --allow-unsigned-rpm /tmp/orion-belt-agent.rpm
-  elif command -v yum >/dev/null 2>&1; then yum -y localinstall /tmp/orion-belt-agent.rpm
-  else rpm -Uvh /tmp/orion-belt-agent.rpm; fi
-  rm -f /tmp/orion-belt-agent.rpm
+  # The rpm is signed with the same pinned key; zypper refuses a package
+  # signed by a key rpm does not know, even with --allow-unsigned-rpm.
+  rpm --import "$WORK/orion-belt.asc"
+  if command -v dnf >/dev/null 2>&1; then dnf -y install "$WORK/orion-belt-agent.rpm"
+  elif command -v zypper >/dev/null 2>&1; then zypper -n install $ZYPPER_UNSIGNED "$WORK/orion-belt-agent.rpm"
+  elif command -v yum >/dev/null 2>&1; then yum -y localinstall "$WORK/orion-belt-agent.rpm"
+  else rpm -Uvh "$WORK/orion-belt-agent.rpm"; fi
 else
   install_agent_archive
 fi
 `)
 	case "alpine":
 		b.WriteString(`echo "==> Installing orion-belt-agent (apk, $APK_ARCH)"
-if fetch_first /tmp/orion-belt-agent.apk \
+if fetch_verified "$WORK/orion-belt-agent.apk" "orion-belt-agent_${APK_V}_${APK_ARCH}.apk" \
   "$PKG_BASE/apk/${APK_ARCH}/orion-belt-agent-${APK_V}.apk" \
   "$PKG_BASE/orion-belt-agent_${APK_V}_${APK_ARCH}.apk" \
   "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.apk" \
   "$RELEASE/orion-belt-agent_${APK_V}_${APK_ARCH}.apk"; then
-  apk add --allow-untrusted /tmp/orion-belt-agent.apk
-  rm -f /tmp/orion-belt-agent.apk
+  apk add --allow-untrusted "$WORK/orion-belt-agent.apk"
 else
   install_agent_archive
 fi
 `)
 	case "arch":
 		b.WriteString(`echo "==> Installing orion-belt-agent (pacman, $PAC_ARCH)"
-if fetch_first /tmp/orion-belt-agent.pkg.tar.zst \
+if fetch_verified "$WORK/orion-belt-agent.pkg.tar.zst" "orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst" \
   "$PKG_BASE/archlinux/${PAC_ARCH}/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst" \
   "$PKG_BASE/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst" \
   "$RELEASE/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst"; then
-  pacman -U --noconfirm /tmp/orion-belt-agent.pkg.tar.zst
-  rm -f /tmp/orion-belt-agent.pkg.tar.zst
+  pacman -U --noconfirm "$WORK/orion-belt-agent.pkg.tar.zst"
 else
   install_agent_archive
 fi
@@ -357,8 +398,8 @@ echo "It should appear under Agents in the Orion Belt console once the tunnel is
 // helpers the package steps share. Each file is tried from the package base
 // URL (the package site, or a mirror) first, then from the GitHub release,
 // which has every package. install_agent_archive is the fallback for hosts
-// without a matching package: the agent archive, then (amd64 only) the bare
-// binary earlier package sites served.
+// without a matching package. The bare binary earlier package sites served is
+// no longer tried: no checksums.txt lists it, so it cannot be verified.
 const agentInstallArch = `RELEASE="https://github.com/orion-belt-dev/orion-belt/releases/download/v${VERSION}"
 # Each package format spells a pre-release differently (1.4.0-rc.1: deb
 # 1.4.0~rc.1, rpm 1.4.0~rc.1 with later dashes as _, apk 1.4.0_rc.1, pacman
@@ -383,17 +424,10 @@ esac
 # A Debian armhf userland on an ARMv7 CPU still uses the armhf package.
 if [ "$GO_ARCH" = armv7 ] && command -v dpkg >/dev/null 2>&1; then DEB_ARCH=$(dpkg --print-architecture); fi
 
-fetch_first() { # fetch_first DEST URL...: the first URL that downloads
-  dest=$1; shift
-  for u in "$@"; do
-    if curl -fsSL -o "$dest" "$u"; then return 0; fi
-  done
-  return 1
-}
-
 install_agent_archive() {
-  tmp=$(mktemp -d)
-  if fetch_first "$tmp/agent.tar.gz" \
+  tmp="$WORK/archive"
+  mkdir -p "$tmp"
+  if fetch_verified "$tmp/agent.tar.gz" "orion-belt-agent_${VERSION}_linux_${GO_ARCH}.tar.gz" \
     "$PKG_BASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.tar.gz" \
     "$RELEASE/orion-belt-agent_${VERSION}_linux_${GO_ARCH}.tar.gz"; then
     tar -xzf "$tmp/agent.tar.gz" -C "$tmp"
@@ -404,13 +438,106 @@ install_agent_archive() {
     install -m 0755 "$tmp/packaging/openrc/orion-belt-agent.initd" /usr/share/orion-belt/init/orion-belt-agent.openrc
     install -m 0755 "$tmp/packaging/sysv/orion-belt-agent" /usr/share/orion-belt/init/orion-belt-agent.sysv
     install -m 0755 "$tmp/packaging/runit/orion-belt-agent/run" /usr/share/orion-belt/init/runit/orion-belt-agent/run
-  elif [ "$GO_ARCH" = amd64 ] && fetch_first /usr/bin/orion-belt-agent "$PKG_BASE/orion-belt-agent"; then
-    chmod 0755 /usr/bin/orion-belt-agent
   else
-    echo "no orion-belt-agent package for $(uname -m) at $PKG_BASE" >&2
+    echo "no verified orion-belt-agent package for $(uname -m) at $PKG_BASE or $RELEASE" >&2
     exit 1
   fi
-  rm -rf "$tmp"
+}
+
+`
+
+// agentInstallVerify checks downloads against the release's checksums.txt,
+// whose GPG signature must come from the pinned release key
+// (ORION_RELEASE_FPR, written to $WORK/orion-belt.asc by the script). The
+// checksums come from the package base first (a mirror of dist/ has them),
+// then from the GitHub release. gpg is installed when it is missing: no
+// download is installed unverified, unless the script was generated with
+// allow_unsigned_build (ORION_ALLOW_UNSIGNED_BUILD=1). Then a package base
+// without signed checksums may supply plain ones, which still catch a
+// corrupted download, or none, and each fallback prints a warning.
+const agentInstallVerify = `ensure_gpg() {
+  command -v gpg >/dev/null 2>&1 && return 0
+  echo "==> Installing gnupg to verify the release signature"
+  if command -v apt-get >/dev/null 2>&1; then apt-get update -y && apt-get install -y gnupg
+  elif command -v dnf >/dev/null 2>&1; then dnf install -y gnupg2
+  elif command -v yum >/dev/null 2>&1; then yum install -y gnupg2
+  elif command -v zypper >/dev/null 2>&1; then zypper -n install gpg2
+  elif command -v apk >/dev/null 2>&1; then apk add --no-cache gnupg
+  elif command -v pacman >/dev/null 2>&1; then pacman -S --noconfirm gnupg
+  fi
+  command -v gpg >/dev/null 2>&1 || { echo "gpg is required to verify the agent package" >&2; exit 1; }
+}
+
+# checksums_signed: true when $WORK/checksums.txt.sig is a good signature of
+# $WORK/checksums.txt by the pinned key (gpg's VALIDSIG names the primary
+# key's fingerprint last).
+checksums_signed() {
+  GNUPGHOME="$WORK/gnupg"
+  export GNUPGHOME
+  rm -rf "$GNUPGHOME" && mkdir -m 0700 "$GNUPGHOME"
+  gpg --batch --quiet --import "$WORK/orion-belt.asc" 2>/dev/null || return 1
+  gpg --batch --status-fd 1 --verify "$WORK/checksums.txt.sig" "$WORK/checksums.txt" 2>/dev/null |
+    awk -v fpr="$ORION_RELEASE_FPR" '$1 == "[GNUPG:]" && $2 == "VALIDSIG" && $NF == fpr { ok = 1 } END { exit !ok }'
+}
+
+load_checksums() {
+  [ -f "$WORK/checksums.ok" ] || [ -f "$WORK/checksums.none" ] && return 0
+  if [ "$ORION_ALLOW_UNSIGNED_BUILD" = 1 ] && ! command -v gpg >/dev/null 2>&1; then
+    echo "warning: gpg not found; not checking release signatures" >&2
+  else
+    ensure_gpg
+  fi
+  for base in "$PKG_BASE" "$RELEASE"; do
+    command -v gpg >/dev/null 2>&1 || break
+    rm -f "$WORK/checksums.txt" "$WORK/checksums.txt.sig"
+    curl -fsSL -o "$WORK/checksums.txt" "$base/checksums.txt" 2>/dev/null || continue
+    curl -fsSL -o "$WORK/checksums.txt.sig" "$base/checksums.txt.sig" 2>/dev/null || continue
+    if checksums_signed; then
+      echo "==> Release checksums verified ($base)"
+      touch "$WORK/checksums.ok"
+      return 0
+    fi
+    echo "warning: checksums.txt from $base is not signed by the release key; ignoring it" >&2
+  done
+  if [ "$ORION_ALLOW_UNSIGNED_BUILD" = 1 ]; then
+    if curl -fsSL -o "$WORK/checksums.txt" "$PKG_BASE/checksums.txt" 2>/dev/null; then
+      echo "WARNING: using UNSIGNED checksums.txt from $PKG_BASE (allow_unsigned_build)" >&2
+      touch "$WORK/checksums.ok"
+    else
+      echo "WARNING: no checksums.txt at $PKG_BASE; installing WITHOUT any verification (allow_unsigned_build)" >&2
+      touch "$WORK/checksums.none"
+    fi
+    return 0
+  fi
+  echo "no signed checksums.txt for v$VERSION at $PKG_BASE or $RELEASE" >&2
+  exit 1
+}
+
+fetch_verified() { # fetch_verified DEST RELEASE_NAME URL...: the first URL whose file matches RELEASE_NAME in checksums.txt
+  dest=$1; name=$2; shift 2
+  load_checksums
+  if [ -f "$WORK/checksums.none" ]; then
+    for u in "$@"; do
+      if curl -fsSL -o "$dest" "$u" 2>/dev/null; then
+        echo "WARNING: installing $u unverified (allow_unsigned_build)" >&2
+        return 0
+      fi
+    done
+    return 1
+  fi
+  want=$(awk -v f="$name" '$2 == f || $2 == "*"f { print $1 }' "$WORK/checksums.txt")
+  if [ -z "$want" ]; then
+    echo "warning: $name is not in the release checksums" >&2
+    return 1
+  fi
+  for u in "$@"; do
+    rm -f "$dest"
+    curl -fsSL -o "$dest" "$u" 2>/dev/null || continue
+    if [ "$(sha256sum "$dest" | cut -d' ' -f1)" = "$want" ]; then return 0; fi
+    echo "warning: $u does not match the signed checksum for $name; skipping it" >&2
+  done
+  rm -f "$dest"
+  return 1
 }
 
 `

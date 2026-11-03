@@ -129,9 +129,10 @@ window on the network.
 4. Enter the agent name, the gateway host (SSH port 2222), and the package base
    URL. The console defaults to the public mirror at
    [`https://pkgs.orion-belt.dev`](https://pkgs.orion-belt.dev)
-   and reads the package version from that mirror's `VERSION` file. To use a
-   local `dist/` build, run `make packages && make serve-packages` and set the
-   base URL to `http://127.0.0.1:8765` or your host's address.
+   and reads the package version from that mirror's `VERSION` file. A mirror
+   of a release's files works too (`make serve-packages` serves `dist/` on
+   `http://127.0.0.1:8765`), as long as the files are that release's: see
+   below.
 5. Select **Generate install script**. The server registers the agent and
    returns a shell script that contains the agent's private key, downloads the
    package, writes `/etc/orion-belt/agent.yaml` and starts the service. Treat
@@ -139,6 +140,21 @@ window on the network.
 6. Run the script as root on the target host.
 
 The API equivalent is `POST /api/v1/admin/agents/install-script`.
+
+The script installs nothing it cannot verify. It carries the release signing
+key (`packaging/keys/orion-belt.asc`, fingerprint pinned), fetches the
+release's `checksums.txt` and `checksums.txt.sig` from the package base URL or
+else the GitHub release, and checks each download against them before
+installing it. It installs `gnupg` first if the host lacks it. A file that does
+not match is skipped for the next source; if none matches, the script stops.
+Local snapshot builds are not signed with the release key. To install one
+from a `dist/` mirror, tick **Allow an unsigned local build** (API:
+`"allow_unsigned_build": true`; `oadmin agents install-script
+--allow-unsigned-build`). The script then still prefers signed checksums, falls
+back to the mirror's unsigned `checksums.txt` (which catches a corrupt
+download, not a swapped one), and installs unchecked only when the mirror has
+none, warning at each step. The `agent.install_script` audit entry records
+`allow_unsigned_build`, the package base URL and the version.
 
 ### Manual installation
 

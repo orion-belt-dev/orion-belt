@@ -2990,6 +2990,14 @@ components:
           type: string
           description: Package version string (without leading v). Defaults to server build version.
           example: "1.0.0"
+        allow_unsigned_build:
+          type: boolean
+          default: false
+          description: >-
+            Accept packages the release key did not sign, for a local snapshot
+            build (make serve-packages). Without it the script installs only
+            downloads that match the release's signed checksums.txt. Recorded
+            in the agent.install_script audit entry.
     AgentInstallScriptResponse:
       type: object
       properties:
@@ -3006,6 +3014,9 @@ components:
           type: string
           example: orion-belt-install-web-01.sh
         message: { type: string }
+        unsigned_build:
+          type: boolean
+          description: True when the script may install packages the release key did not sign.
     RegisterClientRequest:
       type: object
       required: [username, email, public_key]

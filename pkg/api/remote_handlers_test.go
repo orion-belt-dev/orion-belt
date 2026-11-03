@@ -421,6 +421,28 @@ func TestAgentInstallScript(t *testing.T) {
 	if err != nil || m.Tags["os"] != "debian" || m.Tags["env"] != "prod" || m.Port != 22 {
 		t.Errorf("machine = %+v, %v", m, err)
 	}
+	if resp.UnsignedBuild || strings.Contains(resp.Script, "ORION_ALLOW_UNSIGNED_BUILD=1") {
+		t.Errorf("default script allows unsigned builds")
+	}
+
+	// A local snapshot build: allowed only on request, and audited as such.
+	r = e.do("POST", path, e.adminKey, body("name", "lab-01", "package_base_url", "http://127.0.0.1:8765", "allow_unsigned_build", true))
+	e.expect(r, 201)
+	var lab AgentInstallScriptResponse
+	r.json(t, &lab)
+	if !lab.UnsignedBuild || !strings.Contains(lab.Script, "ORION_ALLOW_UNSIGNED_BUILD=1") || !strings.Contains(lab.Message, "did not sign") {
+		t.Errorf("unsigned build install = %+v", lab)
+	}
+	audits := map[string]bool{}
+	for _, l := range e.auditLogsFor("agent.install_script") {
+		audits[l.Resource] = l.Metadata["allow_unsigned_build"] == true
+		if l.Resource == "machine:"+lab.MachineID && l.Metadata["package_base_url"] != "http://127.0.0.1:8765" {
+			t.Errorf("unsigned build audit = %+v", l.Metadata)
+		}
+	}
+	if !audits["machine:"+lab.MachineID] || audits["machine:"+resp.MachineID] {
+		t.Errorf("allow_unsigned_build audited as %v", audits)
+	}
 
 	authority, err := ca.New(common.SSHCAConfig{Enabled: true, MasterKey: "0123456789abcdef0123456789abcdef"}, e.store, nil)
 	if err != nil {

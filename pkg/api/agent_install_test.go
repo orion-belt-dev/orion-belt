@@ -20,6 +20,7 @@ func TestBuildAgentInstallScriptDebian(t *testing.T) {
 		"",
 		"",
 		map[string]string{"os": "debian", "env": "lab"},
+		false,
 	)
 	checks := []string{
 		"#!/usr/bin/env bash",
@@ -39,7 +40,7 @@ func TestBuildAgentInstallScriptDebian(t *testing.T) {
 }
 
 func TestBuildAgentInstallScriptAlpine(t *testing.T) {
-	script := buildAgentInstallScript("alpine", "a1", "10.0.0.1", 2222, "http://pkg", "0.4.0", "KEYDATA", "", "", nil)
+	script := buildAgentInstallScript("alpine", "a1", "10.0.0.1", 2222, "http://pkg", "0.4.0", "KEYDATA", "", "", nil, false)
 	if !strings.Contains(script, "apk add --allow-untrusted") {
 		t.Fatal("expected apk install path")
 	}
@@ -55,6 +56,7 @@ func TestBuildAgentInstallScriptWithHostCert(t *testing.T) {
 		"ssh-ed25519-cert-v01@openssh.com AAAA cert-comment",
 		"ssh-ed25519 AAAA host-ca",
 		nil,
+		false,
 	)
 	for _, c := range []string{
 		"ORION_AGENT_CERT",
@@ -69,7 +71,7 @@ func TestBuildAgentInstallScriptWithHostCert(t *testing.T) {
 }
 
 func TestBuildAgentInstallScriptArch(t *testing.T) {
-	script := buildAgentInstallScript("arch", "a1", "10.0.0.1", 2222, "http://pkg", "1.4.0", "KEYDATA", "", "", nil)
+	script := buildAgentInstallScript("arch", "a1", "10.0.0.1", 2222, "http://pkg", "1.4.0", "KEYDATA", "", "", nil, false)
 	for _, c := range []string{
 		"pacman -U --noconfirm",
 		"$PKG_BASE/archlinux/${PAC_ARCH}/orion-belt-agent-${PAC_V}-1-${PAC_ARCH}.pkg.tar.zst",
