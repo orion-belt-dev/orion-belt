@@ -543,6 +543,9 @@ func (s *APIServer) addSSHKey(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
+	s.recordAudit(c, "auth.ssh_key.add", "ssh_key:"+key.ID, map[string]interface{}{
+		"name": key.Name, "key_type": key.KeyType, "fingerprint": ssh.FingerprintSHA256(pk),
+	})
 	c.JSON(http.StatusCreated, key)
 }
 
@@ -557,14 +560,14 @@ func (s *APIServer) deleteSSHKey(c *gin.Context) {
 		s.fail(c, err)
 		return
 	}
-	owned := false
+	var owned *common.SSHKey
 	for _, k := range keys {
 		if k.ID == id {
-			owned = true
+			owned = k
 			break
 		}
 	}
-	if !owned {
+	if owned == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
@@ -572,6 +575,11 @@ func (s *APIServer) deleteSSHKey(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
+	meta := map[string]interface{}{"name": owned.Name, "key_type": owned.KeyType}
+	if pk, _, _, _, err := ssh.ParseAuthorizedKey([]byte(owned.PublicKey)); err == nil {
+		meta["fingerprint"] = ssh.FingerprintSHA256(pk)
+	}
+	s.recordAudit(c, "auth.ssh_key.delete", "ssh_key:"+id, meta)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 

@@ -98,6 +98,7 @@ func (s *APIServer) mfaConfirm(c *gin.Context) {
 	}
 	pendingEnrollments.Delete(userID.(string))
 
+	s.recordAudit(c, "auth.mfa.enable", "user:"+user.ID, nil)
 	c.JSON(http.StatusOK, gin.H{"message": "mfa enabled", "mfa_enabled": true})
 }
 
@@ -144,6 +145,7 @@ func (s *APIServer) mfaDisable(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable mfa"})
 		return
 	}
+	s.recordAudit(c, "auth.mfa.disable", "user:"+user.ID, nil)
 	c.JSON(http.StatusOK, gin.H{"message": "mfa disabled", "mfa_enabled": false})
 }
 

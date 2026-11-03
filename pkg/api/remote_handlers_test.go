@@ -430,6 +430,17 @@ func TestSSHKeys_OwnKeys(t *testing.T) {
 	}
 	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+key["id"].(string), e.aliceKey, nil), 200)
 	e.expect(e.do("DELETE", "/api/v1/ssh-keys/"+key["id"].(string), e.aliceKey, nil), 404)
+
+	pk, _, _, _, _ := ssh.ParseAuthorizedKey([]byte(testPubKey))
+	for _, action := range []string{"auth.ssh_key.add", "auth.ssh_key.delete"} {
+		l := e.lastAudit(action)
+		if l.UserID != e.alice.ID || l.Resource != "ssh_key:"+key["id"].(string) || l.Metadata["fingerprint"] != ssh.FingerprintSHA256(pk) || l.Metadata["name"] != "laptop" {
+			t.Errorf("%s audit = %+v", action, l)
+		}
+	}
+	if n := len(e.auditLogsFor("auth.ssh_key.delete")); n != 1 {
+		t.Errorf("auth.ssh_key.delete entries = %d", n)
+	}
 }
 
 // --- SSH certificate authority ----------------------------------------------------------
@@ -471,6 +482,9 @@ func TestSSHCA_Endpoints(t *testing.T) {
 	}
 	if cert := pub.(*ssh.Certificate); cert.KeyId != "alice" || cert.ValidPrincipals[0] != "alice" {
 		t.Errorf("cert key id %q principals %v", cert.KeyId, cert.ValidPrincipals)
+	}
+	if l := e.lastAudit("ssh_cert.issue"); l.UserID != e.alice.ID || l.Resource != "ssh_cert:"+issued["serial"].(string) || l.Metadata["fingerprint"] == nil {
+		t.Errorf("ssh_cert.issue audit = %+v", l)
 	}
 	_ = e.do("POST", "/api/v1/ssh-cert", e.bobKey, map[string]any{"public_key": testPubKey})
 

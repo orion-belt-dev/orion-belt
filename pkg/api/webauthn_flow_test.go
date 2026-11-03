@@ -219,6 +219,15 @@ func TestWebAuthn_RegisterLoginAndDelete(t *testing.T) {
 	if u, _ := e.store.GetUser(ctx, e.alice.ID); u.WebAuthnEnabled {
 		t.Error("removing the last credential left WebAuthn enabled")
 	}
+	if l := e.lastAudit("auth.webauthn.register"); l.UserID != e.alice.ID || l.Metadata["credential_id"] != credRowID {
+		t.Errorf("register audit = %+v", l)
+	}
+	if l := e.lastAudit("auth.webauthn.delete"); l.UserID != e.alice.ID || l.Metadata["credential_id"] != credRowID || l.Metadata["last_credential"] != true {
+		t.Errorf("delete audit = %+v", l)
+	}
+	if n := len(e.auditLogsFor("auth.webauthn.delete")); n != 1 {
+		t.Errorf("auth.webauthn.delete entries = %d (bob's refused delete must not count)", n)
+	}
 }
 
 // Credentials registered before backup flags were stored are matched to the
