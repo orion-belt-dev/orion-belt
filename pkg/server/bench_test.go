@@ -366,13 +366,24 @@ func percentileMillis(d []time.Duration, p float64) float64 {
 type benchChannel struct {
 	r io.Reader
 	w io.Writer
+	// writeClosed, when set, receives a value on CloseWrite. proxyConnection
+	// returns once the agent->client copy ends and does not wait for the
+	// client->agent copy, whose io.Copy buffer would otherwise be counted in
+	// the op only if that goroutine happened to run before the timer stopped.
+	// Waiting for it keeps allocs/op the same on every run.
+	writeClosed chan<- struct{}
 }
 
 func (c *benchChannel) Read(p []byte) (int, error)  { return c.r.Read(p) }
 func (c *benchChannel) Write(p []byte) (int, error) { return c.w.Write(p) }
 func (c *benchChannel) Close() error                { return nil }
-func (c *benchChannel) CloseWrite() error           { return nil }
-func (c *benchChannel) Stderr() io.ReadWriter       { return &benchChannel{r: eofReader{}, w: io.Discard} }
+func (c *benchChannel) CloseWrite() error {
+	if c.writeClosed != nil {
+		c.writeClosed <- struct{}{}
+	}
+	return nil
+}
+func (c *benchChannel) Stderr() io.ReadWriter { return &benchChannel{r: eofReader{}, w: io.Discard} }
 
 func (c *benchChannel) SendRequest(name string, wantReply bool, payload []byte) (bool, error) {
 	return true, nil
@@ -404,6 +415,9 @@ func BenchmarkGatewayProxyThroughput(b *testing.B) {
 
 	logger := benchLogger()
 	srv := &Server{logger: logger, config: &common.Config{}}
+	// Buffered so CloseWrite never blocks the proxy goroutine; drained after
+	// each op.
+	inputDone := make(chan struct{}, 1)
 
 	b.Run("proxy_only", func(b *testing.B) {
 		b.SetBytes(proxyPayloadSize)
@@ -412,9 +426,10 @@ func BenchmarkGatewayProxyThroughput(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			srv.proxyConnection(
 				&benchChannel{r: eofReader{}, w: io.Discard},
-				&benchChannel{r: bytes.NewReader(payload), w: io.Discard},
+				&benchChannel{r: bytes.NewReader(payload), w: io.Discard, writeClosed: inputDone},
 				nil, true,
 			)
+			<-inputDone
 		}
 	})
 
@@ -440,9 +455,10 @@ func BenchmarkGatewayProxyThroughput(b *testing.B) {
 			}
 			srv.proxyConnection(
 				&benchChannel{r: eofReader{}, w: io.Discard},
-				&benchChannel{r: bytes.NewReader(payload), w: io.Discard},
+				&benchChannel{r: bytes.NewReader(payload), w: io.Discard, writeClosed: inputDone},
 				sr, true,
 			)
+			<-inputDone
 		}
 		b.StopTimer()
 		_ = recorder.StopRecording(benchSessionID(session))
