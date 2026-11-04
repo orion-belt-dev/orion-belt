@@ -16,8 +16,8 @@
 # Recorded on the CI runner with the "Performance benchmarks" workflow
 # (workflow_dispatch, update_baseline=true); keep only the B/op and allocs/op
 # lines. See docs/BENCHMARKS.md.
-BenchmarkGatewayProxyThroughput/proxy_only	B/op	65770
-BenchmarkGatewayProxyThroughput/proxy_only	allocs/op	8
+BenchmarkGatewayProxyThroughput/proxy_only	B/op	66032
+BenchmarkGatewayProxyThroughput/proxy_only	allocs/op	9
 BenchmarkGatewayProxyThroughput/recorded	B/op	1496804
 BenchmarkGatewayProxyThroughput/recorded	allocs/op	98
 BenchmarkInjectChannelDataDisabled	B/op	0
