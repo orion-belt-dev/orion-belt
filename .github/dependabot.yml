@@ -16,6 +16,23 @@ updates:
       npm_and_yarn:
         patterns: ["*"]
 
+  # SDK dev tooling only: neither SDK has runtime dependencies.
+  - package-ecosystem: npm
+    directory: /sdk/js
+    schedule:
+      interval: weekly
+    groups:
+      sdk-js:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /sdk/python
+    schedule:
+      interval: weekly
+    groups:
+      sdk-python:
+        patterns: ["*"]
+
   # Actions are pinned by commit SHA; Dependabot updates the SHA and the
   # version comment together.
   - package-ecosystem: github-actions

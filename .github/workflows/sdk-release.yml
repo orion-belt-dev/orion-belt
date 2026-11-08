@@ -1,0 +1,92 @@
+name: SDK release
+
+# Publishes one SDK per tag: sdk-python-v<version> to PyPI, sdk-js-v<version>
+# to npm. The tag must match the version in the package manifest.
+#
+# Both registries use trusted publishing (OIDC), so no token is stored in the
+# repository. Before the first release, register this workflow as a trusted
+# publisher: on PyPI for project orion-belt-sdk (workflow sdk-release.yml,
+# environment pypi), and on npm for @orion-belt/sdk (workflow sdk-release.yml,
+# environment npm).
+
+on:
+  push:
+    tags:
+      - 'sdk-python-v*'
+      - 'sdk-js-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Publish Python SDK
+    if: startsWith(github.ref_name, 'sdk-python-v')
+    # GitHub-hosted: the PyPI publish token is minted from this runner's OIDC identity.
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.1'
+          python-version: '3.11'
+      - name: Tag matches package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(uv version --short)"
+          if [ "sdk-python-v$version" != "$TAG" ]; then
+            echo "tag $TAG does not match pyproject.toml version $version" >&2
+            exit 1
+          fi
+      - name: Test
+        run: |
+          uv sync --locked
+          uv run --locked pytest
+      - name: Build
+        run: uv build
+      - name: Publish
+        run: uv publish --trusted-publishing always
+
+  js:
+    name: Publish TypeScript SDK
+    if: startsWith(github.ref_name, 'sdk-js-v')
+    # GitHub-hosted: npm provenance and trusted publishing require it.
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: sdk/js
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Node 24 bundles npm 11, the first line with trusted publishing.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Tag matches package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if [ "sdk-js-v$version" != "$TAG" ]; then
+            echo "tag $TAG does not match package.json version $version" >&2
+            exit 1
+          fi
+      - name: Test
+        run: |
+          npm ci --ignore-scripts
+          npm test
+      # prepack builds dist; publishConfig turns on provenance and public access.
+      - name: Publish
+        run: npm publish
