@@ -95,6 +95,7 @@ obj/
 *.user
 # Node / TypeScript
 node_modules/
+sdk/js/build-test/
 *.tsbuildinfo
 
 .tools/
