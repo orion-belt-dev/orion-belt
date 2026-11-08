@@ -1,0 +1,426 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v1/access-requests"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/access-requests"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/access-requests/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/access/explain"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/access-requests/:id/approve"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/access-requests/:id/reject"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/access-requests/pending"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/agents/:machine_id/command"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/agents/:machine_id/disconnect"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/agents/connected"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/agents/install-script"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/ca/export"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/machines"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/admin/machines/:id"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/admin/machines/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/machines/:id/kubernetes/reconcile"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/machines/:id/kubernetes/reconcile"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/notifications/policy"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/admin/notifications/policy"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/notifications/templates"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/admin/notifications/templates/:event"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/admin/notifications/templates/:event"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/permissions"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/permissions"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/admin/permissions/:id"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/admin/permissions/:id"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/permissions/bulk"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/permissions/bulk-revoke"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/permissions/effective"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/plugins"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/admin/plugins/:name/config"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/plugins/:name/disable"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/plugins/:name/enable"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/risk-policy"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/admin/risk-policy"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/ssh-certificates"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/ssh-certificates/:serial/revoke"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/admin/users"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/admin/users/:id"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/admin/users/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/anomalies"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/api-keys"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/api-keys"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/api-keys/:id"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/api-keys/:id/revoke"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/audit-logs"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/browser-bootstrap"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/auth/me"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/auth/password"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/password"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/capabilities"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboard/usage"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/files"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/files/download"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/files/list"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/files/mkdir"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/files/upload"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/gateway-info"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/logout"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/machines"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/machines/:id"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/mfa/confirm"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/mfa/disable"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/mfa/enroll"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/mfa/status"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/notifications"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/notifications/:id/read"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/notifications/prefs"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/notifications/prefs"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/notifications/read-all"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/notifications/unread-count"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/openapi.json"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/openapi.yaml"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/permissions/machine/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/permissions/user/:id"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/auth/browser-bootstrap/redeem"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/auth/challenge"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/login"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/login/key"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/login/password"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/login/token"
+  },
+  {
+    "method": "ANY",
+    "path": "/api/v1/public/plugins/:name/*proxyPath"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/register/agent"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/register/client"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/webauthn/login/begin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/public/webauthn/login/finish"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/:name/export"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions/:id/content"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions/:id/watch"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/sessions/active"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/setup/status"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ssh-cert"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ssh-cert/ca"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ssh-keys"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ssh-keys"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/ssh-keys/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/terminal/ws"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/users"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/users/:id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/version"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/webauthn/credentials"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/webauthn/credentials/:id"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/webauthn/register/begin"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/webauthn/register/finish"
+  }
+]
