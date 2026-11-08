@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=80", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,16 +8,52 @@ version = "0.1.0"
 description = "Python client for the Orion Belt API"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
-authors = [
-  { name = "Orion Belt Maintainers" }
+# Same terms as the repository: Apache-2.0 with the Commons Clause condition,
+# which has no SPDX identifier.
+license = "LicenseRef-Apache-2.0-with-Commons-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Orion Belt Maintainers" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
 ]
+# Standard library only, so the SDK drops into automation hosts as-is.
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/orion-belt-dev/orion-belt"
+Source = "https://github.com/orion-belt-dev/orion-belt/tree/master/sdk/python"
+Issues = "https://github.com/orion-belt-dev/orion-belt/issues"
+
+[dependency-groups]
+dev = [
+  "mypy>=2.4.1",
+  "pytest>=9.2.0",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.17.4",
+]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+orion_belt_sdk = ["py.typed"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=orion_belt_sdk --cov-branch --cov-report=term-missing --cov-fail-under=90"

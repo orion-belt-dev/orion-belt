@@ -86,6 +86,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 .venv/
 venv/
 # .NET
