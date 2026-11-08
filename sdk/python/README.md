@@ -59,15 +59,17 @@ the signature format and the raw signature. With the `cryptography` package:
 ```python
 from cryptography.hazmat.primitives import serialization
 
+from orion_belt_sdk import OrionBeltClient
+
 key = serialization.load_ssh_private_key(open("id_ed25519", "rb").read(), password=None)
 
+
 class Signer:
-    public_key = key.public_key().public_bytes(
-        serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH
-    ).decode()
+    public_key = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH).decode()
 
     def sign(self, data: bytes) -> tuple[str, bytes]:
         return "ssh-ed25519", key.sign(data)
+
 
 client = OrionBeltClient("https://pam.example.com")
 client.login_with_ssh_key("alice", Signer())
