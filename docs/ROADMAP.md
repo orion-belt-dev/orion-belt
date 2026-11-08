@@ -38,7 +38,7 @@ Open issues grouped by what they wait on. "Ready" means nothing else has to land
 | #52 Ticketing hooks (Jira/ServiceNow) | M | Compiled-in plugin platform |
 | #55 Capability definition (admin) | M | Builds on the read-only catalog in `pkg/api/capabilities.go` |
 | #58 Relationship graph explorer | L | Builds on `/access/explain` |
-| #61 Python SDK, #62 TypeScript SDK | M | `sdk/python` and `sdk/js` exist but cover a fraction of `/api/v1`; publishing needs PyPI/npm accounts |
+| #61 Python SDK, #62 TypeScript SDK | M | Both cover every `/api/v1` route; first release needs the PyPI/npm trusted publishers registered (see `sdk-release.yml`) |
 | #19 HA / DB replicas for the auth path | L | |
 | #30 Cloud privilege broker (AWS/Azure/GCP) | L | Needs cloud test accounts |
 | #34 Database gateway: connection proxying | L | Unblocks #35, #36 |
