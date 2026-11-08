@@ -121,6 +121,70 @@ jobs:
             exit 1
           fi
 
+  # Both SDK suites check their methods against sdk/routes.json; the Go Test
+  # job checks that file against the router, so a new route fails CI until
+  # both SDKs cover it.
+  sdk-python:
+    name: Python SDK (${{ matrix.python }})
+    runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
+    strategy:
+      matrix:
+        # Oldest supported (requires-python) and newest.
+        python: ['3.11', '3.14']
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.1'
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: sdk/python/uv.lock
+      - name: Install
+        run: uv sync --locked
+      - name: Lint
+        run: |
+          uv run --locked ruff check
+          uv run --locked ruff format --check
+      - name: Type-check
+        run: uv run --locked mypy
+      - name: Test
+        run: uv run --locked pytest
+      - name: Vulnerability scan
+        run: |
+          uv export --locked --all-groups --no-emit-project --format requirements-txt -o "$RUNNER_TEMP/requirements.txt"
+          uv tool run pip-audit@2.10.1 --strict --require-hashes --disable-pip -r "$RUNNER_TEMP/requirements.txt"
+      - name: Build
+        run: uv build
+
+  sdk-js:
+    name: TypeScript SDK
+    runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}
+    defaults:
+      run:
+        working-directory: sdk/js
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/js/package-lock.json
+      - name: Install
+        run: npm ci --ignore-scripts
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npm run check
+      - name: Test
+        run: npm test
+      - name: Vulnerability scan
+        run: npm audit --audit-level=high
+      - name: Package
+        run: npm pack --dry-run
+
   build:
     name: Build
     runs-on: ${{ (github.event.pull_request.head.repo.fork && 'ubuntu-latest') || fromJSON(vars.GH_RUNS_ON || '"ubuntu-latest"') }}

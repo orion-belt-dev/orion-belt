@@ -67,7 +67,12 @@ Suggested package names:
 ## Current Status
 
 - Go SDK: implemented in [pkg/sdk](../pkg/sdk)
-- JavaScript/TypeScript SDK: baseline client scaffold started in [sdk/js](../sdk/js)
-- Python/.NET: baseline client scaffolds started in [sdk/python](../sdk/python) and [sdk/dotnet](../sdk/dotnet)
+- Python SDK ([sdk/python](../sdk/python)) and JavaScript/TypeScript SDK
+  ([sdk/js](../sdk/js)): cover every `/api/v1` route, tested in CI, released
+  by tag through `.github/workflows/sdk-release.yml`
+- .NET: baseline client scaffold in [sdk/dotnet](../sdk/dotnet)
 
-The next step is to expand each language client toward fuller OpenAPI parity and add smoke tests per package.
+[sdk/routes.json](../sdk/routes.json) is generated from the Go router and
+checked against it by `pkg/api/routes_manifest_test.go`. The Python and
+TypeScript test suites fail if a route in it has no SDK method, so a new
+endpoint has to land in both SDKs before CI passes.

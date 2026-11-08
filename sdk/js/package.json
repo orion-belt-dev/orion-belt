@@ -2,16 +2,47 @@
   "name": "@orion-belt/sdk",
   "version": "0.1.0",
   "description": "TypeScript client for the Orion Belt API",
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Orion Belt Maintainers",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orion-belt-dev/orion-belt.git",
+    "directory": "sdk/js"
+  },
+  "homepage": "https://github.com/orion-belt-dev/orion-belt/tree/master/sdk/js",
+  "bugs": "https://github.com/orion-belt-dev/orion-belt/issues",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "rm -rf dist",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "oxlint --deny-warnings src test",
+    "clean": "rm -rf dist build-test",
+    "pretest": "rm -rf build-test && tsc -p tsconfig.test.json",
+    "test": "node --test --experimental-test-coverage --test-coverage-include='build-test/src/**' --test-coverage-lines=90 --test-coverage-branches=90 'build-test/test/**/*.test.js'",
+    "prepack": "npm run clean && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "oxlint": "1.90.0",
+    "typescript": "7.0.2"
   }
 }

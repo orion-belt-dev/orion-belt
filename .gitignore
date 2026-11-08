@@ -86,6 +86,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 .venv/
 venv/
 # .NET
@@ -94,6 +95,7 @@ obj/
 *.user
 # Node / TypeScript
 node_modules/
+sdk/js/build-test/
 *.tsbuildinfo
 
 .tools/
