@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "orion-belt-sdk"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python client for the Orion Belt API"
 readme = "README.md"
 requires-python = ">=3.11"
