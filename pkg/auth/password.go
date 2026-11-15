@@ -16,6 +16,11 @@ const (
 	argonThreads = 4
 	argonKeyLen  = 32
 	argonSaltLen = 16
+
+	// Limits on parameters read back from a stored hash: 16x the memory
+	// HashPassword uses, and half its key length.
+	maxVerifyMemory = 16 * argonMemory
+	minVerifyKeyLen = argonKeyLen / 2
 )
 
 // HashPassword returns an argon2id encoded hash suitable for storage.
@@ -48,12 +53,18 @@ func VerifyPassword(encoded, password string) bool {
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &timeCost, &threads); err != nil {
 		return false
 	}
+	// argon2 panics on t=0 or p=0, and m is an allocation size in KiB, so a
+	// corrupt stored hash must not reach it.
+	if timeCost < 1 || threads < 1 || memory > maxVerifyMemory {
+		return false
+	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
 		return false
 	}
 	want, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil {
+	// An empty key would make the comparison below succeed for any password.
+	if err != nil || len(want) < minVerifyKeyLen {
 		return false
 	}
 	got := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, uint32(len(want)))
