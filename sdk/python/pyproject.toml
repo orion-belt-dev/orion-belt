@@ -8,9 +8,8 @@ version = "1.0.0"
 description = "Python client for the Orion Belt API"
 readme = "README.md"
 requires-python = ">=3.11"
-# Same terms as the repository: Apache-2.0 with the Commons Clause condition,
-# which has no SPDX identifier.
-license = "LicenseRef-Apache-2.0-with-Commons-Clause"
+# Same terms as the repository.
+license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Orion Belt Maintainers" }]
 classifiers = [

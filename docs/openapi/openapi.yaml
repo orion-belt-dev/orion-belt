@@ -24,8 +24,8 @@ info:
     name: Orion Belt Maintainers
     url: https://github.com/orion-belt-dev/orion-belt
   license:
-    name: Apache-2.0 WITH Commons-Clause
-    url: https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.html
 
 servers:
   - url: http://localhost:8080

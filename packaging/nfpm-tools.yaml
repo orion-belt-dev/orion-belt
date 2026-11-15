@@ -7,7 +7,7 @@ priority: optional
 maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
 description: Orion Belt CLI tools (osh, ocp, oadmin)
 homepage: https://github.com/orion-belt-dev/orion-belt
-license: Apache-2.0 WITH Commons-Clause
+license: AGPL-3.0-only
 contents:
   - src: dist/osh
     dst: /usr/bin/osh

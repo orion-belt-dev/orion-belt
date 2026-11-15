@@ -2,7 +2,7 @@
   "name": "@orion-belt/sdk",
   "version": "1.0.0",
   "description": "TypeScript client for the Orion Belt API",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "AGPL-3.0-only",
   "author": "Orion Belt Maintainers",
   "repository": {
     "type": "git",

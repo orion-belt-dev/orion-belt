@@ -735,8 +735,8 @@ resolve_version() {
     fi
   fi
   if have python3; then
-    ver=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
-      | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)
+    ver=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" || true)
+    ver=$(printf '%s' "$ver" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)
   else
     ver=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
       | sed -n 's/.*"tag_name": *"\(v[^"]*\)".*/\1/p' | head -1)

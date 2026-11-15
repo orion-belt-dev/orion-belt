@@ -27,7 +27,7 @@ fi
 
 if ! command -v nfpm >/dev/null; then
   echo "Installing nfpm..."
-  go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+  go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
   export PATH="$(go env GOPATH)/bin:$PATH"
 fi
 

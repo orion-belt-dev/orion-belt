@@ -240,7 +240,7 @@ nfpms:
     description: |-
       Orion Belt PAM gateway server (SSH bastion + API).
       Session recording, just-in-time access and audit for SSH.
-    license: Apache-2.0 WITH Commons-Clause
+    license: AGPL-3.0-only
     bindir: /usr/bin
     section: net
     priority: optional
@@ -340,7 +340,7 @@ nfpms:
     description: |-
       Orion Belt PAM gateway server (SSH bastion + API).
       Session recording, just-in-time access and audit for SSH.
-    license: Apache-2.0 WITH Commons-Clause
+    license: AGPL-3.0-only
     bindir: /usr/bin
     section: net
     priority: optional
@@ -445,7 +445,7 @@ nfpms:
     description: |-
       Orion Belt reverse-SSH agent.
       Connects this host to an Orion Belt gateway without opening inbound ports.
-    license: Apache-2.0 WITH Commons-Clause
+    license: AGPL-3.0-only
     bindir: /usr/bin
     section: net
     priority: optional
@@ -527,7 +527,7 @@ nfpms:
     description: |-
       Orion Belt reverse-SSH agent.
       Connects this host to an Orion Belt gateway without opening inbound ports.
-    license: Apache-2.0 WITH Commons-Clause
+    license: AGPL-3.0-only
     bindir: /usr/bin
     section: net
     priority: optional
@@ -610,7 +610,7 @@ nfpms:
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
     description: |-
       Orion Belt clients: osh (SSH), ocp (file copy) and oadmin (administration).
-    license: Apache-2.0 WITH Commons-Clause
+    license: AGPL-3.0-only
     bindir: /usr/bin
     section: net
     priority: optional
@@ -648,7 +648,7 @@ nfpms:
     maintainer: Orion Belt Maintainers <maintainers@orion-belt.dev>
     description: |-
       Orion Belt clients: osh (SSH), ocp (file copy) and oadmin (administration).
-    license: Apache-2.0 WITH Commons-Clause
+    license: AGPL-3.0-only
     bindir: /usr/bin
     section: net
     priority: optional

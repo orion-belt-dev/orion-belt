@@ -77,6 +77,18 @@ Signatures:
   `APK_RSA_PRIVATE_KEY` is set.
 - `orion-belt-release-key.asc`: the public key.
 
+Build provenance (releases after v1.4.0):
+
+- `orion-belt-<tag>.intoto.jsonl`: SLSA level 3 provenance covering every file
+  in `checksums.txt`. Check a file with
+  [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+  `slsa-verifier verify-artifact <file> --provenance-path orion-belt-<tag>.intoto.jsonl --source-uri github.com/orion-belt-dev/orion-belt --source-tag <tag>`.
+- GitHub attestations for every release file and both container images:
+  `gh attestation verify <file> --repo orion-belt-dev/orion-belt`, or
+  `gh attestation verify oci://ghcr.io/orion-belt-dev/orion-belt-server:<version> --repo orion-belt-dev/orion-belt`.
+- The images also carry BuildKit provenance and an SBOM
+  (`docker buildx imagetools inspect <image> --format '{{json .Provenance}}'`).
+
 ## Services
 
 The server and agent packages work with **systemd, OpenRC, runit and SysV
