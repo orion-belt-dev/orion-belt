@@ -11,6 +11,7 @@
 - RDP, VNC and Kubernetes tunnels survive network drops (PR #138)
 - Permission editor: bulk grant/revoke, effective access view, server-side search (#70, PR #140)
 - Agent remote management: `orion:reload`, `orion:drain`/`undrain`, `orion:update` and `oadmin agents` ([AGENT_MANAGEMENT.md](AGENT_MANAGEMENT.md), #71, PR #141)
+- Supply-chain hardening: SLSA level 3 provenance and GitHub attestations for release files and images, least-privilege workflow tokens, SHA/digest pinning, `SECURITY.md`, Go fuzz tests, Go 1.27.4 (GO-2026-6859)
 
 ## Releases since v1.0.0
 
@@ -396,5 +397,5 @@ Helpful directions right now:
 
 Tags and merged PRs are the history. **v1.0.0** is the first release we call stable SSH PAM (API notes + ops docs + smoke). Open GitHub issues (FR-x.y) are the source of truth for planned work; this file summarises them.
 
-**Last Updated:** 2026-10-25 (v1.4.0 + unreleased `master`)  
+**Last Updated:** 2026-11-15 (v1.4.0 + unreleased `master`)  
 **Maintainer:** Mohamed Zrouga ([@zrougamed](https://github.com/zrougamed))

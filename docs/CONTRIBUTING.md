@@ -234,9 +234,10 @@ Please be patient — reviews may take time.
 
 If you discover a security vulnerability, **do not disclose it publicly**.
 
-Please report it privately by emailing:
-
-**[med@zrouga.email](mailto:med@zrouga.email)**
+Please report it privately, either through a
+[GitHub security advisory](https://github.com/orion-belt-dev/orion-belt/security/advisories/new)
+or by emailing **[maintainers@orion-belt.dev](mailto:maintainers@orion-belt.dev)**. See
+[SECURITY.md](../SECURITY.md) for what to include and what to expect.
 
 Responsible disclosure is greatly appreciated.
 
@@ -245,6 +246,19 @@ Responsible disclosure is greatly appreciated.
 ## License
 
 By contributing to Orion-Belt, you agree that your contributions will be licensed under the project's license, currently **Apache License 2.0 with the Commons Clause** (see [LICENSE](../LICENSE)).
+
+---
+
+## Contributors
+
+Thanks to everyone who has contributed to Orion-Belt:
+
+* [@mozinfra](https://github.com/mozinfra)
+* [@mdarguechi](https://github.com/mdarguechi)
+* [@zrougamed](https://github.com/zrougamed)
+* [@alexmchughdev](https://github.com/alexmchughdev)
+* [@SvenNellerz](https://github.com/SvenNellerz)
+* [@OtchereDev](https://github.com/OtchereDev)
 
 ---
 

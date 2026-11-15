@@ -14,6 +14,9 @@
   <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/orion-belt-dev/orion-belt?style=flat-square&color=1f5fe0" alt="Go"></a>
   <a href="https://github.com/orion-belt-dev/orion-belt/releases"><img src="https://img.shields.io/github/v/release/orion-belt-dev/orion-belt?include_prereleases&style=flat-square&color=1f5fe0" alt="Release"></a>
   <a href="https://github.com/orion-belt-dev/orion-belt/actions"><img src="https://img.shields.io/github/actions/workflow/status/orion-belt-dev/orion-belt/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/orion-belt-dev/orion-belt"><img src="https://img.shields.io/ossf-scorecard/github.com/orion-belt-dev/orion-belt?style=flat-square&label=OpenSSF%20Scorecard" alt="OpenSSF Scorecard"></a>
+  <a href="docs/PACKAGING.md#what-a-release-contains"><img src="https://img.shields.io/badge/SLSA-level%203-1f5fe0?style=flat-square" alt="SLSA level 3"></a>
+  <a href="SECURITY.md"><img src="https://img.shields.io/badge/security-policy-1f5fe0?style=flat-square" alt="Security policy"></a>
 </p>
 
 Agents dial out. Sessions are recorded. Access expires on its own.
@@ -524,6 +527,6 @@ You may use, modify, and run Orion Belt internally (including commercially). The
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](docs/CONTRIBUTING.md).
+Issues and pull requests are welcome. See [CONTRIBUTING.md](docs/CONTRIBUTING.md), which also lists the project's [contributors](docs/CONTRIBUTING.md#contributors).
 
 If you run Orion Belt in a lab or a small team and are willing to share feedback, join [Discord](https://discord.gg/w62S8jxTHJ), start a [discussion](https://github.com/orion-belt-dev/orion-belt/discussions), or open an issue.
