@@ -109,4 +109,4 @@ Bump `version` in `pyproject.toml` and push a tag `sdk-python-v<version>`. The
 
 ## License
 
-Apache License 2.0 with the Commons Clause condition. See [LICENSE](https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE).
+GNU Affero General Public License v3.0 only (AGPL-3.0-only). See [LICENSE](https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE).

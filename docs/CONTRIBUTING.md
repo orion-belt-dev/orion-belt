@@ -245,7 +245,7 @@ Responsible disclosure is greatly appreciated.
 
 ## License
 
-By contributing to Orion-Belt, you agree that your contributions will be licensed under the project's license, currently **Apache License 2.0 with the Commons Clause** (see [LICENSE](../LICENSE)).
+By contributing to Orion-Belt, you agree that your contributions will be licensed under the project's license, the **GNU Affero General Public License v3.0 only** (see [LICENSE](../LICENSE)).
 
 ---
 

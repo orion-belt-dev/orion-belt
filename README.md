@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://orion-belt.dev"><img src="https://img.shields.io/badge/website-orion--belt.dev-1f5fe0?style=flat-square" alt="Website"></a>
   <a href="https://discord.gg/w62S8jxTHJ"><img src="https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0%20%2B%20Commons%20Clause-1f5fe0?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f5fe0?style=flat-square" alt="License: AGPL-3.0"></a>
   <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/orion-belt-dev/orion-belt?style=flat-square&color=1f5fe0" alt="Go"></a>
   <a href="https://github.com/orion-belt-dev/orion-belt/releases"><img src="https://img.shields.io/github/v/release/orion-belt-dev/orion-belt?include_prereleases&style=flat-square&color=1f5fe0" alt="Release"></a>
   <a href="https://github.com/orion-belt-dev/orion-belt/actions"><img src="https://img.shields.io/github/actions/workflow/status/orion-belt-dev/orion-belt/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
@@ -23,7 +23,7 @@ Agents dial out. Sessions are recorded. Access expires on its own.
 
 Orion Belt is a self-hosted access gateway for SSH, RDP, VNC and Kubernetes, with privileged access management (PAM) workflows. Agents on your servers connect out to the gateway over reverse SSH, so targets need no inbound ports. The gateway adds session recording and live watch, just-in-time access with approvals, MFA and WebAuthn, relationship-based access control (ReBAC), and an optional SSH certificate authority.
 
-> Version 1.4.0 is the current release. Orion Belt is free to self-host and use internally under [Apache 2.0 with the Commons Clause](LICENSE); it may not be sold as a product or hosted service. See [orion-belt.dev](https://orion-belt.dev) for details.
+> Version 1.4.0 is the current release. Orion Belt is free and open source under the [GNU AGPL v3.0](LICENSE). See [orion-belt.dev](https://orion-belt.dev) for details.
 
 ## Why Orion Belt
 
@@ -521,9 +521,9 @@ Local packages: `make packages` → install from `dist/` ([PACKAGING.md](docs/PA
 
 ## License
 
-Apache License 2.0 with the [Commons Clause](https://commonsclause.com/). See [LICENSE](LICENSE).
+[GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only).
 
-You may use, modify, and run Orion Belt internally (including commercially). The Clause withholds selling Orion Belt itself, or a hosted service whose value derives substantially from it, as a product.
+You may use, modify and run Orion Belt for free, including commercially and inside your company. If you distribute it, or let people use a modified version over a network (for example as a hosted service), you must make the complete source of your version available to them under the same license.
 
 ## Contributing
 

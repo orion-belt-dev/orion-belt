@@ -11,6 +11,7 @@
 - RDP, VNC and Kubernetes tunnels survive network drops (PR #138)
 - Permission editor: bulk grant/revoke, effective access view, server-side search (#70, PR #140)
 - Agent remote management: `orion:reload`, `orion:drain`/`undrain`, `orion:update` and `oadmin agents` ([AGENT_MANAGEMENT.md](AGENT_MANAGEMENT.md), #71, PR #141)
+- License changed from Apache 2.0 + Commons Clause to the GNU AGPL v3.0 only (OSI-approved): free to use, modify and run, including commercially; anyone who distributes Orion Belt or offers a modified version as a network service must publish their source under the same terms
 - Supply-chain hardening: SLSA level 3 provenance and GitHub attestations for release files and images, least-privilege workflow tokens, SHA/digest pinning, `SECURITY.md`, Go fuzz tests, Go 1.27.4 (GO-2026-6859)
 
 ## Releases since v1.0.0
@@ -368,7 +369,7 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 * **v0.3.1:** Host key verification (TOFU), JWT, rate limits, email/webhook plugins, agent control commands, Prometheus metrics
 * **v0.4:** MFA (TOTP + WebAuthn/FIDO), OpenSSH agentless clients (`user+machine@gateway`), role-aware `/ui` (terminal + files), optional OpenFGA, recording encryption + retention
 * **v0.5:** Native packages (deb/rpm/apk) + GPG-signed repos, 0-CVE CI gate, multi-distro QEMU/Compose lab, React web console rebuild, web terminal session recording, setup wizard, OpenAPI + binary versioning, agent install-script UX
-* **v0.6:** Docker Compose quickstart (server/agent), Commons Clause license, security hardening (file-browser command injection fix, remote-user exec impersonation, plugin hook timeouts, session cleanup)
+* **v0.6:** Docker Compose quickstart (server/agent), Commons Clause license (replaced by AGPL-3.0-only after v1.4.0), security hardening (file-browser command injection fix, remote-user exec impersonation, plugin hook timeouts, session cleanup)
 * **v0.7:** Compiled-in plugin platform (replaced `.so` loading) with DB-backed live config + admin UI, `chatops-access-request` (Slack/Discord/Teams/Rocket.Chat), dark/light console theming, inline SVG nav
 * **v0.8:** SSH Certificate Authority (user/host certs, agent Host-cert identity, renewal, revoke), challenge-response pubkey API login, browser bootstrap codes, in-app notification bell, password+TOTP login — see `docs/SSH_CA.md`
 * **v0.9:** Richer permissions UI, recording compression, live session watch, notification prefs, JIT polish, ops docs (folded into the v1.0 cut)

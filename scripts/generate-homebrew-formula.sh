@@ -50,7 +50,7 @@ class OrionBelt < Formula
   desc "Orion Belt PAM CLI tools (osh, ocp, oadmin)"
   homepage "https://orion-belt.dev"
   version "${VERSION_NUM}"
-  license "Apache-2.0"
+  license "AGPL-3.0-only"
 
   on_macos do
     on_arm do
