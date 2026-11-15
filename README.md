@@ -24,7 +24,7 @@ Agents dial out. Sessions are recorded. Access expires on its own.
 
 Orion Belt is a self-hosted access gateway for SSH, RDP, VNC and Kubernetes, with privileged access management (PAM) workflows. Agents on your servers connect out to the gateway over reverse SSH, so targets need no inbound ports. The gateway adds session recording and live watch, just-in-time access with approvals, MFA and WebAuthn, relationship-based access control (ReBAC), and an optional SSH certificate authority.
 
-> Version 1.4.0 is the current release. Orion Belt is free and open source under the [GNU AGPL v3.0](LICENSE). See [orion-belt.dev](https://orion-belt.dev) for details.
+> Version 1.5.0 is the current release. Orion Belt is free and open source under the [GNU AGPL v3.0](LICENSE). See [orion-belt.dev](https://orion-belt.dev) for details.
 
 ## Why Orion Belt
 

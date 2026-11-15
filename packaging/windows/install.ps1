@@ -10,7 +10,7 @@
     irm https://pkgs.orion-belt.dev/install.ps1 | iex
 
   With options, download it first:
-    .\install.ps1 -Version v1.4.0
+    .\install.ps1 -Version v1.5.0
     .\install.ps1 -Uninstall
 
 .PARAMETER Version
