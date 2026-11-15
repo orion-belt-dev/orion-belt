@@ -182,7 +182,7 @@ Without `GPG_PRIVATE_KEY` the release is unsigned; without a packages secret
 the publish step fails rather than skipping.
 
 ```bash
-git tag v1.4.0 && git push origin v1.4.0
+git tag v1.5.0 && git push origin v1.5.0
 ```
 
 Rebuild the site from an existing release:
@@ -198,15 +198,15 @@ ppc64le, s390x, riscv64). The Go build runs on the build machine and
 cross-compiles, so only the final Alpine stage runs under emulation.
 
 ```bash
-docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.4.0
-docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.4.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.5.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.5.0
 # or :latest
 ```
 
 Local build + push (after `docker login ghcr.io`):
 
 ```bash
-DOCKER_TAG=1.4.0 make docker-push
+DOCKER_TAG=1.5.0 make docker-push
 ```
 
 ## Production Docker Compose
@@ -225,7 +225,7 @@ cp .env.prod.agent.example .env.prod.agent
 make docker-prod-agent-up
 ```
 
-Override tag with `ORION_IMAGE_TAG=1.4.0` to pin. Source builds stay on `docker-compose.server.yml`.
+Override tag with `ORION_IMAGE_TAG=1.5.0` to pin. Source builds stay on `docker-compose.server.yml`.
 
 ## First-run setup
 

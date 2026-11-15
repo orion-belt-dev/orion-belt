@@ -5,7 +5,7 @@ priority.
 
 ## Supported versions
 
-Security fixes go into the latest minor release (currently 1.4.x) and are
+Security fixes go into the latest minor release (currently 1.5.x) and are
 shipped as a new patch release. Older releases do not get backports; upgrade
 to the latest release to receive fixes.
 

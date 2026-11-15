@@ -2,17 +2,12 @@
 
 ## Current Status
 
-**Version:** v1.4.0 (released 2026-10-24)
+**Version:** v1.5.0 (released 2026-11-15)
 **Status:** Stable SSH PAM with RDP/VNC and just-in-time Kubernetes access through the agent tunnel, compliance reports, risk policy and anomaly flags. Identity providers (OIDC first), the secrets vault and the database gateway are next.
 
 ## Unreleased on `master`
 
-- Standardised API error handling: `pkg/apperr`, no internal errors leaked in 500s ([ERROR_HANDLING.md](ERROR_HANDLING.md), #66, PR #139)
-- RDP, VNC and Kubernetes tunnels survive network drops (PR #138)
-- Permission editor: bulk grant/revoke, effective access view, server-side search (#70, PR #140)
-- Agent remote management: `orion:reload`, `orion:drain`/`undrain`, `orion:update` and `oadmin agents` ([AGENT_MANAGEMENT.md](AGENT_MANAGEMENT.md), #71, PR #141)
-- License changed from Apache 2.0 + Commons Clause to the GNU AGPL v3.0 only (OSI-approved): free to use, modify and run, including commercially; anyone who distributes Orion Belt or offers a modified version as a network service must publish their source under the same terms
-- Supply-chain hardening: SLSA level 3 provenance and GitHub attestations for release files and images, least-privilege workflow tokens, SHA/digest pinning, `SECURITY.md`, Go fuzz tests, Go 1.27.4 (GO-2026-6859)
+Nothing yet.
 
 ## Releases since v1.0.0
 
@@ -22,6 +17,7 @@
 | v1.2.0 | Notification templates (#67), installer, agent delete cascade fix (#90) |
 | v1.3.0 / v1.3.1 | Capability catalog UI (#57), CLI coverage for new endpoints (#64), auth/authz/proxy hardening, terminal resize fix (#103), packages for every Linux distro and clients for every OS, pkgs.orion-belt.dev |
 | v1.4.0 | Compliance reports SOC2/ISO 27001/PCI (#47–#49), explain-access (#59), risk signals and auto-approve/escalate policy (#40, #41), anomaly flags (#45), recording compression (#69), break-glass admin (#17), integration suites (#73), RDP/VNC tunnel (#29), JIT Kubernetes RoleBindings (#37–#39), reports for non-SSH protocols (#54) |
+| v1.5.0 | Python and TypeScript SDKs for every `/api/v1` endpoint (PR #155, #161), agent remote management: reload, drain, update (#71), permission editor with bulk grants and effective access (#70), standardised API errors (#66), tunnels survive network drops, security audit fixes (PR #150), relicensed to AGPL-3.0-only, SLSA level 3 provenance and attestations for every release file and image |
 
 ## Open work — 2026-10-25
 
@@ -398,5 +394,5 @@ Helpful directions right now:
 
 Tags and merged PRs are the history. **v1.0.0** is the first release we call stable SSH PAM (API notes + ops docs + smoke). Open GitHub issues (FR-x.y) are the source of truth for planned work; this file summarises them.
 
-**Last Updated:** 2026-11-15 (v1.4.0 + unreleased `master`)  
+**Last Updated:** 2026-11-15 (v1.5.0)  
 **Maintainer:** Mohamed Zrouga ([@zrougamed](https://github.com/zrougamed))
