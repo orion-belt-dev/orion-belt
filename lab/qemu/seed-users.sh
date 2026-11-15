@@ -88,9 +88,9 @@ set_role() {
 
 user_id_by_name() {
   local name="$1"
-  curl -sS "$API/api/v1/users" \
-    -H "X-API-Key: $TOKEN" \
-    | ORION_N="$name" python3 -c 'import json,os,sys
+  local body
+  body="$(curl -sS "$API/api/v1/users" -H "X-API-Key: $TOKEN")"
+  printf '%s' "$body" | ORION_N="$name" python3 -c 'import json,os,sys
 name=os.environ["ORION_N"]
 for u in json.load(sys.stdin) or []:
   if u.get("username")==name:
@@ -99,9 +99,9 @@ for u in json.load(sys.stdin) or []:
 
 machine_id_by_name() {
   local name="$1"
-  curl -sS "$API/api/v1/machines" \
-    -H "X-API-Key: $TOKEN" \
-    | ORION_N="$name" python3 -c 'import json,os,sys
+  local body
+  body="$(curl -sS "$API/api/v1/machines" -H "X-API-Key: $TOKEN")"
+  printf '%s' "$body" | ORION_N="$name" python3 -c 'import json,os,sys
 name=os.environ["ORION_N"]
 for m in json.load(sys.stdin) or []:
   if m.get("name")==name:

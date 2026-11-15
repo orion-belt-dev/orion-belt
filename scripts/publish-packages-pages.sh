@@ -92,8 +92,9 @@ resolve_tag() {
   local tag
   tag="$(git -C "$ROOT" describe --tags --abbrev=0 2>/dev/null || true)"
   if [[ -n "$tag" && "$FROM_RELEASE" != "1" ]]; then echo "$tag"; return; fi
-  curl -fsSL "https://api.github.com/repos/$SOURCE_REPO/releases/latest" \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])'
+  local release
+  release="$(curl -fsSL "https://api.github.com/repos/$SOURCE_REPO/releases/latest")"
+  printf '%s' "$release" | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])'
 }
 
 TAG="$(resolve_tag)"
@@ -109,8 +110,8 @@ if [[ "$FROM_RELEASE" == "1" || ! -d "$DIST" ]]; then
   SRC="$WORK/release"
   mkdir -p "$SRC"
   echo "==> Downloading $TAG release files"
-  curl -fsSL "https://api.github.com/repos/$SOURCE_REPO/releases/tags/$TAG" \
-    | python3 -c '
+  release="$(curl -fsSL "https://api.github.com/repos/$SOURCE_REPO/releases/tags/$TAG")"
+  printf '%s' "$release" | python3 -c '
 import sys, json
 for a in json.load(sys.stdin)["assets"]:
     n = a["name"]
@@ -296,7 +297,7 @@ json.dump({
     "version": ver,
     "description": "Orion Belt clients: osh, ocp, oadmin",
     "homepage": "https://orion-belt.dev",
-    "license": "Apache-2.0 WITH Commons-Clause",
+    "license": "AGPL-3.0-only",
     "architecture": arch,
     "bin": ["osh.exe", "ocp.exe", "oadmin.exe"],
 }, sys.stdout, indent=2)

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-ARG BASE=ubuntu:24.04
-FROM golang:1.27.2-bookworm AS builder
+ARG BASE=ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5
+FROM golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
