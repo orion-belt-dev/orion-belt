@@ -63,8 +63,8 @@ orion-belt-server permission revoke \
 
 ## 4. Grant or revoke many at once
 
-:::info[After 1.4.0]
-Ships in the next release; not in 1.4.0.
+:::info[New in 1.5.0]
+Needs the gateway on 1.5.0 or later.
 :::
 
 One call grants an access type to every user × machine pair, up to 500
@@ -130,6 +130,6 @@ flowchart TD
 Yes, omit the `--duration` flag.
 
 **Q: Can I grant temporary access to multiple machines at once?**
-Yes. From the next release, use `oadmin permissions bulk-grant` or the
-console's multi-select (see [section 4](#4-grant-or-revoke-many-at-once)); on
-1.4.0, run one grant command per pair.
+Yes. Since 1.5.0, use `oadmin permissions bulk-grant` or the console's
+multi-select (see [section 4](#4-grant-or-revoke-many-at-once)); on 1.4.0 and
+earlier, run one grant command per pair.

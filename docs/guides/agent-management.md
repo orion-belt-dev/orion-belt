@@ -5,9 +5,8 @@ title: Agent Remote Management
 
 # Agent remote management
 
-:::info[After 1.4.0]
-Ships in the next release; not in 1.4.0. Needs the gateway, the agent and
-`oadmin` on that release.
+:::info[New in 1.5.0]
+Needs the gateway, the agent and `oadmin` on 1.5.0 or later.
 :::
 
 Operate agents from the gateway, without SSHing to each target: check them,

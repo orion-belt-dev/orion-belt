@@ -47,7 +47,7 @@ Stop and wipe `/etc/orion-belt/agent_key` on the host after removal.
 
 ## Reload, drain and update
 
-From the next release, admins can reload an agent's config, drain it for
+Since 1.5.0, admins can reload an agent's config, drain it for
 maintenance and update its binary from the gateway. See
 [Agent remote management](./agent-management).
 

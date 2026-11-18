@@ -82,7 +82,7 @@ const FAQ = [
   },
   {
     q: 'What does it cost?',
-    a: 'Nothing to self-host and use internally. It is Apache 2.0 with the Commons Clause: you may not sell Orion Belt itself as a product or hosted service.',
+    a: 'Nothing. It is open source under the GNU AGPL v3.0: free to use, self-host and run commercially. If you distribute it, or offer a modified version over a network, you publish your source under the same license.',
   },
   {
     q: 'What do I need to run it?',
@@ -139,7 +139,7 @@ function Hero() {
             </Link>
           </div>
           <p className={styles.heroMeta}>
-            Free to self-host. Version 1.4.0.{' '}
+            Open source, AGPL v3.0. Version 1.5.0.{' '}
             <Link className={styles.heroLink} to="https://github.com/orion-belt-dev/orion-belt">
               Source on GitHub
             </Link>

@@ -84,14 +84,10 @@ sudo wget -O /etc/apk/keys/orion-belt.rsa.pub https://pkgs.orion-belt.dev/apk/or
 echo 'https://pkgs.orion-belt.dev/apk' | sudo tee -a /etc/apk/repositories
 sudo apk update
 sudo apk add orion-belt postgresql openssl
-sudo chown -R orionbelt:orionbelt /etc/orion-belt /var/lib/orion-belt /var/log/orion-belt
 sudo rc-service postgresql setup
 sudo rc-service postgresql start
 sudo rc-update add postgresql
 ```
-
-The `chown` is needed on 1.4.0: apk leaves the server's directories owned by
-root, and the server, which runs as `orionbelt`, could not read its config.
 
 </TabItem>
 <TabItem value="arch" label="Arch Linux">
@@ -116,10 +112,10 @@ compose file and write its settings.
 
 ```bash
 mkdir orion-belt && cd orion-belt
-curl -fsSLO https://raw.githubusercontent.com/orion-belt-dev/orion-belt/v1.4.0/docker-compose.prod.yml
+curl -fsSLO https://raw.githubusercontent.com/orion-belt-dev/orion-belt/v1.5.0/docker-compose.prod.yml
 ORION_HOST=orion.example.com    # the name or IP you and your machines use for this server
 cat > .env.prod <<EOF
-ORION_IMAGE_TAG=1.4.0
+ORION_IMAGE_TAG=1.5.0
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 ORION_JWT_SECRET=$(openssl rand -hex 32)
 ORION_PUBLIC_HOST=$ORION_HOST
@@ -419,10 +415,10 @@ On the machine, with Docker and the Compose plugin:
 
 ```bash
 mkdir orion-belt-agent && cd orion-belt-agent
-curl -fsSLO https://raw.githubusercontent.com/orion-belt-dev/orion-belt/v1.4.0/docker-compose.prod.agent.yml
+curl -fsSLO https://raw.githubusercontent.com/orion-belt-dev/orion-belt/v1.5.0/docker-compose.prod.agent.yml
 ssh-keygen -t ed25519 -f agent-key -N ""
 cat > .env.agent <<'EOF'
-ORION_IMAGE_TAG=1.4.0
+ORION_IMAGE_TAG=1.5.0
 ORION_SERVER_HOST=orion.example.com
 ORION_AGENT_NAME=web-01
 EOF

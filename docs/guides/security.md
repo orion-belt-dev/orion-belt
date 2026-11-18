@@ -52,5 +52,5 @@ OIDC / external IdP is on the post-1.0 roadmap. Today: SSH keys, optional passwo
 **LDAP/SSO today?**  
 Not yet — use local users + keys/MFA; watch the roadmap for OIDC.
 
-**Commons Clause?**  
-Free to self-host and use internally; you cannot sell Orion Belt as a product/service. See the LICENSE on GitHub.
+**License?**  
+GNU AGPL v3.0 only, since 1.5.0. Free to use, self-host and run commercially; if you distribute it or offer a modified version over a network, publish your source under the same license. See the [LICENSE](https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE).
