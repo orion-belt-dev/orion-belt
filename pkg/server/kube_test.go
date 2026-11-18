@@ -18,12 +18,20 @@ import (
 )
 
 // stubCluster is the in-cluster agent's view of a cluster: the Orion Belt
-// bindings that exist, and who the proxy acted as.
+// bindings that exist, who the proxy acted as, and how many times the
+// gateway listed the bindings.
 type stubCluster struct {
 	mu        sync.Mutex
 	bindings  map[string]kube.Binding // namespace/name
 	proxied   []string
+	lists     int
 	failApply bool
+}
+
+func (c *stubCluster) listCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lists
 }
 
 func newStubCluster() *stubCluster { return &stubCluster{bindings: map[string]kube.Binding{}} }
@@ -68,6 +76,9 @@ func (a *stubAgent) kube(nc ssh.NewChannel) {
 			c.mu.Unlock()
 			_, _ = io.Copy(ch, ch)
 		case kube.OpList:
+			c.mu.Lock()
+			c.lists++
+			c.mu.Unlock()
 			_ = kube.WriteResponse(ch, c.snapshot(), nil)
 		case kube.OpApply:
 			c.mu.Lock()
@@ -90,7 +101,9 @@ func (a *stubAgent) kube(nc ssh.NewChannel) {
 }
 
 // connectKubeAgent connects the machine's agent as an in-cluster agent and
-// waits until the gateway has registered it as one.
+// waits until the gateway has registered it as one and finished the
+// reconcile it starts on connect. Without that wait, the connect reconcile
+// can run after the test creates a grant and apply it behind the test's back.
 func (h *harness) connectKubeAgent(t *testing.T, cluster *stubCluster) *stubAgent {
 	t.Helper()
 	a := h.connectAgent(t)
@@ -100,12 +113,15 @@ func (h *harness) connectKubeAgent(t *testing.T, cluster *stubCluster) *stubAgen
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := h.srv.kubeAgent(h.machine.ID); err == nil {
+		if _, err := h.srv.kubeAgent(h.machine.ID); err == nil && cluster.listCount() > 0 {
+			// The connect reconcile holds the cluster lock from before its
+			// list until it returns, so taking the lock waits it out.
+			h.srv.kubeLocks.lock(h.machine.ID)()
 			return a
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("gateway never marked the agent as in-cluster")
+	t.Fatal("gateway never marked the agent as in-cluster and reconciled it")
 	return nil
 }
 
