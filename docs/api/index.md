@@ -26,14 +26,15 @@ curl -s -H "Authorization: Bearer $ORION_API_KEY" https://orion.example.com/api/
 - `/api/v1/sessions` – session history, recordings, live watch
 - `/api/v1/audit-logs`, `/api/v1/reports` – audit log and compliance reports
 
-Refer to [`endpoints.md`](endpoints.md) for every endpoint.
+Refer to [`endpoints.md`](endpoints.md) for every endpoint, and to [SDKs](./sdks.md)
+for the Python, TypeScript and Go clients.
 
 ---
 
 ## Errors
 
-:::info[After 1.4.0]
-The `code` field ships in the next release; 1.4.0 returns `error` only.
+:::info[New in 1.5.0]
+The `code` field is new in 1.5.0; older servers return `error` only.
 :::
 
 A failed call answers with a status that matches the kind of failure and a

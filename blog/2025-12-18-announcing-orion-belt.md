@@ -67,7 +67,12 @@ Details: [Architecture overview](/docs/architecture/overview) and [Why reverse S
 
 ## License — said up front
 
-Orion Belt ships under **Apache 2.0 + Commons Clause**:
+:::info[Update, November 2026]
+Since 1.5.0, Orion Belt is open source under the GNU AGPL v3.0. See
+[Orion Belt is now AGPL v3.0](/blog/orion-belt-agpl).
+:::
+
+At launch, Orion Belt shipped under **Apache 2.0 + Commons Clause**:
 
 - Free to use, modify, and **self-host**, including internal commercial use  
 - You **cannot sell** Orion Belt (or a hosted service whose value derives substantially from it) as a product  

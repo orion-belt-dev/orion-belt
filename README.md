@@ -33,7 +33,7 @@ nvm use 22
 
 ## Content
 
-- `docs/`: unreleased "Next"; published cuts in `versioned_docs/` (default **1.3.0**)
+- `docs/`: unreleased "Next"; published cuts in `versioned_docs/` (default **1.5.0**)
 - `blog/`: site blog
 - `src/pages/`: marketing homepage
 - `static/`: favicons, fonts and brand marks (`static/img/orion-belt-*`)

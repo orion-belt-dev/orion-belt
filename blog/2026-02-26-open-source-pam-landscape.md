@@ -68,7 +68,7 @@ Ask:
 3. Is **session recording** a hard requirement?  
 4. Do we need **JIT approvals** or is standing access OK?  
 5. Can we run a gateway (Postgres, backups) ourselves?  
-6. Does license policy allow **Apache 2.0 + Commons Clause**?
+6. Does license policy allow the **AGPL v3.0**? (Orion Belt moved to it from Apache 2.0 + Commons Clause in 1.5.0.)
 
 If answers skew toward SSH + self-host + recording/JIT, evaluate Orion Belt hands-on:
 
@@ -78,4 +78,4 @@ If answers skew toward SSH + self-host + recording/JIT, evaluate Orion Belt hand
 
 - [Announcing Orion Belt](/blog/announcing-orion-belt)  
 - [Bastion vs PAM](/blog/bastion-vs-pam)  
-- [Commons Clause honesty](/blog/commons-clause-honesty)
+- [Orion Belt is now AGPL v3.0](/blog/orion-belt-agpl)

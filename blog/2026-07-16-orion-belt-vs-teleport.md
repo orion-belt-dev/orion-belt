@@ -11,7 +11,7 @@ keywords: [Teleport alternative, Orion Belt vs Teleport, open source PAM, self-h
 
 {/* truncate */}
 
-This comparison is for practitioners evaluating **open source PAM** / **self-hosted privileged access** options for SSH, not a dunk contest. Licensing differs; verify current Teleport terms for your use case. Orion Belt is Apache 2.0 + Commons Clause ([details](/blog/commons-clause-honesty)).
+This comparison is for practitioners evaluating **open source PAM** / **self-hosted privileged access** options for SSH, not a dunk contest. Licensing differs; verify current Teleport terms for your use case. Orion Belt is open source under the AGPL v3.0 since 1.5.0 ([details](/blog/orion-belt-agpl)).
 
 ## Who should read this
 
@@ -92,7 +92,7 @@ Boundary shines when the center of gravity is **identity + credential brokering*
 For SSH-centric self-hosted PAM/bastion needs, yes. For full multi-protocol zero trust, Teleport remains broader.
 
 **Is Orion Belt open source?**  
-Source-available under Apache 2.0 + Commons Clause — free to self-host; not for sale as a product/SaaS wrapper. Not OSI “Open Source” in the strict sense.
+Yes, since 1.5.0: GNU AGPL v3.0 only, an OSI-approved license. Free to use, self-host and run commercially; if you distribute it or offer a modified version over a network, you publish your source under the same license. Releases 1.0 to 1.4 were Apache 2.0 + Commons Clause.
 
 **Can I migrate from a jump host?**  
 Yes: enroll agents, move humans to `user+host@gateway`, turn on recording, then tighten inbound SSH. See [bastion vs PAM](/blog/bastion-vs-pam).

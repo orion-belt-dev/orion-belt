@@ -111,8 +111,8 @@ Anything listed for deletion is expired, revoked or orphaned.
 
 ## 4. Network interruptions
 
-:::info[After 1.4.0]
-Ships in the next release; not in 1.4.0.
+:::info[New in 1.5.0]
+Needs the gateway, agents and `osh` on 1.5.0 or later.
 :::
 
 `osh kube` behaves like `osh rdp` when the network drops: the local relay

@@ -9,12 +9,12 @@ title: Introduction
 
 Teleport-like SSH access control — without opening inbound ports or adopting a large platform. Agents dial **out** over reverse SSH; you get session recording, live watch, JIT approvals, MFA/WebAuthn, ReBAC, and optional SSH CA.
 
-:::tip[v1.4.0]
+:::tip[v1.5.0]
 Stable and public. Fastest path: **[Get started in 10 minutes](./quickstart/get-started)**, from the signed packages, step by step for your OS. To only look around, [try it with Docker](./quickstart/try-in-10-minutes). Every option: [Installation](./quickstart/installation).
-New in 1.4.0: [RDP and VNC](./guides/rdp-vnc) and [just-in-time Kubernetes access](./guides/kubernetes) through the same outbound agents, [compliance reports](./guides/compliance-reports), and [risk signals, access explain and anomaly flags](./guides/risk-and-anomalies).
+New in 1.5.0: [Python and TypeScript SDKs](./api/sdks.md) for the whole API, [agent remote management](./guides/agent-management), [bulk grants and effective access](./guides/permissions-management#4-grant-or-revoke-many-at-once), tunnels that survive network drops, [standard API error codes](./api/index.md#errors), the 2026-11 security audit fixes, and [verifiable build provenance](./quickstart/verify-release). Orion Belt is now open source under the AGPL v3.0.
 :::
 
-> Free to self-host and use internally under [Apache 2.0 + Commons Clause](https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE). You cannot sell Orion Belt as a product or hosted service.
+> Open source under the [GNU AGPL v3.0](https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE). Free to use, self-host, modify and run commercially. If you distribute Orion Belt, or offer a modified version over a network, you publish your source under the same license.
 
 ## Why Orion Belt?
 
@@ -27,7 +27,9 @@ New in 1.4.0: [RDP and VNC](./guides/rdp-vnc) and [just-in-time Kubernetes acces
 | ✓ | MFA — TOTP + WebAuthn |
 | ✓ | ReBAC authorization (optional OpenFGA) |
 | ✓ | Optional SSH Certificate Authority |
-| ✓ | Linux packages (deb / rpm / apk) |
+| ✓ | Linux packages (deb / rpm / apk / pacman) |
+| ✓ | Python, TypeScript and Go SDKs |
+| ✓ | Open source (AGPL v3.0), signed releases with SLSA provenance |
 
 ## Architecture
 

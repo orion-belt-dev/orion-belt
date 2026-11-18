@@ -1,11 +1,16 @@
 ---
 slug: commons-clause-honesty
-title: Apache 2.0 + Commons Clause — what Orion Belt’s license means
-description: Clear explanation of Orion Belt’s Apache 2.0 + Commons Clause license for self-hosted PAM — what you can do, what you cannot sell, and why we disclose it on HN and Reddit.
+title: Apache 2.0 + Commons Clause — what Orion Belt’s license meant before 1.5.0
+description: Orion Belt 1.0 to 1.4 shipped under Apache 2.0 + Commons Clause; 1.5.0 moved to the AGPL v3.0. Plain-language explanation of the old license for self-hosted PAM — what you can do, what you cannot sell, and why we disclose it on HN and Reddit.
 authors: [orion]
 tags: [self-hosted, pam]
 keywords: [Commons Clause, Apache 2.0 PAM, open source license self-hosted, Orion Belt license]
 ---
+
+:::info[Update, November 2026]
+This post describes the license of Orion Belt 1.0 to 1.4. Since 1.5.0, Orion Belt is open source under the GNU AGPL v3.0. See
+[Orion Belt is now AGPL v3.0](/blog/orion-belt-agpl).
+:::
 
 Security infrastructure requires trust. Burying a restrictive clause until after launch is how open-source communities learn to ignore you. Orion Belt uses **Apache License 2.0 with the Commons Clause**, and we say so in the README, website, and launch posts.
 
@@ -59,5 +64,6 @@ Full legal text: [LICENSE](https://github.com/orion-belt-dev/orion-belt/blob/mas
 
 ## Related
 
+- [Orion Belt is now AGPL v3.0](/blog/orion-belt-agpl)  
 - [Announcing Orion Belt](/blog/announcing-orion-belt)  
 - [Open-source PAM landscape](/blog/open-source-pam-landscape)

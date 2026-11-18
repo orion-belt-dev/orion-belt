@@ -104,13 +104,13 @@ Full walkthrough: [Try it with Docker](./try-in-10-minutes). For a server on Doc
 ### Published images (GHCR)
 
 ```bash
-docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.4.0
-docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.4.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-server:1.5.0
+docker pull ghcr.io/orion-belt-dev/orion-belt-agent:1.5.0
 # or :latest
 ```
 
 From a clone: `cp .env.prod.example .env.prod` (set secrets + public URL), then
-`make docker-prod-up`. Pin with `ORION_IMAGE_TAG=1.4.0` if you do not want
+`make docker-prod-up`. Pin with `ORION_IMAGE_TAG=1.5.0` if you do not want
 `:latest`. Image list: [CONTAINERS](https://pkgs.orion-belt.dev/CONTAINERS).
 
 ## From source
