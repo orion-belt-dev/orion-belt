@@ -23,7 +23,7 @@ This is an open call for **early operators** — roughly the first twenty labs o
 ## Who we are not optimizing for (yet)
 
 - Enterprises needing HA + OIDC + multi-protocol on day one  
-- Teams blocked by Commons Clause / non-OSI policy ([license notes](/blog/commons-clause-honesty))  
+- Teams whose policy rules out AGPL software ([license notes](/blog/orion-belt-agpl); Orion Belt moved from Commons Clause to the AGPL v3.0 in 1.5.0)  
 - Drive-by “please add my niche protocol” without deploying SSH first  
 
 ## What you get

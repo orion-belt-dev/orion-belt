@@ -31,6 +31,8 @@ SSH CA, OpenFGA, and WebAuthn are valuable. None of them should block the first 
 
 People evaluating PAM software are professionally paranoid. Commons Clause disclosed early builds trust even when it loses some adopters. [License FAQ](/blog/commons-clause-honesty).
 
+Update, November 2026: in 1.5.0 we moved to the AGPL v3.0, an OSI-approved license. [Why](/blog/orion-belt-agpl).
+
 ## 6. Protect the 10-minute path like an API
 
 Every feature PR should ask: did we break `docker-quickstart` → agent → Sessions? If yes, fix or document before merge. [Install path design](/blog/ten-minute-install-path).

@@ -44,7 +44,12 @@ Then: [Try Orion Belt in 10 minutes](/docs/quickstart/try-in-10-minutes) through
 
 ## License
 
-Apache 2.0 + Commons Clause — free to self-host and use internally; you cannot sell Orion Belt as a product or substantially derived hosted service. [Plain-language FAQ](/blog/commons-clause-honesty).
+:::info[Update, November 2026]
+Since 1.5.0, Orion Belt is open source under the GNU AGPL v3.0. See
+[Orion Belt is now AGPL v3.0](/blog/orion-belt-agpl).
+:::
+
+At 1.0: Apache 2.0 + Commons Clause — free to self-host and use internally; you cannot sell Orion Belt as a product or substantially derived hosted service. [Plain-language FAQ](/blog/commons-clause-honesty).
 
 ## Join early operators
 
