@@ -30,7 +30,7 @@ else
 fi
 
 if metrics=$(curl -fsS "${API}/metrics" 2>/dev/null); then
-  if echo "$metrics" | grep -q 'orion_belt_up'; then
+  if grep -q 'orion_belt_up' <<<"$metrics"; then
     pass "GET /metrics (orion_belt_up)"
   else
     fail "GET /metrics missing orion_belt_up"
@@ -40,7 +40,7 @@ else
 fi
 
 if oa=$(curl -fsS "${API}/api/v1/openapi.yaml" 2>/dev/null); then
-  if echo "$oa" | grep -q '^openapi:'; then
+  if grep -q '^openapi:' <<<"$oa"; then
     pass "GET /api/v1/openapi.yaml"
   else
     fail "openapi.yaml unexpected body"
