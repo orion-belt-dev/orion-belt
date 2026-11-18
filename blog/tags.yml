@@ -32,3 +32,28 @@ ops:
   label: Ops
   permalink: /ops
   description: Deploying and running Orion Belt
+
+linux:
+  label: Linux
+  permalink: /linux
+  description: Linux packages, distributions and host tooling
+
+kubernetes:
+  label: Kubernetes
+  permalink: /kubernetes
+  description: Just-in-time Kubernetes access
+
+rdp:
+  label: RDP and VNC
+  permalink: /rdp
+  description: Remote desktop access through the gateway
+
+observability:
+  label: Observability
+  permalink: /observability
+  description: Metrics, logs and tracing
+
+compliance:
+  label: Compliance
+  permalink: /compliance
+  description: Audit evidence for SOC 2, ISO 27001 and PCI DSS
