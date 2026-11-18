@@ -2,11 +2,293 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://orion-belt.dev/blog</id>
     <title>Orion Belt Blog</title>
-    <updated>2026-10-24T00:00:00.000Z</updated>
+    <updated>2026-11-18T14:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://orion-belt.dev/blog"/>
     <subtitle>Orion Belt Blog</subtitle>
     <icon>https://orion-belt.dev/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Orion Belt v1.5 — SDKs, agent remote management and an AGPL license]]></title>
+        <id>https://orion-belt.dev/blog/orion-belt-v1-5</id>
+        <link href="https://orion-belt.dev/blog/orion-belt-v1-5"/>
+        <updated>2026-11-18T14:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Orion Belt 1.5.0 adds Python and TypeScript SDKs for the whole API, remote management for agents, bulk grants, tunnels that survive network drops, standard API errors and the fixes from a security audit. It is now open source under the AGPL v3.0, with verifiable build provenance.]]></summary>
+        <content type="html"><![CDATA[<p><strong>Orion Belt 1.5.0</strong> makes the gateway easier to automate and easier to
+trust. It ships SDKs for every API endpoint, lets you manage agents from the
+gateway, and fixes everything a security audit found. It is also the first
+release under an open source license, and the first with build provenance
+you can check.</p>
+<!-- -->
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="python-and-typescript-sdks">Python and TypeScript SDKs<a href="https://orion-belt.dev/blog/orion-belt-v1-5#python-and-typescript-sdks" class="hash-link" aria-label="Direct link to Python and TypeScript SDKs" title="Direct link to Python and TypeScript SDKs" translate="no">​</a></h2>
+<p><code>pip install orion-belt-sdk</code> and <code>npm install @orion-belt/sdk</code> give you a
+client for every <code>/api/v1</code> endpoint, with no runtime dependencies. CI checks
+both against the server's route table, so a new endpoint can't ship without
+them. See <a class="" href="https://orion-belt.dev/docs/api/sdks">SDKs</a> and
+<a class="" href="https://orion-belt.dev/blog/orion-belt-sdks">the SDK post</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="agent-remote-management">Agent remote management<a href="https://orion-belt.dev/blog/orion-belt-v1-5#agent-remote-management" class="hash-link" aria-label="Direct link to Agent remote management" title="Direct link to Agent remote management" translate="no">​</a></h2>
+<p><code>oadmin agents reload</code>, <code>drain</code>, <code>undrain</code> and <code>update</code> run over the
+connection the agent already holds open to the gateway. No SSH to the host,
+no inbound port. Each command is admin or operator only and audited. See
+<a class="" href="https://orion-belt.dev/docs/guides/agent-management">Agent remote management</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="bulk-grants-and-effective-access">Bulk grants and effective access<a href="https://orion-belt.dev/blog/orion-belt-v1-5#bulk-grants-and-effective-access" class="hash-link" aria-label="Direct link to Bulk grants and effective access" title="Direct link to Bulk grants and effective access" translate="no">​</a></h2>
+<p>One call grants or revokes an access type for every user × machine pair, up
+to 500, each applied and audited on its own. The console gains multi-select,
+an effective access view and server-side search. See
+<a class="" href="https://orion-belt.dev/docs/guides/permissions-management#4-grant-or-revoke-many-at-once">Permissions</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="tunnels-that-survive-network-drops">Tunnels that survive network drops<a href="https://orion-belt.dev/blog/orion-belt-v1-5#tunnels-that-survive-network-drops" class="hash-link" aria-label="Direct link to Tunnels that survive network drops" title="Direct link to Tunnels that survive network drops" translate="no">​</a></h2>
+<p>Agents redial as soon as a link drops, with jittered backoff. The gateway
+pings agents and clients every 15 seconds, so dead links are noticed quickly,
+and a reconnecting agent is no longer shown as offline.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="standard-api-errors">Standard API errors<a href="https://orion-belt.dev/blog/orion-belt-v1-5#standard-api-errors" class="hash-link" aria-label="Direct link to Standard API errors" title="Direct link to Standard API errors" translate="no">​</a></h2>
+<p>Every error now has a <code>code</code>: <code>invalid</code>, <code>unauthenticated</code>, <code>forbidden</code>,
+<code>not_found</code>, <code>conflict</code>, <code>unavailable</code> or <code>internal</code>, each with a fixed HTTP
+status. Internal details never reach a 500 response. See
+<a class="" href="https://orion-belt.dev/docs/api#errors">API errors</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="security-audit-fixes">Security audit fixes<a href="https://orion-belt.dev/blog/orion-belt-v1-5#security-audit-fixes" class="hash-link" aria-label="Direct link to Security audit fixes" title="Direct link to Security audit fixes" translate="no">​</a></h2>
+<p>An external audit in early November found four issues; all are fixed, along
+with what we found while fixing them:</p>
+<ul>
+<li class="">Generated agent install scripts and <code>install-server.sh</code> verify every
+download against the signed <code>checksums.txt</code>.</li>
+<li class="">Deleting a machine keeps its recordings until the retention sweep. Agent
+registration, credential changes and file browser actions are audited. MFA
+backup codes can no longer be reused.</li>
+<li class="">The API server has timeouts, a request body limit and security headers.</li>
+<li class="">With a Host CA configured, agents no longer trust a gateway that omits its
+certificate.</li>
+<li class="">The server container runs as <code>orionbelt</code>, not root.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="now-agpl-v30">Now AGPL v3.0<a href="https://orion-belt.dev/blog/orion-belt-v1-5#now-agpl-v30" class="hash-link" aria-label="Direct link to Now AGPL v3.0" title="Direct link to Now AGPL v3.0" translate="no">​</a></h2>
+<p>Orion Belt is now open source under the GNU AGPL v3.0, replacing Apache 2.0
+with the Commons Clause. Using, modifying and running it stays free,
+including commercially. <a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">What changes and why</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="verifiable-releases">Verifiable releases<a href="https://orion-belt.dev/blog/orion-belt-v1-5#verifiable-releases" class="hash-link" aria-label="Direct link to Verifiable releases" title="Direct link to Verifiable releases" translate="no">​</a></h2>
+<p>Every release file and container image comes with SLSA level 3 provenance
+and a GitHub attestation, alongside the GPG signatures. You can check that a
+binary was built by the release workflow from the <code>v1.5.0</code> tag. See
+<a class="" href="https://orion-belt.dev/docs/quickstart/verify-release">Verify a release</a> and
+<a class="" href="https://orion-belt.dev/blog/verifiable-releases">the post on how we build releases</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="upgrade-notes">Upgrade notes<a href="https://orion-belt.dev/blog/orion-belt-v1-5#upgrade-notes" class="hash-link" aria-label="Direct link to Upgrade notes" title="Direct link to Upgrade notes" translate="no">​</a></h2>
+<ul>
+<li class=""><strong>JWT secret:</strong> the server refuses to start with the example placeholder
+secret or one shorter than 32 bytes. Package installs and upgrades replace
+the placeholder with a random secret, which signs everyone out once. For
+Docker or hand-written configs, set one with <code>openssl rand -hex 32</code>.</li>
+<li class=""><strong>Database migration:</strong> the first start converts timestamp columns to
+<code>TIMESTAMPTZ</code>, rewriting each table once under a lock. Expect a pause on a
+large <code>audit_logs</code>. A non-UTC host whose time zone can't be detected needs
+<code>ORION_DB_LEGACY_TIMEZONE</code>.</li>
+<li class=""><strong>Unsigned builds:</strong> generated install scripts need signed release
+packages. For a local <code>dist/</code>, tick "Allow an unsigned local build".</li>
+<li class=""><strong>Alpine:</strong> the <code>chown</code> step from the 1.4.0 install guide is no longer
+needed; the package owns its directories correctly.</li>
+</ul>
+<p>Full notes are on the
+<a href="https://github.com/orion-belt-dev/orion-belt/releases/tag/v1.5.0" target="_blank" rel="noopener noreferrer" class="">v1.5.0 release</a>.</p>]]></content>
+        <author>
+            <name>Orion Belt</name>
+            <uri>https://orion-belt.dev</uri>
+        </author>
+        <category label="PAM" term="PAM"/>
+        <category label="Self-hosted" term="Self-hosted"/>
+        <category label="Security" term="Security"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Orion Belt is now open source under the AGPL v3.0]]></title>
+        <id>https://orion-belt.dev/blog/orion-belt-agpl</id>
+        <link href="https://orion-belt.dev/blog/orion-belt-agpl"/>
+        <updated>2026-11-18T13:00:00.000Z</updated>
+        <summary type="html"><![CDATA[From 1.5.0, Orion Belt is licensed under the GNU AGPL v3.0 only, replacing Apache 2.0 with the Commons Clause. What you can do, what you must share, and what it means for the SDKs.]]></summary>
+        <content type="html"><![CDATA[<p>From <strong>1.5.0</strong>, Orion Belt is licensed under the
+<a href="https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE" target="_blank" rel="noopener noreferrer" class="">GNU Affero General Public License v3.0 only</a>
+(<code>AGPL-3.0-only</code>). It replaces Apache 2.0 with the Commons Clause, which we
+used from the first release. Orion Belt is now open source in the
+<a href="https://opensource.org/license/agpl-v3" target="_blank" rel="noopener noreferrer" class="">OSI sense</a>, not only
+source-available.</p>
+<!-- -->
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-you-can-do">What you can do<a href="https://orion-belt.dev/blog/orion-belt-agpl#what-you-can-do" class="hash-link" aria-label="Direct link to What you can do" title="Direct link to What you can do" translate="no">​</a></h2>
+<ul>
+<li class="">Run Orion Belt for any purpose, including inside a company and for paying
+customers' infrastructure.</li>
+<li class="">Read, audit and modify the code.</li>
+<li class="">Package it, mirror it and redistribute it.</li>
+</ul>
+<p>There is no fee and no "internal use only" condition. The Commons Clause
+restriction on selling Orion Belt is gone.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-you-must-do-in-return">What you must do in return<a href="https://orion-belt.dev/blog/orion-belt-agpl#what-you-must-do-in-return" class="hash-link" aria-label="Direct link to What you must do in return" title="Direct link to What you must do in return" translate="no">​</a></h2>
+<p>The AGPL asks for one thing: if you pass the software on, you pass on the
+source too.</p>
+<ul>
+<li class=""><strong>Distributing it</strong> (a modified binary, an appliance, an image you hand to
+others): ship the corresponding source under the AGPL.</li>
+<li class=""><strong>Offering a modified version over a network</strong> (users connect to your
+changed gateway): offer those users the source of your version.</li>
+</ul>
+<p>Running an unmodified Orion Belt triggers neither. Your configuration, your
+scripts and the machines behind the gateway are not covered by the license.
+This is a summary, not legal advice; the LICENSE text is what applies.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="why-we-changed">Why we changed<a href="https://orion-belt.dev/blog/orion-belt-agpl#why-we-changed" class="hash-link" aria-label="Direct link to Why we changed" title="Direct link to Why we changed" translate="no">​</a></h2>
+<p>When we <a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">explained the Commons Clause</a>, we
+named three goals: keep the code auditable, keep self-hosting free, and stop
+a vendor from wrapping the project as a closed hosted service. The AGPL meets
+all three. Anyone can run a hosted Orion Belt, but they have to publish the
+changes they make to it, which is the protection we were after.</p>
+<p>What the Commons Clause added on top was a ban on selling, and that came at a
+cost. It is not an OSI license, so teams with an "OSI-approved only" policy
+could not adopt Orion Belt at all, and packagers and security reviewers had to
+read a custom clause before they could even evaluate it. The AGPL is a license
+those teams already have a policy for.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-sdks">The SDKs<a href="https://orion-belt.dev/blog/orion-belt-agpl#the-sdks" class="hash-link" aria-label="Direct link to The SDKs" title="Direct link to The SDKs" translate="no">​</a></h2>
+<p>The Python and TypeScript SDKs are AGPL too. An application that bundles an
+SDK and is distributed, or served to others over a network, should be under an
+AGPL-compatible license. Calling the REST API directly, with any HTTP client,
+does not bring the AGPL into your code.</p>
+<p>The SDK packages on PyPI and npm still carry the old license metadata from
+their 1.0.0 release. Their next release picks up the AGPL.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="older-releases">Older releases<a href="https://orion-belt.dev/blog/orion-belt-agpl#older-releases" class="hash-link" aria-label="Direct link to Older releases" title="Direct link to Older releases" translate="no">​</a></h2>
+<p>Releases up to and including 1.4.x stay under the license they shipped with.
+A license doesn't change retroactively. Upgrade to 1.5.0 to run under the
+AGPL.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="related">Related<a href="https://orion-belt.dev/blog/orion-belt-agpl#related" class="hash-link" aria-label="Direct link to Related" title="Direct link to Related" translate="no">​</a></h2>
+<ul>
+<li class=""><a class="" href="https://orion-belt.dev/blog/orion-belt-v1-5">Orion Belt v1.5</a></li>
+<li class=""><a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">Apache 2.0 + Commons Clause, before 1.5.0</a></li>
+<li class=""><a class="" href="https://orion-belt.dev/blog/open-source-pam-landscape">Open-source PAM landscape</a></li>
+</ul>]]></content>
+        <author>
+            <name>Orion Belt</name>
+            <uri>https://orion-belt.dev</uri>
+        </author>
+        <category label="Self-hosted" term="Self-hosted"/>
+        <category label="PAM" term="PAM"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to check that an Orion Belt binary is the one we built]]></title>
+        <id>https://orion-belt.dev/blog/verifiable-releases</id>
+        <link href="https://orion-belt.dev/blog/verifiable-releases"/>
+        <updated>2026-11-18T12:00:00.000Z</updated>
+        <summary type="html"><![CDATA[From 1.5.0, every Orion Belt release file and container image has SLSA level 3 provenance and a GitHub attestation next to its GPG signature. What each proof tells you, how to check it, and the rest of the supply-chain work behind it.]]></summary>
+        <content type="html"><![CDATA[<p>An access gateway holds the keys to every machine behind it, so the binary
+you run matters as much as the code you read. From <strong>1.5.0</strong>, each Orion
+Belt release lets you check not only who signed a file, but how and from
+what it was built.</p>
+<!-- -->
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="three-proofs-three-questions">Three proofs, three questions<a href="https://orion-belt.dev/blog/verifiable-releases#three-proofs-three-questions" class="hash-link" aria-label="Direct link to Three proofs, three questions" title="Direct link to Three proofs, three questions" translate="no">​</a></h2>
+<table><thead><tr><th>Proof</th><th>Question it answers</th></tr></thead><tbody><tr><td>GPG signature (<code>&lt;file&gt;.sig</code>, <code>checksums.txt.sig</code>)</td><td>Was this file signed with the Orion Belt release key?</td></tr><tr><td>SLSA provenance (<code>orion-belt-v1.5.0.intoto.jsonl</code>)</td><td>Was it built by our release workflow, from the <code>v1.5.0</code> tag of our repository?</td></tr><tr><td>GitHub attestation</td><td>The same, recorded by GitHub, for release files and both container images</td></tr></tbody></table>
+<p>The GPG key signs every release file and the package repositories. It
+proves a file came from someone with the key. It can't tell you what was
+built: a signed binary built from a modified tree would pass.</p>
+<p>Provenance closes that gap. The release workflow records which repository,
+commit and workflow produced each file, and that statement is signed with a
+short-lived certificate issued to the workflow run itself. No maintainer
+holds a key that could sign a false one.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="checking-a-file">Checking a file<a href="https://orion-belt.dev/blog/verifiable-releases#checking-a-file" class="hash-link" aria-label="Direct link to Checking a file" title="Direct link to Checking a file" translate="no">​</a></h2>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token assign-left variable" style="color:#36acaa">TAG</span><span class="token operator" style="color:#393A34">=</span><span class="token plain">v1.5.0</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token assign-left variable" style="color:#36acaa">FILE</span><span class="token operator" style="color:#393A34">=</span><span class="token plain">orion-belt_1.5.0_linux_amd64.tar.gz</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">gh release download </span><span class="token string" style="color:#e3116c">"</span><span class="token string variable" style="color:#36acaa">$TAG</span><span class="token string" style="color:#e3116c">"</span><span class="token plain"> </span><span class="token parameter variable" style="color:#36acaa">-R</span><span class="token plain"> orion-belt-dev/orion-belt </span><span class="token punctuation" style="color:#393A34">\</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token parameter variable" style="color:#36acaa">-p</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">"</span><span class="token string variable" style="color:#36acaa">$FILE</span><span class="token string" style="color:#e3116c">"</span><span class="token plain"> </span><span class="token parameter variable" style="color:#36acaa">-p</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">"orion-belt-</span><span class="token string variable" style="color:#36acaa">$TAG</span><span class="token string" style="color:#e3116c">.intoto.jsonl"</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">slsa-verifier verify-artifact </span><span class="token string" style="color:#e3116c">"</span><span class="token string variable" style="color:#36acaa">$FILE</span><span class="token string" style="color:#e3116c">"</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">\</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  --provenance-path </span><span class="token string" style="color:#e3116c">"orion-belt-</span><span class="token string variable" style="color:#36acaa">$TAG</span><span class="token string" style="color:#e3116c">.intoto.jsonl"</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">\</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  --source-uri github.com/orion-belt-dev/orion-belt </span><span class="token punctuation" style="color:#393A34">\</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  --source-tag </span><span class="token string" style="color:#e3116c">"</span><span class="token string variable" style="color:#36acaa">$TAG</span><span class="token string" style="color:#e3116c">"</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">gh attestation verify </span><span class="token string" style="color:#e3116c">"</span><span class="token string variable" style="color:#36acaa">$FILE</span><span class="token string" style="color:#e3116c">"</span><span class="token plain"> </span><span class="token parameter variable" style="color:#36acaa">--repo</span><span class="token plain"> orion-belt-dev/orion-belt</span><br></div></code></pre></div></div>
+<p>And an image:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token plain">gh attestation verify oci://ghcr.io/orion-belt-dev/orion-belt-server:1.5.0 </span><span class="token punctuation" style="color:#393A34">\</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token parameter variable" style="color:#36acaa">--repo</span><span class="token plain"> orion-belt-dev/orion-belt</span><br></div></code></pre></div></div>
+<p>The images also carry BuildKit provenance and an SBOM. The full walkthrough,
+including GPG, is in <a class="" href="https://orion-belt.dev/docs/quickstart/verify-release">Verify a release</a>.</p>
+<p>If you install from <a href="https://pkgs.orion-belt.dev/" target="_blank" rel="noopener noreferrer" class="">pkgs.orion-belt.dev</a>, your
+package manager already checks the GPG signature on every package.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="why-only-from-150">Why only from 1.5.0<a href="https://orion-belt.dev/blog/verifiable-releases#why-only-from-150" class="hash-link" aria-label="Direct link to Why only from 1.5.0" title="Direct link to Why only from 1.5.0" translate="no">​</a></h2>
+<p>Provenance has to be produced at build time. We could generate statements for
+1.4.0 and earlier now, but they would describe builds that never happened that
+way. Older releases keep their GPG signatures and nothing more.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-rest-of-the-work">The rest of the work<a href="https://orion-belt.dev/blog/verifiable-releases#the-rest-of-the-work" class="hash-link" aria-label="Direct link to The rest of the work" title="Direct link to The rest of the work" translate="no">​</a></h2>
+<p>Provenance was the visible part of a wider pass over how the project is built
+and maintained:</p>
+<ul>
+<li class="">Every GitHub Action is pinned to a commit SHA (except the SLSA generator,
+which has to be referenced by its release tag for <code>slsa-verifier</code> to trust
+it). Container base images in the lab are pinned by digest, and workflow
+tokens get write access only in the jobs that need it.</li>
+<li class=""><code>master</code> needs two approving reviews, a fresh approval after the last push,
+and nine passing CI checks, including a gate that fails on any known
+vulnerability in a dependency.</li>
+<li class="">Go fuzz targets cover scope parsing, SCP file names, shell word splitting
+and password hash verification. The last one found a panic on malformed
+stored hashes, fixed in 1.5.0.</li>
+<li class="">A <a href="https://github.com/orion-belt-dev/orion-belt/blob/master/SECURITY.md" target="_blank" rel="noopener noreferrer" class="">security policy</a>
+with private reporting through GitHub advisories or
+<a href="mailto:maintainers@orion-belt.dev" target="_blank" rel="noopener noreferrer" class="">maintainers@orion-belt.dev</a>.</li>
+</ul>
+<p>The project's
+<a href="https://scorecard.dev/viewer/?uri=github.com/orion-belt-dev/orion-belt" target="_blank" rel="noopener noreferrer" class="">OpenSSF Scorecard</a>
+went from 7.1 to 9.4, and it holds the
+<a href="https://www.bestpractices.dev/projects/16726" target="_blank" rel="noopener noreferrer" class="">OpenSSF Best Practices</a> passing
+badge. Scores aren't security, but they are a public checklist anyone can
+re-run against us.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="related">Related<a href="https://orion-belt.dev/blog/verifiable-releases#related" class="hash-link" aria-label="Direct link to Related" title="Direct link to Related" translate="no">​</a></h2>
+<ul>
+<li class=""><a class="" href="https://orion-belt.dev/blog/orion-belt-v1-5">Orion Belt v1.5</a></li>
+<li class=""><a class="" href="https://orion-belt.dev/blog/linux-packages-and-labs">Linux packages and labs</a></li>
+</ul>]]></content>
+        <author>
+            <name>Orion Belt</name>
+            <uri>https://orion-belt.dev</uri>
+        </author>
+        <category label="Security" term="Security"/>
+        <category label="Ops" term="Ops"/>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Automating Orion Belt from Python and TypeScript]]></title>
+        <id>https://orion-belt.dev/blog/orion-belt-sdks</id>
+        <link href="https://orion-belt.dev/blog/orion-belt-sdks"/>
+        <updated>2026-11-18T11:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Orion Belt 1.5.0 ships Python and TypeScript SDKs that cover every API endpoint, with no runtime dependencies. How they stay complete, how to log in with an SSH key, and a JIT access script to start from.]]></summary>
+        <content type="html"><![CDATA[<p>Most of what people build around a PAM gateway is glue: a chat bot that
+files access requests, a nightly job that reviews standing grants, a deploy
+pipeline that asks for an hour on production. With <strong>1.5.0</strong>, that glue can
+be written against a typed client in Python or TypeScript instead of
+hand-rolled HTTP calls.</p>
+<!-- -->
+<div class="language-sh codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-sh codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token plain">pip </span><span class="token function" style="color:#d73a49">install</span><span class="token plain"> orion-belt-sdk        </span><span class="token comment" style="color:#999988;font-style:italic"># Python 3.11+</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token function" style="color:#d73a49">npm</span><span class="token plain"> </span><span class="token function" style="color:#d73a49">install</span><span class="token plain"> @orion-belt/sdk       </span><span class="token comment" style="color:#999988;font-style:italic"># Node 20+, Deno, Bun, browsers</span><br></div></code></pre></div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="complete-by-construction">Complete by construction<a href="https://orion-belt.dev/blog/orion-belt-sdks#complete-by-construction" class="hash-link" aria-label="Direct link to Complete by construction" title="Direct link to Complete by construction" translate="no">​</a></h2>
+<p>An SDK that covers "the main endpoints" quietly falls behind. These two cover
+every <code>/api/v1</code> route, and they stay that way because the build says so.</p>
+<p>The server's routes are generated from the Go router into
+<a href="https://github.com/orion-belt-dev/orion-belt/blob/master/sdk/routes.json" target="_blank" rel="noopener noreferrer" class=""><code>sdk/routes.json</code></a>.
+A server test fails if the router and the file disagree, and each SDK has a
+contract test that fails if a route has no method. Adding an endpoint without
+adding it to both clients turns CI red.</p>
+<p>Both clients follow the Go SDK's method names (<code>list_machines</code> in Python,
+<code>listMachines</code> in TypeScript), so code ports between the three with little
+thought.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="no-dependencies">No dependencies<a href="https://orion-belt.dev/blog/orion-belt-sdks#no-dependencies" class="hash-link" aria-label="Direct link to No dependencies" title="Direct link to No dependencies" translate="no">​</a></h2>
+<p>The Python client uses only the standard library. The TypeScript client uses
+the platform <code>fetch</code>. Neither pulls anything into your dependency tree, which
+matters for a tool that holds admin credentials to your access gateway.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="log-in-with-an-ssh-key">Log in with an SSH key<a href="https://orion-belt.dev/blog/orion-belt-sdks#log-in-with-an-ssh-key" class="hash-link" aria-label="Direct link to Log in with an SSH key" title="Direct link to Log in with an SSH key" translate="no">​</a></h2>
+<p>Scripts don't need a stored password. Prove you hold a key registered to the
+user, and the client keeps the API key it gets back:</p>
+<div class="language-python codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-python codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token keyword" style="color:#00009f">from</span><span class="token plain"> cryptography</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">hazmat</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">primitives </span><span class="token keyword" style="color:#00009f">import</span><span class="token plain"> serialization</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token keyword" style="color:#00009f">from</span><span class="token plain"> orion_belt_sdk </span><span class="token keyword" style="color:#00009f">import</span><span class="token plain"> OrionBeltClient</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">key </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> serialization</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">load_ssh_private_key</span><span class="token punctuation" style="color:#393A34">(</span><span class="token builtin">open</span><span class="token punctuation" style="color:#393A34">(</span><span class="token string" style="color:#e3116c">"id_ed25519"</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">"rb"</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">read</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> password</span><span class="token operator" style="color:#393A34">=</span><span class="token boolean" style="color:#36acaa">None</span><span class="token punctuation" style="color:#393A34">)</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token keyword" style="color:#00009f">class</span><span class="token plain"> </span><span class="token class-name">Signer</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">    public_key </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> key</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">public_key</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">public_bytes</span><span class="token punctuation" style="color:#393A34">(</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">        serialization</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">Encoding</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">OpenSSH</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> serialization</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">PublicFormat</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">OpenSSH</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">    </span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">decode</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">)</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">    </span><span class="token keyword" style="color:#00009f">def</span><span class="token plain"> </span><span class="token function" style="color:#d73a49">sign</span><span class="token punctuation" style="color:#393A34">(</span><span class="token plain">self</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> data</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"> </span><span class="token builtin">bytes</span><span class="token punctuation" style="color:#393A34">)</span><span class="token plain"> </span><span class="token operator" style="color:#393A34">-</span><span class="token operator" style="color:#393A34">&gt;</span><span class="token plain"> </span><span class="token builtin">tuple</span><span class="token punctuation" style="color:#393A34">[</span><span class="token builtin">str</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> </span><span class="token builtin">bytes</span><span class="token punctuation" style="color:#393A34">]</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">        </span><span class="token keyword" style="color:#00009f">return</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">"ssh-ed25519"</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> key</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">sign</span><span class="token punctuation" style="color:#393A34">(</span><span class="token plain">data</span><span class="token punctuation" style="color:#393A34">)</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">client </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> OrionBeltClient</span><span class="token punctuation" style="color:#393A34">(</span><span class="token string" style="color:#e3116c">"https://orion.example.com"</span><span class="token punctuation" style="color:#393A34">)</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">client</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">login_with_ssh_key</span><span class="token punctuation" style="color:#393A34">(</span><span class="token string" style="color:#e3116c">"deploy-bot"</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"> Signer</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">)</span><br></div></code></pre></div></div>
+<p><code>cryptography</code> is only needed for this example; the SDK itself doesn't
+require it. Password and TOTP login, session tokens and JWTs work too. See
+<a class="" href="https://orion-belt.dev/docs/api/sdks#authentication">SDKs</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="example-ask-for-an-hour-on-a-machine">Example: ask for an hour on a machine<a href="https://orion-belt.dev/blog/orion-belt-sdks#example-ask-for-an-hour-on-a-machine" class="hash-link" aria-label="Direct link to Example: ask for an hour on a machine" title="Direct link to Example: ask for an hour on a machine" translate="no">​</a></h2>
+<p>A deploy job that requests just-in-time access, then waits for a human to
+approve it:</p>
+<div class="language-ts codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-ts codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token keyword" style="color:#00009f">import</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">{</span><span class="token plain"> OrionBeltClient </span><span class="token punctuation" style="color:#393A34">}</span><span class="token plain"> </span><span class="token keyword" style="color:#00009f">from</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">'@orion-belt/sdk'</span><span class="token punctuation" style="color:#393A34">;</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token keyword" style="color:#00009f">const</span><span class="token plain"> client </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> </span><span class="token keyword" style="color:#00009f">new</span><span class="token plain"> </span><span class="token class-name">OrionBeltClient</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">{</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  baseUrl</span><span class="token operator" style="color:#393A34">:</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">'https://orion.example.com'</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  apiKey</span><span class="token operator" style="color:#393A34">:</span><span class="token plain"> process</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">env</span><span class="token punctuation" style="color:#393A34">.</span><span class="token constant" style="color:#36acaa">ORION_API_KEY</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token punctuation" style="color:#393A34">}</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">;</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token keyword" style="color:#00009f">const</span><span class="token plain"> machine </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> </span><span class="token keyword" style="color:#00009f">await</span><span class="token plain"> client</span><span class="token punctuation" style="color:#393A34">.</span><span class="token function" style="color:#d73a49">getMachineByName</span><span class="token punctuation" style="color:#393A34">(</span><span class="token string" style="color:#e3116c">'web-01'</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">;</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token keyword" style="color:#00009f">const</span><span class="token plain"> request </span><span class="token operator" style="color:#393A34">=</span><span class="token plain"> </span><span class="token keyword" style="color:#00009f">await</span><span class="token plain"> client</span><span class="token punctuation" style="color:#393A34">.</span><span class="token function" style="color:#d73a49">createAccessRequest</span><span class="token punctuation" style="color:#393A34">(</span><span class="token punctuation" style="color:#393A34">{</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  machine_id</span><span class="token operator" style="color:#393A34">:</span><span class="token plain"> machine</span><span class="token punctuation" style="color:#393A34">.</span><span class="token plain">id</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  reason</span><span class="token operator" style="color:#393A34">:</span><span class="token plain"> </span><span class="token template-string template-punctuation string" style="color:#e3116c">`</span><span class="token template-string string" style="color:#e3116c">deploy </span><span class="token template-string interpolation interpolation-punctuation punctuation" style="color:#393A34">${</span><span class="token template-string interpolation">process</span><span class="token template-string interpolation punctuation" style="color:#393A34">.</span><span class="token template-string interpolation">env</span><span class="token template-string interpolation punctuation" style="color:#393A34">.</span><span class="token template-string interpolation constant" style="color:#36acaa">GIT_SHA</span><span class="token template-string interpolation interpolation-punctuation punctuation" style="color:#393A34">}</span><span class="token template-string template-punctuation string" style="color:#e3116c">`</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  duration</span><span class="token operator" style="color:#393A34">:</span><span class="token plain"> </span><span class="token number" style="color:#36acaa">3600</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">  remote_users</span><span class="token operator" style="color:#393A34">:</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">[</span><span class="token string" style="color:#e3116c">'deploy'</span><span class="token punctuation" style="color:#393A34">]</span><span class="token punctuation" style="color:#393A34">,</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token punctuation" style="color:#393A34">}</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">;</span><span class="token plain"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain" style="display:inline-block"></span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token builtin">console</span><span class="token punctuation" style="color:#393A34">.</span><span class="token function" style="color:#d73a49">log</span><span class="token punctuation" style="color:#393A34">(</span><span class="token template-string template-punctuation string" style="color:#e3116c">`</span><span class="token template-string string" style="color:#e3116c">Access request </span><span class="token template-string interpolation interpolation-punctuation punctuation" style="color:#393A34">${</span><span class="token template-string interpolation">request</span><span class="token template-string interpolation punctuation" style="color:#393A34">.</span><span class="token template-string interpolation">id</span><span class="token template-string interpolation interpolation-punctuation punctuation" style="color:#393A34">}</span><span class="token template-string string" style="color:#e3116c"> is waiting for approval</span><span class="token template-string template-punctuation string" style="color:#e3116c">`</span><span class="token punctuation" style="color:#393A34">)</span><span class="token punctuation" style="color:#393A34">;</span><br></div></code></pre></div></div>
+<p>The approver sees the request, its reason and its
+<a class="" href="https://orion-belt.dev/docs/guides/risk-and-anomalies">risk signals</a> in the console or in chat,
+and the access expires on its own an hour later.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="license">License<a href="https://orion-belt.dev/blog/orion-belt-sdks#license" class="hash-link" aria-label="Direct link to License" title="Direct link to License" translate="no">​</a></h2>
+<p>The SDKs are AGPL v3.0, like the rest of Orion Belt. If you bundle one into
+an application you distribute or serve to others, check that your license is
+compatible. <a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">More on the license change</a>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="related">Related<a href="https://orion-belt.dev/blog/orion-belt-sdks#related" class="hash-link" aria-label="Direct link to Related" title="Direct link to Related" translate="no">​</a></h2>
+<ul>
+<li class=""><a class="" href="https://orion-belt.dev/docs/api/sdks">SDK reference</a></li>
+<li class=""><a class="" href="https://orion-belt.dev/blog/jit-access-approvals">JIT access approvals</a></li>
+<li class=""><a class="" href="https://orion-belt.dev/blog/orion-belt-v1-5">Orion Belt v1.5</a></li>
+</ul>]]></content>
+        <author>
+            <name>Orion Belt</name>
+            <uri>https://orion-belt.dev</uri>
+        </author>
+        <category label="PAM" term="PAM"/>
+        <category label="Ops" term="Ops"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Orion Belt v1.4 — RDP, VNC and just-in-time Kubernetes access]]></title>
         <id>https://orion-belt.dev/blog/orion-belt-v1-4</id>
@@ -69,7 +351,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
         <summary type="html"><![CDATA[Compare Orion Belt and Teleport for self-hosted privileged access. When a lighter SSH bastion/PAM gateway wins, when Teleport’s broader platform is worth it, plus Boundary and classic bastions.]]></summary>
         <content type="html"><![CDATA[<p><strong>Short version:</strong> Orion Belt is a self-hosted <strong>SSH access gateway with PAM workflows</strong>. Teleport is a <strong>broad zero-trust access platform</strong>. If you mainly need mediated SSH, recording, JIT, and MFA — without inbound ports on every host or a large ops surface — Orion Belt is the lighter <strong>Teleport alternative</strong>.</p>
 <!-- -->
-<p>This comparison is for practitioners evaluating <strong>open source PAM</strong> / <strong>self-hosted privileged access</strong> options for SSH, not a dunk contest. Licensing differs; verify current Teleport terms for your use case. Orion Belt is Apache 2.0 + Commons Clause (<a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">details</a>).</p>
+<p>This comparison is for practitioners evaluating <strong>open source PAM</strong> / <strong>self-hosted privileged access</strong> options for SSH, not a dunk contest. Licensing differs; verify current Teleport terms for your use case. Orion Belt is open source under the AGPL v3.0 since 1.5.0 (<a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">details</a>).</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="who-should-read-this">Who should read this<a href="https://orion-belt.dev/blog/orion-belt-vs-teleport#who-should-read-this" class="hash-link" aria-label="Direct link to Who should read this" title="Direct link to Who should read this" translate="no">​</a></h2>
 <ul>
 <li class="">Teams searching for a <strong>Teleport alternative</strong> focused on SSH</li>
@@ -113,7 +395,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <p><strong>Is Orion Belt a Teleport alternative?</strong><br>
 <!-- -->For SSH-centric self-hosted PAM/bastion needs, yes. For full multi-protocol zero trust, Teleport remains broader.</p>
 <p><strong>Is Orion Belt open source?</strong><br>
-<!-- -->Source-available under Apache 2.0 + Commons Clause — free to self-host; not for sale as a product/SaaS wrapper. Not OSI “Open Source” in the strict sense.</p>
+<!-- -->Yes, since 1.5.0: GNU AGPL v3.0 only, an OSI-approved license. Free to use, self-host and run commercially; if you distribute it or offer a modified version over a network, you publish your source under the same license. Releases 1.0 to 1.4 were Apache 2.0 + Commons Clause.</p>
 <p><strong>Can I migrate from a jump host?</strong><br>
 <!-- -->Yes: enroll agents, move humans to <code>user+host@gateway</code>, turn on recording, then tighten inbound SSH. See <a class="" href="https://orion-belt.dev/blog/bastion-vs-pam">bastion vs PAM</a>.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="try-before-you-debate">Try before you debate<a href="https://orion-belt.dev/blog/orion-belt-vs-teleport#try-before-you-debate" class="hash-link" aria-label="Direct link to Try before you debate" title="Direct link to Try before you debate" translate="no">​</a></h2>
@@ -156,7 +438,9 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token function" style="color:#d73a49">git</span><span class="token plain"> clone https://github.com/orion-belt-dev/orion-belt.git</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token builtin class-name">cd</span><span class="token plain"> orion-belt</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">./scripts/docker-quickstart.sh</span><br></div></code></pre></div></div>
 <p>Then: <a class="" href="https://orion-belt.dev/docs/quickstart/try-in-10-minutes">Try Orion Belt in 10 minutes</a> through agent → SSH → Sessions playback.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="license">License<a href="https://orion-belt.dev/blog/welcome-orion-belt-v1#license" class="hash-link" aria-label="Direct link to License" title="Direct link to License" translate="no">​</a></h2>
-<p>Apache 2.0 + Commons Clause — free to self-host and use internally; you cannot sell Orion Belt as a product or substantially derived hosted service. <a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">Plain-language FAQ</a>.</p>
+<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class="admonitionHeading_Gvgb"><span class="admonitionIcon_Rf37"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"></path></svg></span>Update, November 2026</div><div class="admonitionContent_BuS1"><p>Since 1.5.0, Orion Belt is open source under the GNU AGPL v3.0. See
+<a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">Orion Belt is now AGPL v3.0</a>.</p></div></div>
+<p>At 1.0: Apache 2.0 + Commons Clause — free to self-host and use internally; you cannot sell Orion Belt as a product or substantially derived hosted service. <a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">Plain-language FAQ</a>.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="join-early-operators">Join early operators<a href="https://orion-belt.dev/blog/welcome-orion-belt-v1#join-early-operators" class="hash-link" aria-label="Direct link to Join early operators" title="Direct link to Join early operators" translate="no">​</a></h2>
 <p>We want deployments and sharp feedback more than vanity metrics. <a class="" href="https://orion-belt.dev/blog/looking-for-early-operators">Early operators call</a> · <a href="https://discord.gg/w62S8jxTHJ" target="_blank" rel="noopener noreferrer" class="">Discord</a> · <a href="https://github.com/orion-belt-dev/orion-belt/discussions" target="_blank" rel="noopener noreferrer" class="">Discussions</a></p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="links">Links<a href="https://orion-belt.dev/blog/welcome-orion-belt-v1#links" class="hash-link" aria-label="Direct link to Links" title="Direct link to Links" translate="no">​</a></h2>
@@ -192,7 +476,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="who-we-are-not-optimizing-for-yet">Who we are not optimizing for (yet)<a href="https://orion-belt.dev/blog/looking-for-early-operators#who-we-are-not-optimizing-for-yet" class="hash-link" aria-label="Direct link to Who we are not optimizing for (yet)" title="Direct link to Who we are not optimizing for (yet)" translate="no">​</a></h2>
 <ul>
 <li class="">Enterprises needing HA + OIDC + multi-protocol on day one</li>
-<li class="">Teams blocked by Commons Clause / non-OSI policy (<a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">license notes</a>)</li>
+<li class="">Teams whose policy rules out AGPL software (<a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">license notes</a>; Orion Belt moved from Commons Clause to the AGPL v3.0 in 1.5.0)</li>
 <li class="">Drive-by “please add my niche protocol” without deploying SSH first</li>
 </ul>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-you-get">What you get<a href="https://orion-belt.dev/blog/looking-for-early-operators#what-you-get" class="hash-link" aria-label="Direct link to What you get" title="Direct link to What you get" translate="no">​</a></h2>
@@ -247,6 +531,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <p>SSH CA, OpenFGA, and WebAuthn are valuable. None of them should block the first recorded session. Optional flags exist so labs stay fast (<a class="" href="https://orion-belt.dev/blog/optional-ssh-ca">SSH CA</a>, <a class="" href="https://orion-belt.dev/blog/mfa-webauthn-ssh">MFA</a>).</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="5-license-clarity-is-a-security-feature">5. License clarity is a security feature<a href="https://orion-belt.dev/blog/lessons-building-self-hosted-pam#5-license-clarity-is-a-security-feature" class="hash-link" aria-label="Direct link to 5. License clarity is a security feature" title="Direct link to 5. License clarity is a security feature" translate="no">​</a></h2>
 <p>People evaluating PAM software are professionally paranoid. Commons Clause disclosed early builds trust even when it loses some adopters. <a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">License FAQ</a>.</p>
+<p>Update, November 2026: in 1.5.0 we moved to the AGPL v3.0, an OSI-approved license. <a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">Why</a>.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="6-protect-the-10-minute-path-like-an-api">6. Protect the 10-minute path like an API<a href="https://orion-belt.dev/blog/lessons-building-self-hosted-pam#6-protect-the-10-minute-path-like-an-api" class="hash-link" aria-label="Direct link to 6. Protect the 10-minute path like an API" title="Direct link to 6. Protect the 10-minute path like an API" translate="no">​</a></h2>
 <p>Every feature PR should ask: did we break <code>docker-quickstart</code> → agent → Sessions? If yes, fix or document before merge. <a class="" href="https://orion-belt.dev/blog/ten-minute-install-path">Install path design</a>.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="7-say-no-to-protocol-sprawl-in-v1">7. Say no to protocol sprawl in v1<a href="https://orion-belt.dev/blog/lessons-building-self-hosted-pam#7-say-no-to-protocol-sprawl-in-v1" class="hash-link" aria-label="Direct link to 7. Say no to protocol sprawl in v1" title="Direct link to 7. Say no to protocol sprawl in v1" translate="no">​</a></h2>
@@ -413,12 +698,14 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
         <category label="Ops" term="Ops"/>
     </entry>
     <entry>
-        <title type="html"><![CDATA[Apache 2.0 + Commons Clause — what Orion Belt’s license means]]></title>
+        <title type="html"><![CDATA[Apache 2.0 + Commons Clause — what Orion Belt’s license meant before 1.5.0]]></title>
         <id>https://orion-belt.dev/blog/commons-clause-honesty</id>
         <link href="https://orion-belt.dev/blog/commons-clause-honesty"/>
         <updated>2026-04-30T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Clear explanation of Orion Belt’s Apache 2.0 + Commons Clause license for self-hosted PAM — what you can do, what you cannot sell, and why we disclose it on HN and Reddit.]]></summary>
-        <content type="html"><![CDATA[<p>Security infrastructure requires trust. Burying a restrictive clause until after launch is how open-source communities learn to ignore you. Orion Belt uses <strong>Apache License 2.0 with the Commons Clause</strong>, and we say so in the README, website, and launch posts.</p>
+        <summary type="html"><![CDATA[Orion Belt 1.0 to 1.4 shipped under Apache 2.0 + Commons Clause; 1.5.0 moved to the AGPL v3.0. Plain-language explanation of the old license for self-hosted PAM — what you can do, what you cannot sell, and why we disclose it on HN and Reddit.]]></summary>
+        <content type="html"><![CDATA[<div class="theme-admonition theme-admonition-info admonition_xJq3 alert alert--info"><div class="admonitionHeading_Gvgb"><span class="admonitionIcon_Rf37"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M7 2.3c3.14 0 5.7 2.56 5.7 5.7s-2.56 5.7-5.7 5.7A5.71 5.71 0 0 1 1.3 8c0-3.14 2.56-5.7 5.7-5.7zM7 1C3.14 1 0 4.14 0 8s3.14 7 7 7 7-3.14 7-7-3.14-7-7-7zm1 3H6v5h2V4zm0 6H6v2h2v-2z"></path></svg></span>Update, November 2026</div><div class="admonitionContent_BuS1"><p>This post describes the license of Orion Belt 1.0 to 1.4. Since 1.5.0, Orion Belt is open source under the GNU AGPL v3.0. See
+<a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">Orion Belt is now AGPL v3.0</a>.</p></div></div>
+<p>Security infrastructure requires trust. Burying a restrictive clause until after launch is how open-source communities learn to ignore you. Orion Belt uses <strong>Apache License 2.0 with the Commons Clause</strong>, and we say so in the README, website, and launch posts.</p>
 <!-- -->
 <p>This article is the plain-language license FAQ for people evaluating Orion Belt as <strong>self-hosted privileged access</strong> software.</p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-you-can-do">What you can do<a href="https://orion-belt.dev/blog/commons-clause-honesty#what-you-can-do" class="hash-link" aria-label="Direct link to What you can do" title="Direct link to What you can do" translate="no">​</a></h2>
@@ -457,6 +744,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <p>Full legal text: <a href="https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE" target="_blank" rel="noopener noreferrer" class="">LICENSE</a> · <a href="https://commonsclause.com/" target="_blank" rel="noopener noreferrer" class="">commonsclause.com</a></p>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="related">Related<a href="https://orion-belt.dev/blog/commons-clause-honesty#related" class="hash-link" aria-label="Direct link to Related" title="Direct link to Related" translate="no">​</a></h2>
 <ul>
+<li class=""><a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">Orion Belt is now AGPL v3.0</a></li>
 <li class=""><a class="" href="https://orion-belt.dev/blog/announcing-orion-belt">Announcing Orion Belt</a></li>
 <li class=""><a class="" href="https://orion-belt.dev/blog/open-source-pam-landscape">Open-source PAM landscape</a></li>
 </ul>]]></content>
@@ -671,7 +959,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <li class="">Is <strong>session recording</strong> a hard requirement?</li>
 <li class="">Do we need <strong>JIT approvals</strong> or is standing access OK?</li>
 <li class="">Can we run a gateway (Postgres, backups) ourselves?</li>
-<li class="">Does license policy allow <strong>Apache 2.0 + Commons Clause</strong>?</li>
+<li class="">Does license policy allow the <strong>AGPL v3.0</strong>? (Orion Belt moved to it from Apache 2.0 + Commons Clause in 1.5.0.)</li>
 </ol>
 <p>If answers skew toward SSH + self-host + recording/JIT, evaluate Orion Belt hands-on:</p>
 <p><a class="" href="https://orion-belt.dev/docs/quickstart/try-in-10-minutes">Try in 10 minutes</a></p>
@@ -679,7 +967,7 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
 <ul>
 <li class=""><a class="" href="https://orion-belt.dev/blog/announcing-orion-belt">Announcing Orion Belt</a></li>
 <li class=""><a class="" href="https://orion-belt.dev/blog/bastion-vs-pam">Bastion vs PAM</a></li>
-<li class=""><a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">Commons Clause honesty</a></li>
+<li class=""><a class="" href="https://orion-belt.dev/blog/orion-belt-agpl">Orion Belt is now AGPL v3.0</a></li>
 </ul>]]></content>
         <author>
             <name>Orion Belt</name>
@@ -903,154 +1191,5 @@ working for SSH and are told to upgrade if a tunnel is requested.</li>
         <category label="SSH" term="SSH"/>
         <category label="PAM" term="PAM"/>
         <category label="Security" term="Security"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Announcing Orion Belt — open-source self-hosted SSH PAM / bastion]]></title>
-        <id>https://orion-belt.dev/blog/announcing-orion-belt</id>
-        <link href="https://orion-belt.dev/blog/announcing-orion-belt"/>
-        <updated>2025-12-18T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Orion Belt is a self-hosted SSH access gateway with PAM workflows — reverse agents, session recording, JIT approvals, MFA, and ReBAC. A lighter Teleport alternative for SSH-first teams.]]></summary>
-        <content type="html"><![CDATA[<p><strong>Orion Belt</strong> is an open-source, <strong>self-hosted SSH access gateway</strong> with PAM-style workflows. It sits in the gap between a raw jump host and a full zero-trust platform: reverse agents, session recording, live watch, JIT approvals, MFA/WebAuthn, ReBAC, and an optional SSH CA — without SaaS dependency.</p>
-<!-- -->
-<p>This post is the product introduction for operators evaluating an <strong>open source PAM</strong> option focused on SSH, or a practical <strong>Teleport alternative</strong> when you do not need every protocol on day one.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="who-this-is-for">Who this is for<a href="https://orion-belt.dev/blog/announcing-orion-belt#who-this-is-for" class="hash-link" aria-label="Direct link to Who this is for" title="Direct link to Who this is for" translate="no">​</a></h2>
-<ul>
-<li class="">DevOps / SRE / Linux admins managing fleets over SSH</li>
-<li class="">Homelab and <strong>self-hosted</strong> users who want audit trails without a vendor cloud</li>
-<li class="">Small companies that need <strong>privileged access</strong> controls but not a CyberArk deployment</li>
-<li class="">Teams tired of inbound <code>:22</code> on every box “just for the bastion”</li>
-</ul>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-problem-we-kept-hitting">The problem we kept hitting<a href="https://orion-belt.dev/blog/announcing-orion-belt#the-problem-we-kept-hitting" class="hash-link" aria-label="Direct link to The problem we kept hitting" title="Direct link to The problem we kept hitting" translate="no">​</a></h2>
-<p>Traditional SSH access fails in predictable ways:</p>
-<ul>
-<li class="">Long-lived keys copied into chat</li>
-<li class="">No native approval workflow for break-glass</li>
-<li class="">Spotty or nonexistent session recording</li>
-<li class="">Broad VPN access instead of per-machine grants</li>
-<li class="">“Enterprise PAM” locked behind proprietary licensing and SaaS</li>
-</ul>
-<p>Commercial products and large open platforms solve real problems — and often arrive with an ops surface larger than the SSH problem you actually have.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-orion-belt-is-and-is-not">What Orion Belt is (and is not)<a href="https://orion-belt.dev/blog/announcing-orion-belt#what-orion-belt-is-and-is-not" class="hash-link" aria-label="Direct link to What Orion Belt is (and is not)" title="Direct link to What Orion Belt is (and is not)" translate="no">​</a></h2>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="it-is">It is<a href="https://orion-belt.dev/blog/announcing-orion-belt#it-is" class="hash-link" aria-label="Direct link to It is" title="Direct link to It is" translate="no">​</a></h3>
-<p>A <strong>Linux-first SSH/SCP bastion gateway</strong> you run yourself:</p>
-<table><thead><tr><th>Capability</th><th>Role</th></tr></thead><tbody><tr><td>Reverse agents</td><td>Targets dial <strong>out</strong> — no inbound hole required on the host for Orion</td></tr><tr><td>Gateway</td><td>Brokers sessions, enforces ReBAC, records traffic</td></tr><tr><td>JIT access</td><td>Request → approve → expire (UI / API / ChatOps)</td></tr><tr><td>MFA</td><td>TOTP + WebAuthn for the console; FIDO SSH keys supported</td></tr><tr><td>Clients</td><td><code>osh</code> / <code>ocp</code> / <code>oadmin</code>, vanilla OpenSSH, or web terminal</td></tr><tr><td>Packaging</td><td>Docker quickstart, deb/rpm/apk</td></tr></tbody></table>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="it-is-not">It is not<a href="https://orion-belt.dev/blog/announcing-orion-belt#it-is-not" class="hash-link" aria-label="Direct link to It is not" title="Direct link to It is not" translate="no">​</a></h3>
-<ul>
-<li class="">A multi-protocol mesh for Kubernetes, Windows RDP, and databases on day one (roadmap items exist; SSH is the v1 promise)</li>
-<li class="">A hosted SaaS (by design)</li>
-<li class="">A drop-in replacement for every Teleport feature</li>
-</ul>
-<p>Positioning we use deliberately: <em>Teleport-like SSH access control without opening inbound ports or adopting a large platform.</em></p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="architecture-in-one-diagram">Architecture in one diagram<a href="https://orion-belt.dev/blog/announcing-orion-belt#architecture-in-one-diagram" class="hash-link" aria-label="Direct link to Architecture in one diagram" title="Direct link to Architecture in one diagram" translate="no">​</a></h2>
-<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token plain">CLI / OpenSSH / Web UI  →  Gateway (:2222 SSH, :8080 UI)</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">                              ↑ reverse SSH</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">                           Agent on target</span><br></div></code></pre></div></div>
-<p>Details: <a class="" href="https://orion-belt.dev/docs/architecture/overview">Architecture overview</a> and <a class="" href="https://orion-belt.dev/blog/why-reverse-ssh-agents">Why reverse SSH agents</a>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="license--said-up-front">License — said up front<a href="https://orion-belt.dev/blog/announcing-orion-belt#license--said-up-front" class="hash-link" aria-label="Direct link to License — said up front" title="Direct link to License — said up front" translate="no">​</a></h2>
-<p>Orion Belt ships under <strong>Apache 2.0 + Commons Clause</strong>:</p>
-<ul>
-<li class="">Free to use, modify, and <strong>self-host</strong>, including internal commercial use</li>
-<li class="">You <strong>cannot sell</strong> Orion Belt (or a hosted service whose value derives substantially from it) as a product</li>
-</ul>
-<p>We disclose this on community posts (HN, Lobsters, Reddit) because security software requires trust. Full text: <a href="https://github.com/orion-belt-dev/orion-belt/blob/master/LICENSE" target="_blank" rel="noopener noreferrer" class="">LICENSE</a>. More context: <a class="" href="https://orion-belt.dev/blog/commons-clause-honesty">Commons Clause honesty</a>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="try-it">Try it<a href="https://orion-belt.dev/blog/announcing-orion-belt#try-it" class="hash-link" aria-label="Direct link to Try it" title="Direct link to Try it" translate="no">​</a></h2>
-<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token function" style="color:#d73a49">git</span><span class="token plain"> clone https://github.com/orion-belt-dev/orion-belt.git</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token builtin class-name">cd</span><span class="token plain"> orion-belt</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">./scripts/docker-quickstart.sh</span><br></div></code></pre></div></div>
-<p>Walkthrough: <a class="" href="https://orion-belt.dev/docs/quickstart/try-in-10-minutes">Try Orion Belt in 10 minutes</a>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="links">Links<a href="https://orion-belt.dev/blog/announcing-orion-belt#links" class="hash-link" aria-label="Direct link to Links" title="Direct link to Links" translate="no">​</a></h2>
-<ul>
-<li class="">Website: <a href="https://orion-belt.dev/" target="_blank" rel="noopener noreferrer" class="">orion-belt.dev</a></li>
-<li class="">Source: <a href="https://github.com/orion-belt-dev/orion-belt" target="_blank" rel="noopener noreferrer" class="">github.com/orion-belt-dev/orion-belt</a></li>
-<li class="">Chat: <a href="https://discord.gg/w62S8jxTHJ" target="_blank" rel="noopener noreferrer" class="">Discord</a></li>
-<li class="">Compare: <a class="" href="https://orion-belt.dev/blog/orion-belt-vs-teleport">Orion Belt vs Teleport</a></li>
-</ul>]]></content>
-        <author>
-            <name>Orion Belt</name>
-            <uri>https://orion-belt.dev</uri>
-        </author>
-        <category label="SSH" term="SSH"/>
-        <category label="PAM" term="PAM"/>
-        <category label="Self-hosted" term="Self-hosted"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Why reverse SSH agents beat opening inbound ports on every server]]></title>
-        <id>https://orion-belt.dev/blog/why-reverse-ssh-agents</id>
-        <link href="https://orion-belt.dev/blog/why-reverse-ssh-agents"/>
-        <updated>2025-12-05T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Learn how reverse SSH tunnels work for bastion and PAM gateways, the security tradeoffs versus inbound SSH, and why Orion Belt agents dial out instead of exposing port 22.]]></summary>
-        <content type="html"><![CDATA[<p>If you run Linux servers at any scale, you already know the uncomfortable default: <strong>someone opens SSH from somewhere</strong>. A bastion host, a VPN, a “temporary” security-group rule that outlives the outage. Traditional <strong>SSH bastion</strong> designs still often assume the gateway (or the operator) can reach port 22 on the target.</p>
-<!-- -->
-<p>Orion Belt takes a different default for its <strong>self-hosted PAM / SSH access gateway</strong>: agents on target machines <strong>dial out</strong> to the gateway over reverse SSH. Operators never need inbound SSH on the application hosts. This article explains why that model exists, how it compares to classic bastions, and which tradeoffs you should accept with eyes open.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="the-problem-with-inbound-ssh-even-just-from-the-bastion">The problem with inbound SSH (even “just from the bastion”)<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#the-problem-with-inbound-ssh-even-just-from-the-bastion" class="hash-link" aria-label="Direct link to The problem with inbound SSH (even “just from the bastion”)" title="Direct link to The problem with inbound SSH (even “just from the bastion”)" translate="no">​</a></h2>
-<p>A classic pattern looks like this:</p>
-<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token plain">Operator → Bastion → (SSH :22) → Target</span><br></div></code></pre></div></div>
-<p>That path creates recurring pain:</p>
-<ol>
-<li class=""><strong>Firewall inventory grows forever</strong> — every VPC, VLAN, and cloud account needs rules so the bastion can reach targets.</li>
-<li class=""><strong>Targets stay in the attack surface</strong> — anything that accepts inbound SSH can be scanned, credential-stuffed, or hit by a compromised jump box.</li>
-<li class=""><strong>NAT and ephemeral environments fight you</strong> — laptops, CI runners, and locked-down cloud subnets often cannot be “reached”; they can only dial out.</li>
-<li class=""><strong>Audit is incomplete</strong> — if anyone still SSHs direct to the host, your bastion’s session recording never sees it.</li>
-</ol>
-<p>A <strong>Teleport alternative</strong> or commercial PAM product will solve pieces of this with agents, workers, or IoT tunnels. The underlying idea is the same: <strong>move reachability so the target initiates connectivity</strong>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-agents-dial-out-means">What “agents dial out” means<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#what-agents-dial-out-means" class="hash-link" aria-label="Direct link to What “agents dial out” means" title="Direct link to What “agents dial out” means" translate="no">​</a></h2>
-<p>In Orion Belt:</p>
-<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token plain">Operator → Gateway (SSH :2222 / HTTPS UI)</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">                ↑</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">         reverse SSH</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">                ↑</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">              Agent on target</span><br></div></code></pre></div></div>
-<ol>
-<li class="">You install a small <strong>agent</strong> on the machine you want to manage.</li>
-<li class="">The agent authenticates to the <strong>gateway</strong> and keeps a reverse tunnel open (outbound from the target’s perspective).</li>
-<li class="">When an operator connects to the gateway (CLI, OpenSSH <code>user+machine@gateway</code>, or web terminal), the gateway <strong>brokers</strong> the session through that tunnel.</li>
-<li class="">Policy (ReBAC), MFA on the console, JIT approvals, and <strong>session recording / live watch</strong> all sit on the gateway path.</li>
-</ol>
-<p>The target still runs Linux users and SSH semantics for the remote account you land on (<code>root</code>, <code>ubuntu</code>, …). What changes is <strong>who is allowed to open a connection toward that host from the network</strong>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="security-tradeoffs-honest">Security tradeoffs (honest)<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#security-tradeoffs-honest" class="hash-link" aria-label="Direct link to Security tradeoffs (honest)" title="Direct link to Security tradeoffs (honest)" translate="no">​</a></h2>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="gains">Gains<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#gains" class="hash-link" aria-label="Direct link to Gains" title="Direct link to Gains" translate="no">​</a></h3>
-<ul>
-<li class=""><strong>No inbound SSH required on targets</strong> for the Orion path — useful for hardened subnets and “deny all ingress” baselines.</li>
-<li class=""><strong>One control plane</strong> for authentication, authorization, and recording.</li>
-<li class=""><strong>Works behind NAT</strong> as long as the agent can reach the gateway on the SSH port (typically <strong>2222</strong>).</li>
-</ul>
-<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="costs">Costs<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#costs" class="hash-link" aria-label="Direct link to Costs" title="Direct link to Costs" translate="no">​</a></h3>
-<ul>
-<li class=""><strong>Offline agent = unreachable host</strong> until it reconnects. There is no magic wake-up if the process is dead.</li>
-<li class=""><strong>The gateway becomes high-value infrastructure.</strong> Treat it like a domain controller for SSH: patch it, restrict who can reach <code>:2222</code> / the UI, encrypt recordings, require MFA for admins.</li>
-<li class=""><strong>You must trust and update the agent binary</strong> on every enrolled machine — same class of risk as any other node agent (Teleport, monitoring, backup).</li>
-</ul>
-<p>If your environment cannot allow <strong>outbound</strong> connections from targets to a central gateway, reverse agents are the wrong tool. Pick a model that matches your network policy.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="reverse-tunnels-vs-vpn-vs-classic-bastion">Reverse tunnels vs VPN vs classic bastion<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#reverse-tunnels-vs-vpn-vs-classic-bastion" class="hash-link" aria-label="Direct link to Reverse tunnels vs VPN vs classic bastion" title="Direct link to Reverse tunnels vs VPN vs classic bastion" translate="no">​</a></h2>
-<table><thead><tr><th>Approach</th><th>Typical exposure</th><th>Recording / JIT</th><th>Ops weight</th></tr></thead><tbody><tr><td>Direct SSH to hosts</td><td>Inbound :22 everywhere</td><td>DIY</td><td>Low features</td></tr><tr><td>Classic bastion</td><td>Inbound to bastion + often bastion→host :22</td><td>Rare / custom</td><td>Low–medium</td></tr><tr><td>Full-mesh VPN</td><td>Broad L3 reachability</td><td>Separate tools</td><td>Medium</td></tr><tr><td>Reverse-agent gateway (Orion Belt)</td><td>Inbound mainly to gateway; agents outbound</td><td>Built-in path</td><td>Medium, SSH-focused</td></tr></tbody></table>
-<p>VPNs solve “how do packets route.” They do not automatically give you <strong>privileged access management</strong>: approvals, per-machine grants, or session playback. A <strong>self-hosted privileged access</strong> gateway sits <em>above</em> connectivity.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="when-reverse-agents-are-the-right-default">When reverse agents are the right default<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#when-reverse-agents-are-the-right-default" class="hash-link" aria-label="Direct link to When reverse agents are the right default" title="Direct link to When reverse agents are the right default" translate="no">​</a></h2>
-<p>Choose this model if most of these are true:</p>
-<ul>
-<li class="">Your privileged access problem is <strong>mostly SSH</strong></li>
-<li class="">You want a <strong>self-hosted SSH bastion</strong> without SaaS lock-in</li>
-<li class="">Security wants <strong>no inbound SSH</strong> on app tiers</li>
-<li class="">You need <strong>recording + JIT</strong> without buying a CyberArk-class appliance</li>
-<li class="">You are okay operating a gateway (Postgres, backups, hardening)</li>
-</ul>
-<p>Prefer a broader platform (for example Teleport) if you need first-class Kubernetes, database, Windows, and web app access in one product on day one. See our comparison: <a class="" href="https://orion-belt.dev/blog/orion-belt-vs-teleport">Orion Belt vs Teleport</a>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="try-the-model-in-about-ten-minutes">Try the model in about ten minutes<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#try-the-model-in-about-ten-minutes" class="hash-link" aria-label="Direct link to Try the model in about ten minutes" title="Direct link to Try the model in about ten minutes" translate="no">​</a></h2>
-<p>The fastest way to feel the tradeoff is not a whitepaper:</p>
-<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token function" style="color:#d73a49">git</span><span class="token plain"> clone https://github.com/orion-belt-dev/orion-belt.git</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token builtin class-name">cd</span><span class="token plain"> orion-belt</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain">./scripts/docker-quickstart.sh</span><br></div></code></pre></div></div>
-<p>Then follow <a class="" href="https://orion-belt.dev/docs/quickstart/try-in-10-minutes">Try Orion Belt in 10 minutes</a>: register an agent, dial out, SSH through the gateway, open <strong>Sessions</strong> for playback.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="faq">FAQ<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#faq" class="hash-link" aria-label="Direct link to FAQ" title="Direct link to FAQ" translate="no">​</a></h2>
-<p><strong>Is reverse SSH the same as <code>ssh -R</code>?</strong><br>
-<!-- -->Conceptually related: the remote side opens a channel back toward you. Orion Belt productizes that idea with enrollment, policy, and recording — not a one-off shell tunnel.</p>
-<p><strong>Do I still expose port 22 on the target?</strong><br>
-<!-- -->Not for the Orion path. You may leave local SSH for break-glass; just know those sessions bypass gateway recording.</p>
-<p><strong>What about lateral movement from a compromised gateway?</strong><br>
-<!-- -->A compromised gateway is bad in <em>any</em> bastion design. Mitigate with MFA, least privilege, network allowlists, recording encryption, and host hardening — see the main repo’s deployment hardening docs.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="next-reading">Next reading<a href="https://orion-belt.dev/blog/why-reverse-ssh-agents#next-reading" class="hash-link" aria-label="Direct link to Next reading" title="Direct link to Next reading" translate="no">​</a></h2>
-<ul>
-<li class=""><a class="" href="https://orion-belt.dev/blog/announcing-orion-belt">Announcing Orion Belt</a></li>
-<li class=""><a class="" href="https://orion-belt.dev/blog/session-recording-is-hard">Session recording is hard</a></li>
-<li class=""><a class="" href="https://orion-belt.dev/docs/architecture/overview">Architecture overview</a></li>
-<li class=""><a href="https://discord.gg/w62S8jxTHJ" target="_blank" rel="noopener noreferrer" class="">Discord</a> · <a href="https://github.com/orion-belt-dev/orion-belt" target="_blank" rel="noopener noreferrer" class="">GitHub</a></li>
-</ul>]]></content>
-        <author>
-            <name>Orion Belt</name>
-            <uri>https://orion-belt.dev</uri>
-        </author>
-        <category label="SSH" term="SSH"/>
-        <category label="Architecture" term="Architecture"/>
-        <category label="Security" term="Security"/>
-        <category label="Self-hosted" term="Self-hosted"/>
     </entry>
 </feed>
