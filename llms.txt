@@ -1,0 +1,67 @@
+# Orion Belt
+
+> Orion Belt is an open source (GNU AGPL v3.0), self-hosted SSH access gateway with privileged access management (PAM) workflows. Agents on target machines dial out to the gateway over reverse SSH, so targets need no inbound port. It provides per-machine grants, just-in-time access requests with approval, session recording and live watch, MFA (TOTP and WebAuthn), relationship-based access control (ReBAC, optional OpenFGA), an optional SSH certificate authority, RDP/VNC tunnels, just-in-time Kubernetes RoleBindings, compliance reports, and Python, TypeScript and Go SDKs. Current version: 1.5.0 (released 2026-11-15).
+
+Key facts:
+
+- Website: https://orion-belt.dev · Source: https://github.com/orion-belt-dev/orion-belt · Packages: https://pkgs.orion-belt.dev
+- License: GNU AGPL v3.0 only, since 1.5.0. Releases 1.0 to 1.4 were Apache 2.0 with the Commons Clause.
+- Components: the gateway (`orion-belt-server`, SSH on port 2222 and HTTP on 8080, needs PostgreSQL), the agent (`orion-belt-agent`, on each target or inside a Kubernetes cluster), and clients (`osh`, `ocp`, `oadmin`). Plain OpenSSH also works: `ssh user+machine@gateway`.
+- Install: signed apt, dnf, zypper, apk and pacman repositories; container images on GHCR; clients for macOS, Windows and the BSDs.
+- Releases are GPG-signed, with SLSA level 3 provenance and GitHub attestations from 1.5.0.
+- Suited to: SSH-centric teams that want self-hosted PAM without opening inbound ports. Not yet available: OIDC/SAML single sign-on, high availability, recording of RDP/VNC sessions, database proxies.
+
+## Docs
+
+- [Introduction](https://orion-belt.dev/docs/introduction): what Orion Belt is, features and architecture
+- [Get started in 10 minutes](https://orion-belt.dev/docs/quickstart/get-started): server, agent and client from the signed packages, per OS
+- [Try it with Docker](https://orion-belt.dev/docs/quickstart/try-in-10-minutes): local lab with Docker Compose
+- [Installation](https://orion-belt.dev/docs/quickstart/installation): every install option
+- [Verify a release](https://orion-belt.dev/docs/quickstart/verify-release): GPG, SLSA provenance and GitHub attestations
+- [Architecture overview](https://orion-belt.dev/docs/architecture/overview): gateway, agents, clients and data flow
+- [Permissions](https://orion-belt.dev/docs/guides/permissions-management): grants, access types, bulk grants, effective access
+- [Sessions](https://orion-belt.dev/docs/guides/sessions): recording, playback and live watch
+- [Agent management](https://orion-belt.dev/docs/guides/agent-management): reload, drain and update agents remotely
+- [RDP and VNC](https://orion-belt.dev/docs/guides/rdp-vnc): remote desktop through the agent tunnel
+- [Kubernetes](https://orion-belt.dev/docs/guides/kubernetes): just-in-time RoleBindings through an in-cluster agent
+- [Compliance reports](https://orion-belt.dev/docs/guides/compliance-reports): SOC 2, ISO 27001 and PCI DSS evidence
+- [Risk and anomalies](https://orion-belt.dev/docs/guides/risk-and-anomalies): risk signals, access explain, anomaly flags
+- [Security](https://orion-belt.dev/docs/guides/security): hardening and security FAQ
+- [osh client](https://orion-belt.dev/docs/cli/osh-client): connect, request access, tunnels, kubectl
+- [API reference](https://orion-belt.dev/docs/api): authentication and error codes
+- [API endpoints](https://orion-belt.dev/docs/api/endpoints): every /api/v1 endpoint
+- [SDKs](https://orion-belt.dev/docs/api/sdks): Python, TypeScript and Go clients
+
+## Guides and explainers
+
+- [What is privileged access management (PAM)?](https://orion-belt.dev/blog/what-is-privileged-access-management): definitions of PAM, JIT, PASM, PEDM, standing privilege
+- [SSH bastion vs PAM](https://orion-belt.dev/blog/bastion-vs-pam): when a jump host is enough and when it isn't
+- [SSH bastion host best practices](https://orion-belt.dev/blog/ssh-bastion-host-best-practices): hardening checklist with OpenSSH settings
+- [How to audit SSH access on Linux](https://orion-belt.dev/blog/how-to-audit-ssh-access-linux): sshd, auditd, pam_tty_audit, tlog and gateway recording compared
+- [SSH key management at scale](https://orion-belt.dev/blog/ssh-key-management-at-scale): authorized_keys, SSH certificates and gateways compared
+- [Why reverse SSH agents](https://orion-belt.dev/blog/why-reverse-ssh-agents): outbound agents instead of inbound SSH
+- [Just-in-time access approvals](https://orion-belt.dev/blog/jit-access-approvals): request, approve, expire
+- [Temporary Kubernetes access with expiring RoleBindings](https://orion-belt.dev/blog/temporary-kubernetes-access-rolebindings)
+- [Secure RDP without exposing port 3389](https://orion-belt.dev/blog/secure-rdp-without-exposing-3389): VPN, RD Gateway, SSH tunnels and reverse tunnels compared
+- [Tracing SSH sessions with OpenTelemetry](https://orion-belt.dev/blog/opentelemetry-ssh-tracing)
+- [How to check an Orion Belt binary is the one we built](https://orion-belt.dev/blog/verifiable-releases)
+
+## Comparisons
+
+- [Open-source PAM and SSH bastion options compared](https://orion-belt.dev/blog/open-source-pam-landscape): Teleport, Boundary, Warpgate, jump hosts, Orion Belt
+- [Orion Belt vs Teleport](https://orion-belt.dev/blog/orion-belt-vs-teleport)
+
+## Releases
+
+- [Orion Belt 1.5](https://orion-belt.dev/blog/orion-belt-v1-5): SDKs, agent remote management, bulk grants, security audit fixes, AGPL, provenance
+- [Orion Belt is now AGPL v3.0](https://orion-belt.dev/blog/orion-belt-agpl)
+- [Orion Belt 1.4](https://orion-belt.dev/blog/orion-belt-v1-4): RDP, VNC, Kubernetes, compliance reports, risk signals
+- [Orion Belt 1.3](https://orion-belt.dev/blog/orion-belt-v1-3-packages-everywhere): packages for every Linux distribution
+- [GitHub releases](https://github.com/orion-belt-dev/orion-belt/releases)
+
+## Optional
+
+- [Blog](https://orion-belt.dev/blog): all posts
+- [Roadmap](https://github.com/orion-belt-dev/orion-belt/blob/master/docs/ROADMAP.md)
+- [Security policy](https://github.com/orion-belt-dev/orion-belt/blob/master/SECURITY.md)
+- [OpenAPI spec](https://github.com/orion-belt-dev/orion-belt/blob/master/docs/openapi/openapi.yaml)
