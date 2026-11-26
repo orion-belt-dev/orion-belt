@@ -127,7 +127,7 @@ OpenSSH: ssh alice+web-01@gateway
 | [RISK.md](RISK.md) | Risk signals, risk policy, anomalies |
 | [ERROR_HANDLING.md](ERROR_HANDLING.md) | `pkg/apperr` and API error responses |
 | [ROADMAP.md](ROADMAP.md) | Current |
-| [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md) | Before tagging v1.0 |
+| [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md) | What v1.0 covers |
 | [API_STABILITY.md](API_STABILITY.md) | `/api/v1` compatibility |
 | [RELEASE_SMOKE.md](RELEASE_SMOKE.md) | Quick pre-release checks |
 | [OBSERVABILITY.md](OBSERVABILITY.md) | Logs, metrics and tracing |

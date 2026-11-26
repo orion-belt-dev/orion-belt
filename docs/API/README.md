@@ -54,7 +54,7 @@ Response fields include:
 ## Related docs
 
 - [API_STABILITY.md](../API_STABILITY.md) — what we promise for `/api/v1`
-- [V1_RELEASE_CRITERIA.md](../V1_RELEASE_CRITERIA.md) — checklist before tagging v1.0
+- [V1_RELEASE_CRITERIA.md](../V1_RELEASE_CRITERIA.md) — what v1.0 covers
 - [RELEASE_SMOKE.md](../RELEASE_SMOKE.md) — `make release-smoke`
 - [SSH_CA.md](../SSH_CA.md) — SSH CA
 - [SRS-UI.md](../SRS-UI.md) — web console

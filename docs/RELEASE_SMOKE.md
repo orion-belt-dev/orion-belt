@@ -1,6 +1,6 @@
 # Release smoke
 
-Lightweight checks before tagging (especially **v1.0**). Deeper multi-distro coverage still lives in [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md).
+Lightweight checks to run against a release candidate before tagging. Deeper multi-distro coverage still lives in [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md).
 
 ## Automated
 
