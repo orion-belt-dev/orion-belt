@@ -155,7 +155,9 @@ jobs:
       - name: Vulnerability scan
         run: |
           uv export --locked --all-groups --no-emit-project --format requirements-txt -o "$RUNNER_TEMP/requirements.txt"
-          uv tool run pip-audit@2.10.1 --strict --require-hashes --disable-pip -r "$RUNNER_TEMP/requirements.txt"
+          # Keep pip-audit's cache in the job's temp directory.
+          uv tool run pip-audit@2.10.1 --strict --require-hashes --disable-pip \
+            --cache-dir "$RUNNER_TEMP/pip-audit-cache" -r "$RUNNER_TEMP/requirements.txt"
       - name: Build
         run: uv build
 
