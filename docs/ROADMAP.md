@@ -17,7 +17,7 @@ Nothing yet.
 | v1.2.0 | Notification templates (#67), installer, agent delete cascade fix (#90) |
 | v1.3.0 / v1.3.1 | Capability catalog UI (#57), CLI coverage for new endpoints (#64), auth/authz/proxy hardening, terminal resize fix (#103), packages for every Linux distro and clients for every OS, pkgs.orion-belt.dev |
 | v1.4.0 | Compliance reports SOC2/ISO 27001/PCI (#47–#49), explain-access (#59), risk signals and auto-approve/escalate policy (#40, #41), anomaly flags (#45), recording compression (#69), break-glass admin (#17), integration suites (#73), RDP/VNC tunnel (#29), JIT Kubernetes RoleBindings (#37–#39), reports for non-SSH protocols (#54) |
-| v1.5.0 | Python and TypeScript SDKs for every `/api/v1` endpoint (PR #155, #161), agent remote management: reload, drain, update (#71), permission editor with bulk grants and effective access (#70), standardised API errors (#66), tunnels survive network drops, security audit fixes (PR #150), relicensed to AGPL-3.0-only, SLSA level 3 provenance and attestations for every release file and image |
+| v1.5.0 | Python and TypeScript SDKs for every `/api/v1` endpoint (PR #155, #161), agent remote management: reload, drain, update (#71), permission editor with bulk grants and effective access (#70), standardised API errors (#66), tunnels survive network drops, fixes from a security audit by maintainer Mohamed Zrouga (PR #150), relicensed to AGPL-3.0-only, SLSA level 3 provenance and attestations for every release file and image |
 
 ## Open work
 
