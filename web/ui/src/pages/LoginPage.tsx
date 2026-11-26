@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth, useHomePath } from "../auth/AuthContext";
@@ -54,11 +54,16 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Redeem a code passed in the URL once. Codes are single-use, so the ref
+  // stops a second attempt from a re-render or StrictMode's double mount.
+  const redeemedFromURL = useRef(false);
+  const redeemFromURL = useEffectEvent((value: string) => void redeemCode(value));
   useEffect(() => {
     const fromURL = searchParams.get("code");
-    if (fromURL) void redeemCode(fromURL);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!fromURL || redeemedFromURL.current) return;
+    redeemedFromURL.current = true;
+    redeemFromURL(fromURL);
+  }, [searchParams]);
 
   if (ready && user) return <Navigate to={home} replace />;
 
