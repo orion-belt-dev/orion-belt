@@ -1,8 +1,7 @@
 # Deployment hardening
 
 Work through this checklist before exposing a gateway on a production
-network, and again before tagging a release (see
-[V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md)). It complements
+network. It complements
 [SETUP.md](SETUP.md), [REVERSE_PROXY.md](REVERSE_PROXY.md) and
 [OBSERVABILITY.md](OBSERVABILITY.md).
 

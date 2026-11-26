@@ -17,9 +17,9 @@ Nothing yet.
 | v1.2.0 | Notification templates (#67), installer, agent delete cascade fix (#90) |
 | v1.3.0 / v1.3.1 | Capability catalog UI (#57), CLI coverage for new endpoints (#64), auth/authz/proxy hardening, terminal resize fix (#103), packages for every Linux distro and clients for every OS, pkgs.orion-belt.dev |
 | v1.4.0 | Compliance reports SOC2/ISO 27001/PCI (#47–#49), explain-access (#59), risk signals and auto-approve/escalate policy (#40, #41), anomaly flags (#45), recording compression (#69), break-glass admin (#17), integration suites (#73), RDP/VNC tunnel (#29), JIT Kubernetes RoleBindings (#37–#39), reports for non-SSH protocols (#54) |
-| v1.5.0 | Python and TypeScript SDKs for every `/api/v1` endpoint (PR #155, #161), agent remote management: reload, drain, update (#71), permission editor with bulk grants and effective access (#70), standardised API errors (#66), tunnels survive network drops, security audit fixes (PR #150), relicensed to AGPL-3.0-only, SLSA level 3 provenance and attestations for every release file and image |
+| v1.5.0 | Python and TypeScript SDKs for every `/api/v1` endpoint (PR #155, #161), agent remote management: reload, drain, update (#71), permission editor with bulk grants and effective access (#70), standardised API errors (#66), tunnels survive network drops, fixes from a security audit by maintainer Mohamed Zrouga and Alex McHugh (PR #150), relicensed to AGPL-3.0-only, SLSA level 3 provenance and attestations for every release file and image |
 
-## Open work — 2026-10-25
+## Open work
 
 Open issues grouped by what they wait on. "Ready" means nothing else has to land first.
 
@@ -36,7 +36,6 @@ Open issues grouped by what they wait on. "Ready" means nothing else has to land
 | #52 Ticketing hooks (Jira/ServiceNow) | M | Compiled-in plugin platform |
 | #55 Capability definition (admin) | M | Builds on the read-only catalog in `pkg/api/capabilities.go` |
 | #58 Relationship graph explorer | L | Builds on `/access/explain` |
-| #61 Python SDK, #62 TypeScript SDK | M | Both cover every `/api/v1` route; first release needs the PyPI/npm trusted publishers registered (see `sdk-release.yml`) |
 | #19 HA / DB replicas for the auth path | L | |
 | #30 Cloud privilege broker (AWS/Azure/GCP) | L | Needs cloud test accounts |
 | #34 Database gateway: connection proxying | L | Unblocks #35, #36 |
@@ -63,37 +62,6 @@ Open issues grouped by what they wait on. "Ready" means nothing else has to land
 - [ ] Alerting
 - [ ] Log shipping to Loki/ELK (logs are JSON slog today)
 - [ ] Config validation improvements
-
-## Audit Findings — 2026-07-13
-
-A full pass over the backend (`pkg/`, `cmd/`, `plugins/`), docs (`docs/`, `README.md`, OpenAPI spec), and web console (`web/ui/src`) turned up concrete, specific gaps — listed here rather than folded silently into the sections below so they don't get lost among the aspirational Phase 2-4 items. Two were security-critical and fixed same-day; the rest are queued.
-
-All items below were found and fixed same-day (backend, docs, and web-console work landed in parallel).
-
-### Security / correctness
-
-- [x] **Agent shell spawn no longer shells out to `su -`.** `pkg/agent/agent.go` now resolves the target user from the local user database and drops privileges directly via `syscall.Credential` (setuid/setgid), resolving the user's real login shell from `/etc/passwd` instead of assuming `/bin/bash` exists. Matches how OpenSSH spawns sessions; fixes hard failures on minimal distro images (e.g. `agent-opensuse`) where `su`'s PAM/setuid path was unreliable.
-- [x] **CRITICAL — command injection in the web file browser, fixed.** `pkg/api/terminal.go`'s `filesList`/`filesDownload`/`filesUpload`/`filesMkdir`/`filesDelete` built shell command strings with Go's `%q` verb, which escapes Go-string syntax only — not shell metacharacters. `$(...)` command substitution still expanded inside the resulting double-quoted shell token, so a `path` like `/tmp/$(id>/tmp/pwned)` executed arbitrary commands on the target agent. All five handlers now use the existing `shellQuote()` POSIX single-quote escaper. Regression-tested in `pkg/api/terminal_test.go`.
-- [x] **`exec` requests now forward `remote_user` to the agent.** File ops and CLI `exec` previously always ran as the agent's own uid (root) regardless of the selected remote user — only the interactive `shell` request carried a `User` field. Added `User` to the exec payload on both the web-terminal-bridge path (`pkg/api/terminal.go` `execOnMachine`) and the CLI/gateway path (`pkg/server/server.go`); `pkg/agent/agent.go`'s `executeCommand` now impersonates that user via the same setuid/setgid machinery `buildShellCommand` uses for interactive shells (factored into shared `resolveUnixIdentity()`/`credentialForIdentity()` helpers), falling back to the agent's own identity when no user is specified (admin control commands, heartbeat).
-- [x] **Plugin hooks now have panic recovery and a bounded timeout.** `pkg/plugin/plugin.go`'s `TriggerHook` runs each plugin via `recover()`-guarded `callHook`, raced against a timeout (default 5s) so a panicking or hanging plugin (e.g. a webhook with no HTTP timeout) can no longer crash the server or stall every login/session. Covered in `pkg/plugin/plugin_test.go`.
-- [x] **Plugin config wiring no longer picks a plugin at random.** `pkg/plugin/plugin_loader.go`'s `LoadPlugin` now returns the just-loaded plugin's real name instead of `LoadPluginWithConfig` re-deriving "the" plugin via undefined map-iteration order over `loadedLibs`. *(Superseded 2026-07-14 — `plugin_loader.go` and dynamic `.so` loading were removed entirely; see "Compiled-in plugin platform" below.)*
-- [x] **Expired HTTP sessions are now cleaned up.** `pkg/server/server.go` has a new `runSessionCleanupLoop` (hourly ticker, same shutdown-channel pattern as the recording retention loop) calling the previously-unwired `AuthService.CleanupExpiredSessions`.
-
-### Documentation
-
-- [x] **`docs/openapi/openapi.yaml`** now documents `POST /api/v1/admin/agents/{machine_id}/disconnect`, matching the sibling `/admin/agents/*` entries.
-- [x] **`docs/SETUP.md`** now points readers at `config/server.example.yaml` right after the minimal-config step, with one-line explanations of the WebAuthn/OpenFGA/MFA-enforcement/rate-limiting/recording-encryption knobs that were previously undiscoverable.
-- [x] **`docs/SREVER-CLI.md` filename typo, fixed** — renamed to `docs/SERVER-CLI.md`; fixed the inbound link and typo callout in `ARCHITECTURE.md`.
-- [x] **`docs/SRS-UI.md`'s role/nav table** now includes the Permissions page (admin/operator only, confirmed against `web/ui/src/lib/nav.ts`).
-
-### Web console
-
-- [x] **`PermissionsPage.tsx` `revoke()` now requires confirmation**, matching every other destructive action in the console.
-- [x] **`PermissionsPage.tsx` migrated to the shared `DataTable`/`useTableState` pattern**, with a new "view by user / by machine" toggle wired to the existing `GET /permissions/machine/:id` endpoint — the concrete substance behind the old "richer permission editor" line.
-- [x] **API key management UI added** — new "API keys" tab in `SecurityPage.tsx` alongside MFA/WebAuthn/SSH keys: create (with optional expiry), one-time copyable reveal of the raw key on creation (mirrors the MFA-enrollment "show secret once" UX), and separate soft-Revoke vs. permanent-Delete actions matching the backend's actual semantics.
-- [x] **`SetupPage.tsx` onboarding fixed — and a larger bug found in the process.** Step 5 ("Harden auth") no longer hardcodes `done: false` (now derived from the signed-in user's MFA/WebAuthn enrollment status). While fixing it, discovered the page was reading fields (`has_admin`, `agents_connected`, `machines`, `ready`) that don't exist in the real `/setup/status` response shape (`complete`, `steps.*`, `counts.*`) — so steps 2, 3, 4, and 6 (not just 5) were silently stuck on "todo" regardless of actual state. Fixed the type and all step/stat derivations to match the real backend response. Also replaced the dead-ternary `BadgeDone` component with the existing shared `Badge` component instead of inventing new CSS.
-
----
 
 ## What Orion Belt Is
 
@@ -169,9 +137,9 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 - [x] Client machine listing (`osh --list`)
 - [x] Access request creation + polling from client
 - [x] Admin CLI (`oadmin`) for approve/reject
-- [x] Docker Compose local-dev stack (merged on master post-tag)
+- [x] Docker Compose local-dev stack
 
-### Phase 1 Hardening (v0.3.1 — current)
+### v0.3.1 — Hardening
 
 * **SSH Host Key Verification**
   - [x] Replace `InsecureIgnoreHostKey` in client (`osh`/`ocp`)
@@ -246,7 +214,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
   - [x] New admin API (`GET`/`PUT`/`POST /api/v1/admin/plugins...`) plus a Plugins settings page in the web console
   - [x] Each plugin declares a `ConfigSchema()` so the UI renders real form fields (text/bool/int/nested groups); secret fields are partially revealed (e.g. `xoxb****9f2c`) and reconciled back to the stored secret on save instead of requiring full re-entry
   - [x] `audit-logger` ships enabled and auto-configured by default; WebAuthn/FIDO2 enabled by default across Docker, qemu lab, and lab compose
-  - [x] Build pipeline (`make build-server`, qemu lab scripts, GoReleaser) always rebuilds the embedded web console before producing a server binary, so it can no longer ship a stale committed UI snapshot
+  - [x] Build pipeline (`make build-server`, qemu lab scripts, GoReleaser) always rebuilds the embedded web console before producing a server binary, so a release cannot ship a stale committed UI snapshot
 
 * **ChatOps**
   - [x] New `chatops-access-request` plugin posts access requests to Slack, Discord, Microsoft Teams, and Rocket.Chat
@@ -263,7 +231,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 
 ---
 
-## Still open (post-v0.4)
+## Post-v0.4 follow-ups
 
 - [ ] HashiCorp Vault integration (#20, #27)
 - [x] Structured logs (JSON slog); shipping to Loki/ELK still open
@@ -278,7 +246,7 @@ Orion Belt is a lightweight, self-hosted Privileged Access Management (PAM) syst
 - [x] Build version on binaries, `/health`, `/api/v1/version`, and UI
 - [x] GPG signing for release checksums + APT/RPM repos (`make packaging-key`, `make repos`)
 
-### Ops / release (in progress on this branch)
+### v0.5 — Packaging and release
 
 - [x] Go 1.26.6 + dependency bump; `govulncheck` 0-CVE gate (`make cve`, CI)
 - [x] Native packages: deb / rpm / apk via GoReleaser + nFPM (`make packages`)
@@ -319,7 +287,7 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 - [x] RDP / VNC ([RDP_VNC.md](RDP_VNC.md)) and Kubernetes ([KUBERNETES.md](KUBERNETES.md))
 - [ ] DB proxies (#34–#36)
 - [x] Go SDK ([GO_SDK.md](GO_SDK.md))
-- [ ] Python and TypeScript SDKs (#61, #62)
+- [x] Python and TypeScript SDKs ([MULTI_LANGUAGE_SDK.md](MULTI_LANGUAGE_SDK.md), #61, #62)
 - [ ] Workflow automation
 - [ ] AI/ML access analytics (maybe)
 - [x] CLI coverage for new endpoints (#64)
@@ -335,7 +303,7 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 - [x] End-to-end CVE gate (`e2e/cve`, `scripts/cve-check.sh`)
 - [x] Multi-distro e2e lab (compose + QEMU) + [E2E test plan](E2E_TEST_PLAN.md)
 - [x] Performance benchmarks (`pkg/server/bench_test.go`, nightly gate) — [BENCHMARKS.md](BENCHMARKS.md)
-- [ ] Architecture Decision Records (ADRs); the first one, `docs/adr/0001-recording-compression.md`, was dropped in the v1.0 docs cut (71a1353)
+- [ ] Architecture Decision Records (ADRs)
 
 **Refactoring**
 
@@ -374,7 +342,8 @@ Notes: [V1_RELEASE_CRITERIA.md](V1_RELEASE_CRITERIA.md), [API_STABILITY.md](API_
 * **v1.2:** Notification templates, installer
 * **v1.3:** Capability catalog, CLI coverage for new endpoints, security hardening, packages for every Linux distro and clients for every OS (pkgs.orion-belt.dev)
 * **v1.4:** Compliance reports, explain-access, risk policy, anomaly flags, recording compression, break-glass admin, RDP/VNC and JIT Kubernetes access
-* **Later:** OIDC (then SAML/LDAP), secrets vault, database gateway, HA, OPA, Python/TypeScript SDKs, SIEM/ticketing — see [Open work](#open-work--2026-10-25)
+* **v1.5:** Python and TypeScript SDKs, agent remote management, permission editor, standardised API errors, AGPL-3.0-only, SLSA provenance
+* **Later:** OIDC (then SAML/LDAP), secrets vault, database gateway, HA, OPA, SIEM/ticketing — see [Open work](#open-work)
 
 ---
 
@@ -386,7 +355,6 @@ Helpful directions right now:
 - Secrets vault (#20)
 - SIEM forwarding (#51) and ticketing hooks (#52)
 - Relationship graph explorer (#58)
-- Python and TypeScript SDKs (#61, #62)
 
 ---
 
@@ -394,5 +362,5 @@ Helpful directions right now:
 
 Tags and merged PRs are the history. **v1.0.0** is the first release we call stable SSH PAM (API notes + ops docs + smoke). Open GitHub issues (FR-x.y) are the source of truth for planned work; this file summarises them.
 
-**Last Updated:** 2026-11-15 (v1.5.0)  
+**Last updated:** 2026-11-26  
 **Maintainer:** Mohamed Zrouga ([@zrougamed](https://github.com/zrougamed))

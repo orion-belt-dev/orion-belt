@@ -1,39 +1,15 @@
 # .NET SDK
 
-`.NET` client package for Orion Belt.
+Early `.NET` client for Orion Belt, package name `OrionBelt.SDK`. It is not
+published and does not yet cover the full API; the Python and TypeScript SDKs
+do.
 
-Source of truth: [docs/openapi/openapi.yaml](../../docs/openapi/openapi.yaml)
+The HTTP contract is [docs/openapi/openapi.yaml](../../docs/openapi/openapi.yaml).
 
-Package name: `OrionBelt.SDK`
+## What it covers
 
-## What is included
+- An `HttpClient`-based client with API key, session token and bearer token auth
+- The public challenge/login flow
+- Read and write calls for machines, sessions, reports and files
 
-- typed `HttpClient`-based client with API key, session token, and bearer token auth
-- public challenge/login helpers
-- core read/write helpers for machines, sessions, reports, and files
-- record models for the initial surface
-
-## Status
-
-Baseline client scaffold is implemented.
-
-See the project file in [OrionBelt.SDK.csproj](OrionBelt.SDK.csproj).# .NET SDK
-
-Planned .NET client for Orion Belt.
-
-Source of truth: [docs/openapi/openapi.yaml](../../docs/openapi/openapi.yaml)
-
-Suggested package name: `OrionBelt.SDK`
-
-## Planned Surface
-
-- auth helpers
-- API key/session/JWT auth
-- users, machines, permissions, access requests
-- sessions, audit logs, reports, notifications
-- plugins, agents, MFA, WebAuthn, SSH keys
-- file browser APIs
-
-## Status
-
-Scaffold only.
+Build it from [OrionBelt.SDK.csproj](OrionBelt.SDK.csproj).

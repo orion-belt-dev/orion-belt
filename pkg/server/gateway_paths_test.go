@@ -191,7 +191,14 @@ func TestGateway_CertRejections(t *testing.T) {
 		t.Error("host cert from an untrusted CA accepted")
 	}
 
-	odd := &ssh.Certificate{Key: h.aliceKey.PublicKey(), CertType: 3, ValidBefore: ssh.CertTimeInfinity}
+	// x/crypto refuses to sign a certificate without principals, so give it
+	// one; the gateway must still reject the unknown certificate type.
+	odd := &ssh.Certificate{
+		Key:             h.aliceKey.PublicKey(),
+		CertType:        3,
+		ValidPrincipals: []string{"alice"},
+		ValidBefore:     ssh.CertTimeInfinity,
+	}
 	if err := odd.SignCert(rand.Reader, rogue); err != nil {
 		t.Fatal(err)
 	}

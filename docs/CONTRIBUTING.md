@@ -1,7 +1,6 @@
 # Contributing to Orion-Belt
 
-First of all, thank you for considering contributing to **Orion-Belt** ❤️
-Community involvement is what makes open-source projects thrive.
+Thank you for considering a contribution to **Orion-Belt**.
 
 Orion-Belt is an infrastructure and security-focused project, so we value
 **clarity, correctness, security, and thoughtful design** in all contributions.
@@ -19,8 +18,6 @@ There are many ways to contribute, including:
 * Implementing new features
 * Reviewing pull requests
 * Building plugins or integrations
-
-No contribution is too small.
 
 ---
 
@@ -206,8 +203,17 @@ agent: add heartbeat retry mechanism
 2. Create a feature or fix branch
 3. Make your changes
 4. Ensure tests pass
-5. Open a pull request against `main`
+5. Open a pull request against `master`
 6. Clearly describe **what** and **why**
+
+Every pull request into `master` needs two approving reviews, including the
+code owner's, and an approval after the last push. All review threads must be
+resolved before merge.
+
+Keep security-relevant changes (authentication, authorization, the gateway,
+the agent, recording, install scripts) in small pull requests, one concern
+each, so each can be reviewed properly. Split large features into a series of
+pull requests.
 
 Pull requests may be reviewed for:
 
@@ -239,8 +245,6 @@ Please report it privately, either through a
 or by emailing **[maintainers@orion-belt.dev](mailto:maintainers@orion-belt.dev)**. See
 [SECURITY.md](../SECURITY.md) for what to include and what to expect.
 
-Responsible disclosure is greatly appreciated.
-
 ---
 
 ## License
@@ -262,26 +266,9 @@ Thanks to everyone who has contributed to Orion-Belt:
 
 ---
 
-## Community & Participation
+## Questions and ideas
 
-Orion-Belt is built **with the community, for the community**.
-
-Whether you are:
-
-* A security engineer
-* A DevOps practitioner
-* A Go developer
-* Or simply curious about SSH internals and access control
-
-**You are welcome here.**
-
-Feel free to:
-
-* Ask questions
-* Share ideas
-* Challenge assumptions
-* Propose improvements
-
-Let’s build a **secure, auditable, and open access platform** together
-
-Thank you for being part of the Orion-Belt community.
+Ask questions and propose changes in [GitHub issues](https://github.com/orion-belt-dev/orion-belt/issues)
+or on [Discord](https://discord.gg/w62S8jxTHJ). For anything larger than a
+small fix, open an issue first so the design can be agreed before you write
+the code.

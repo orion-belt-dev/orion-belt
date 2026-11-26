@@ -2,14 +2,12 @@
 
 | Field | Value |
 |-------|--------|
-| **Document ID** | `QA-E2E-QEMU-001` |
 | **Product** | Orion Belt |
 | **Scope** | QEMU lab: clean → start → admin UI → agents → RBAC users → OpenSSH gateway |
 | **Type** | System / integration E2E |
 | **Automation entry** | `make lab-qemu-start` |
 | **Related** | [lab/README.md](../lab/README.md), [openssh-clients.md](openssh-clients.md), [PACKAGING.md](PACKAGING.md), [RELEASE_SMOKE.md](RELEASE_SMOKE.md) |
 | **Status** | Active |
-| **Last updated** | 2026-07-14 |
 
 ---
 
@@ -121,6 +119,9 @@ Validate that a fresh Orion Belt gateway can be brought up under QEMU, that mult
 | **Blocked** | Cannot execute due to unmet dependency (prior case failed, env issue) |
 | **Pass with notes** | Goal met with acceptable workaround documented |
 
+When reporting a run, give each case ID with its result and, for anything
+other than Pass, the evidence listed in §10.
+
 ## 7. Test suite execution
 
 ### 7.1 Automated primary path (recommended)
@@ -164,9 +165,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 2. Directories empty or absent (recreated empty `run/logs` / `images` OK).
 3. No lab QEMU processes remain.
 
-**Actual / evidence:** _(tester fills)_  
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
-
 ---
 
 ### TC-QEMU-002 — Clean does not require flags to remove images
@@ -186,8 +184,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 
 1. Cloud images are deleted.
 2. Console logs a line about removing cloud images.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
 
 ---
 
@@ -212,8 +208,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 2. HTTP status `200` from `/metrics`.
 3. Host listens on `2222`, `8080`, `2200`.
 4. `orion-belt-server` process is running inside the server VM.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
 
 ---
 
@@ -240,8 +234,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 3. `osh` authenticates via key challenge-response and prints a 10-char code plus a `/ui/bootstrap?code=…` URL with a 5-minute expiry.
 4. Session is established; console shows machines / ops views appropriate for admin. First login lands on the blocking "create a password + enrol TOTP" gate.
 5. Rejected — codes are single-use.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
 
 ---
 
@@ -272,8 +264,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 
 **Notes:** Guests still in cloud-init may be Blocked/retest; re-run `make lab-qemu-connect-agents AGENTS="…"`.
 
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
-
 ---
 
 ### TC-QEMU-006 — RBAC seed users and grants
@@ -288,19 +278,17 @@ KEEP_IMAGES=1 make lab-qemu-start
 
 1. Read `lab/credentials/USERS.txt`.
 2. Confirm key files: `operator_ed25519`, `auditor_ed25519`, `alice_ed25519`, `bob_ed25519` (+ `.pub`).
-3. UI login as `alice` with `alice_ed25519.pub` — verify visible machines include Alpine (or only Alpine).
-4. UI login as `bob` with `bob_ed25519.pub` — verify Debian access, not Alpine (as applicable to UI listing).
-5. UI login as `auditor` — verify login works; machine session start to Alpine should be denied or unavailable.
+3. As `alice`: `./bin/osh -u alice --api-endpoint http://127.0.0.1:8080 -i lab/credentials/alice_ed25519 --list`, or sign in to the console with `osh login --code` (as in TC-QEMU-004) and open **Machines**.
+4. Repeat step 3 as `bob` with `bob_ed25519`.
+5. Repeat step 3 as `auditor` with `auditor_ed25519`.
 
 **Expected results**
 
 1. Summary table matches §4.3.
 2. All four demo keypairs exist.
-3. Alice can operate on `agent-alpine` only.
-4. Bob limited to `agent-debian`.
-5. Auditor has no machine grants for interactive access.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
+3. Alice sees `agent-alpine` only.
+4. Bob sees `agent-debian` only.
+5. Auditor signs in but sees no machines for interactive access.
 
 ---
 
@@ -329,8 +317,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 2. Session lands on the Alpine agent environment (hostname/`uname` consistent with Alpine guest).
 3. Clean disconnect.
 
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
-
 ---
 
 ### TC-QEMU-008 — OpenSSH negative: alice cannot use bob’s machine
@@ -354,8 +340,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 
 1. Connection fails or session is rejected (permission / access denied). Alice must **not** get an interactive shell on Debian.
 
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
-
 ---
 
 ### TC-QEMU-009 — Admin OpenSSH to any registered agent
@@ -373,8 +357,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 **Expected results**
 
 1–2. Sessions succeed for registered connected agents.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
 
 ---
 
@@ -395,8 +377,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 1. Operator authenticates.
 2. Sessions succeed on agents granted in seed (all registered).
 
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
-
 ---
 
 ### TC-QEMU-011 — KEEP_IMAGES preserves downloads
@@ -415,8 +395,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 **Expected results**
 
 1–3. Images retained; VM overlays removed; console mentions keeping images.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
 
 ---
 
@@ -437,8 +415,6 @@ KEEP_IMAGES=1 make lab-qemu-start
 
 1. `govulncheck` reports **0 affecting vulnerabilities** for source and binaries; exit 0.
 2. Test Pass.
-
-**Result:** ☐ Pass ☐ Fail ☐ Blocked
 
 ---
 
@@ -463,15 +439,6 @@ When filing a fail:
 4. **Expected vs actual**
 5. **Evidence:** console snippet, `lab/qemu/run/logs/*.log`, guest `orion-agent.log`, server `/var/log/orion-belt/server.log`
 6. **Severity:** Blocker / Major / Minor / Cosmetic
-
-## 11. Sign-off
-
-| Role | Name | Date | Outcome |
-|------|------|------|---------|
-| Executor | | | ☐ Pass ☐ Fail |
-| Reviewer | | | ☐ Approved ☐ Rework |
-
----
 
 ## Appendix A — Useful commands
 
@@ -498,6 +465,6 @@ cat lab/credentials/admin_ed25519.pub
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
 | Agent log only `handshake failed: EOF` | Agent started before server listen | Re-run `make lab-qemu-connect-agents`; agent cloud-init now retries |
-| Alpine restart fails with `sudo` | Alpine uses `doas` | Fixed in helpers; use `doas` on guest |
+| Alpine restart fails with `sudo` | Alpine uses `doas` | Use `doas` on the Alpine guest; the lab helpers already do |
 | Rocky/openSUSE pubkey missing | Guest still booting | Wait; retry connect with `AGENTS=…` |
-| `/ui` login invalid credentials | Wrong pubkey paste / wrong user | Paste full single-line `.pub` for that username |
+| `osh login --code` fails | Wrong key or username | Pass the private key that matches the user's registered `.pub` (`-i lab/credentials/<user>_ed25519`) |

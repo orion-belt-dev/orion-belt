@@ -76,7 +76,7 @@ For the full walkthrough, including an agent on a real machine, see
 | Target reach | Agents dial out (no inbound on hosts) | Node agents / reverse tunnels | Workers / proxies | Inbound to bastion, often to hosts too |
 | Session recording | Yes, with live watch | Yes | Yes (with workers) | Usually custom or none |
 | JIT approvals | Built in, with ChatOps | Yes | Via workflows / IdP | Rarely |
-| Weight | Lighter SSH PAM slice | Large platform | Identity-centric | Minimal features |
+| Weight | Single gateway binary plus PostgreSQL | Large platform | Identity-centric | Minimal features |
 
 Orion Belt fits teams that want to run their own access management for servers, desktops and clusters without exposing SSH, RDP or the Kubernetes API on every host or operating a platform the size of Teleport.
 
@@ -227,7 +227,7 @@ sudo rc-service orion-belt-server start
 sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 ```
 
-Without a signed APKINDEX (no `APK_RSA_PRIVATE_KEY` on the release), `install.sh` falls back to verified release files instead of an unsigned index.
+If the apk repository index is not signed, `install.sh` installs from checksum-verified release files instead.
 
 </details>
 
@@ -502,7 +502,7 @@ Local packages: `make packages` → install from `dist/` ([PACKAGING.md](docs/PA
 | [AGENT_MANAGEMENT.md](docs/AGENT_MANAGEMENT.md) | Reload, drain and update agents |
 | [COMPLIANCE_REPORTS.md](docs/COMPLIANCE_REPORTS.md) | SOC2 / ISO 27001 / PCI reports |
 | [GO_SDK.md](docs/GO_SDK.md) | Reusable Go SDK for API integrations |
-| [MULTI_LANGUAGE_SDK.md](docs/MULTI_LANGUAGE_SDK.md) | Python / .NET / JS SDK plan |
+| [MULTI_LANGUAGE_SDK.md](docs/MULTI_LANGUAGE_SDK.md) | Python and TypeScript SDKs |
 | [openssh-clients.md](docs/openssh-clients.md) | Vanilla `ssh` via the gateway |
 | [DEPLOYMENT_HARDENING.md](docs/DEPLOYMENT_HARDENING.md) | Hardening checklist |
 | [REVERSE_PROXY.md](docs/REVERSE_PROXY.md) | TLS with nginx or Caddy, trusted proxies |
