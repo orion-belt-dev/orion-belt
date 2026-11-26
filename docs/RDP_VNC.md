@@ -78,8 +78,8 @@ Tunnels are built to ride out flaky networks:
   fix those.
 - **Dead links are noticed in seconds, not minutes.** The gateway, agents and
   `osh` exchange keepalives every 15 seconds and close a connection that has
-  not answered within 10, so a half-open link no longer hangs sessions until
-  TCP gives up.
+  not answered within 10, so a half-open link cannot hang sessions until TCP
+  gives up.
 - **Agents reconnect at once.** An agent redials as soon as its connection
   drops, with jittered backoff. Its new connection replaces the old one on the
   gateway, so the machine is back online the moment the agent is.

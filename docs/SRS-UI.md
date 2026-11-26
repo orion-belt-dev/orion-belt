@@ -4,8 +4,7 @@
 **Scope:** React SPA under `web/ui/` (built into `web/static/`, embedded at `/ui/`)  
 **Base URL:** `/ui/` (served by the gateway; redirects from `/` and `/admin`)  
 **API:** `/api/v1/*` — see [openapi/openapi.yaml](openapi/openapi.yaml)  
-**Status:** React console Phase 2 — **v1.0.0**  
-**Last updated:** July 2026 (live watch, permissions all-grants/edit, notification prefs + admin notification policy, admin notification templates, usage analytics dashboard)
+**Status:** Describes the console as shipped in the current release.
 
 ---
 
@@ -54,10 +53,10 @@ This SRS is the acceptance baseline for UI regressions and for matching OpenAPI 
 
 | Role | Nav access (implemented) | Notes |
 |------|--------------------------|-------|
-| **admin** | Dashboard, Setup, Requests, Machines, Terminal, Files, Sessions, Users, Permissions, Agents, Add agent, Audit, Security | Full console |
+| **admin** | Dashboard, Setup, Catalog, Requests, Machines, Terminal, Files, Sessions, Users, Permissions, Agents, Add agent, Audit, Security, Plugins | Full console |
 | **operator** | Same as admin | Approvals and admin API; cannot create, modify, promote to or delete admin accounts |
 | **auditor** | Dashboard, Sessions, Users (read), Audit, Security | No terminal/files/agents/setup |
-| **user** | Machines, Terminal, Files, Sessions, Requests, Audit, Security | Own records only; the user directory returns just their own account |
+| **user** | Catalog, Machines, Terminal, Files, Sessions, Requests, Audit, Security | Own records only; the user directory returns just their own account |
 
 Role uses `EffectiveRole`: explicit `admin`/`operator`/`auditor`, else `is_admin → admin`, else `role`/`user`.
 
@@ -68,6 +67,7 @@ Role uses `EffectiveRole`: explicit `admin`/`operator`/`auditor`, else `is_admin
 ```
 /ui/
 ├── /login
+├── /bootstrap (sign-in by device code)
 └── App shell
     ├── Side nav (role-filtered) + version in footer
     └── Routes
@@ -80,9 +80,11 @@ Role uses `EffectiveRole`: explicit `admin`/`operator`/`auditor`, else `is_admin
         ├── /files
         ├── /sessions (+ cast playback)
         ├── /users
+        ├── /permissions
         ├── /agents
         ├── /add-agent
         ├── /audit
+        ├── /plugins
         └── /security
 ```
 
@@ -115,7 +117,7 @@ Defined in `web/ui/src/styles/theme.css` (`:root` CSS variables).
 
 ## 6. Functional requirements
 
-Parity with the original console FRs remains the Phase 1 bar:
+The console must support:
 
 - Login (pubkey, TOTP, WebAuthn)
 - Role-filtered shell + version chip
@@ -153,6 +155,5 @@ Parity with the original console FRs remains the Phase 1 bar:
 - **Source:** `web/ui/`
 - **Shipped assets:** `web/static/` (built; embedded by `web/embed.go`)
 - **RBAC in UI** is navigation gating only; the API remains authoritative.
-- Phase 2 delivered: permission editor (`/permissions`), command palette (⌘/Ctrl+K), dashboard agent health, session search.
-- Phase 2 delivered: permission editor (`/permissions`), command palette (⌘/Ctrl+K), dashboard agent health, usage analytics (`GET /dashboard/usage`), session search.
-- Phase 3 candidates: live session join, richer audit filters, MFA enrollment polish.
+- Also shipped: permission editor (`/permissions`), command palette (⌘/Ctrl+K), dashboard agent health, usage analytics (`GET /dashboard/usage`), session search.
+- Not built yet: joining a live session (watch is read-only), richer audit filters.
