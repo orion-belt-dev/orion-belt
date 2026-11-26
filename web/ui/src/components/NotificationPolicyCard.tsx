@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useToast } from "./Toast";
@@ -47,17 +47,19 @@ export function NotificationPolicyCard() {
   const [allowed, setAllowed] = useState<string[]>([]);
   const [mandatory, setMandatory] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
+  const [seededFrom, setSeededFrom] = useState<PolicyResponse | undefined>(undefined);
 
-  useEffect(() => {
-    if (!q.data?.policy) return;
+  // Reseed the form whenever a new policy response arrives. Doing it during
+  // render (React's "adjust state when data changes" pattern) avoids a second
+  // render pass from an effect.
+  if (q.data?.policy && q.data !== seededFrom) {
+    setSeededFrom(q.data);
     // An empty allowed_channels list means "all channels" on the wire; expand
     // it here so the checkboxes show the effective state rather than blank.
     const stored = q.data.policy.allowed_channels ?? [];
     setAllowed(stored.length === 0 ? knownChannels : stored);
     setMandatory(q.data.policy.mandatory_events ?? {});
-    // knownChannels is derived from the same response, so q.data drives this.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q.data]);
+  }
 
   if (q.isError) return null; // non-admin, or policy endpoint unavailable
 

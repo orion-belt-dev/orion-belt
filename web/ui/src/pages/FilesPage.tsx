@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiRaw } from "../lib/api";
 import type { Machine } from "../lib/types";
@@ -33,45 +33,49 @@ function fmtSize(n?: number) {
 export function FilesPage() {
   const { toast } = useToast();
   const machinesQ = useQuery({ queryKey: ["machines"], queryFn: () => api<Machine[]>("/machines") });
-  const [machine, setMachine] = useState("");
+  const [selectedMachine, setSelectedMachine] = useState("");
   const [user, setUser] = useState("root");
   const [path, setPath] = useState("/");
   const [pathInput, setPathInput] = useState("/");
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
   const table = useTableState<Entry>({ pageSize: 50 });
 
-  useEffect(() => {
-    if (!machinesQ.data?.length || machine) return;
-    setMachine(machinesQ.data[0].name);
-  }, [machinesQ.data, machine]);
+  // Until the operator picks one, browse the first machine.
+  const machine = selectedMachine || machinesQ.data?.[0]?.name || "";
 
-  async function load(p = pathInput) {
-    if (!machine) return;
-    setErr("");
-    setLoading(true);
-    try {
-      const q = new URLSearchParams({ machine, user, path: p });
+  // Listings are fetched fresh on every visit and never retried, so a
+  // permission error shows at once and a reopened folder is never stale.
+  const listQ = useQuery({
+    queryKey: ["files", machine, user, path],
+    enabled: machine !== "",
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const q = new URLSearchParams({ machine, user, path });
       const data = await api<{ entries?: Entry[]; error?: string; raw?: string } | Entry[]>(`/files/list?${q}`);
       if (data && !Array.isArray(data) && data.error) throw new Error(data.error);
-      const list = Array.isArray(data) ? data : data.entries || [];
-      setEntries(list);
-      setPath(p);
-      setPathInput(p);
-      table.setQuery("");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
+      return Array.isArray(data) ? data : data.entries || [];
+    },
+  });
+  const entries = useMemo(() => (listQ.isError ? [] : listQ.data ?? []), [listQ.isError, listQ.data]);
+  const err = listQ.error ? (listQ.error instanceof Error ? listQ.error.message : String(listQ.error)) : "";
+  const loading = listQ.isFetching;
+
+  function load(p: string) {
+    setPathInput(p);
+    table.setQuery("");
+    if (p === path) void listQ.refetch();
+    else setPath(p);
   }
 
-  useEffect(() => {
-    if (machine) void load("/");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [machine, user]);
+  // A different machine or remote user starts again from the root.
+  function changeTarget(nextMachine: string, nextUser: string) {
+    setSelectedMachine(nextMachine);
+    setUser(nextUser);
+    setPath("/");
+    setPathInput("/");
+    table.setQuery("");
+  }
 
   async function download(fp: string) {
     const q = new URLSearchParams({ machine, user, path: fp });
@@ -155,7 +159,7 @@ export function FilesPage() {
         <div className="term-toolbar">
           <div>
             <label className="field" htmlFor="files-machine">Machine</label>
-            <select id="files-machine" value={machine} onChange={(e) => setMachine(e.target.value)}>
+            <select id="files-machine" value={machine} onChange={(e) => changeTarget(e.target.value, user)}>
               {(machinesQ.data || []).map((m) => (
                 <option key={m.id} value={m.name}>
                   {m.name}
@@ -165,7 +169,7 @@ export function FilesPage() {
           </div>
           <div>
             <label className="field" htmlFor="files-remote-user">Remote user</label>
-            <input id="files-remote-user" list="remoteUserListFiles" value={user} onChange={(e) => setUser(e.target.value)} />
+            <input id="files-remote-user" list="remoteUserListFiles" value={user} onChange={(e) => changeTarget(machine, e.target.value)} />
             <datalist id="remoteUserListFiles">
               {REMOTE_USERS.map((u) => (
                 <option key={u} value={u}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { PluginConfigField, PluginInfo } from "../lib/types";
@@ -202,8 +202,8 @@ function PluginCard({ plugin }: { plugin: PluginInfo }) {
 
   // Seed the form from the plugin's current config the first time it's opened; never clobber
   // in-progress edits on background refetches.
-  useEffect(() => {
-    if (expanded && initializedFor !== plugin.name) {
+  function toggleExpanded() {
+    if (!expanded && initializedFor !== plugin.name) {
       if (hasSchema) {
         setFormValues(seedFromSchema(plugin.schema!, plugin.config || {}));
       } else {
@@ -213,8 +213,8 @@ function PluginCard({ plugin }: { plugin: PluginInfo }) {
       setValidationError("");
       setSaveError("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, plugin.name, plugin.config, initializedFor, hasSchema]);
+    setExpanded(!expanded);
+  }
 
   async function toggle() {
     setToggling(true);
@@ -302,7 +302,7 @@ function PluginCard({ plugin }: { plugin: PluginInfo }) {
           <button type="button" className="btn secondary sm" disabled={toggling} onClick={() => void toggle()}>
             {toggling ? "…" : plugin.enabled ? "Disable" : "Enable"}
           </button>
-          <button type="button" className="btn secondary sm" onClick={() => setExpanded((v) => !v)}>
+          <button type="button" className="btn secondary sm" onClick={toggleExpanded}>
             {expanded ? "Close" : "Edit config"}
           </button>
         </div>

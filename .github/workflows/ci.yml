@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run for its previous commit, so the
+# runners only work on the latest one. Pushes to branches are never cancelled:
+# every commit on master keeps a complete result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Jobs run on the local gh-local runners while the gh-runners dispatcher keeps
 # the GH_RUNS_ON repository variable set, and on GitHub-hosted runners when it
 # is unset (dispatcher stopped). Fork pull requests always use hosted runners
