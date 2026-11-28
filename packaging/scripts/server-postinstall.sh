@@ -7,6 +7,12 @@
 # upgrade restarts a running server.
 set -e
 
+# On ostree systems (rpm-ostree, bootc) this script runs in a fresh copy of
+# /etc for every new deployment, so anything generated here is replaced on
+# each OS update unless the admin has edited it.
+ostree=
+if [ -e /run/ostree-booted ] || [ -d /usr/lib/bootc ]; then ostree=1; fi
+
 if ! getent group orionbelt >/dev/null 2>&1; then
   groupadd --system orionbelt || addgroup -S orionbelt 2>/dev/null || true
 fi
@@ -15,11 +21,18 @@ if ! getent passwd orionbelt >/dev/null 2>&1; then
     || adduser -S -G orionbelt -h /var/lib/orion-belt -s /sbin/nologin orionbelt 2>/dev/null || true
 fi
 
-mkdir -p /var/lib/orion-belt/recordings /var/log/orion-belt /etc/orion-belt
 # The service runs as orionbelt with ProtectSystem=strict and ReadWritePaths
 # covering these three trees — ownership must match or startup/setup fail.
-chown -R orionbelt:orionbelt /var/lib/orion-belt /var/log/orion-belt /etc/orion-belt 2>/dev/null || true
-chmod 750 /var/lib/orion-belt /var/log/orion-belt /etc/orion-belt 2>/dev/null || true
+mkdir -p /etc/orion-belt
+chown -R orionbelt:orionbelt /etc/orion-belt 2>/dev/null || true
+chmod 750 /etc/orion-belt 2>/dev/null || true
+# rpm-ostree (Fedora Silverblue, CoreOS) runs this script with /var read-only.
+# There the rpm's tmpfiles.d entry (/usr/lib/tmpfiles.d/orion-belt.conf)
+# creates these directories at boot instead.
+if mkdir -p /var/lib/orion-belt/recordings /var/log/orion-belt 2>/dev/null; then
+  chown -R orionbelt:orionbelt /var/lib/orion-belt /var/log/orion-belt 2>/dev/null || true
+  chmod 750 /var/lib/orion-belt /var/log/orion-belt 2>/dev/null || true
+fi
 # The shipped server.yaml carries a placeholder jwt_secret, which is public
 # (it is in the repository), and the server refuses to start with it. Replace
 # it with a random secret, on install and on upgrade alike, so a server still
@@ -41,13 +54,22 @@ if [ -f /etc/orion-belt/server.yaml ]; then
 fi
 
 # Without ssh-keygen (e.g. minimal openSUSE, where recommends are skipped) the
-# server creates the key itself on first start.
-if [ ! -f /etc/orion-belt/ssh_host_key ]; then
+# server creates the key itself on first start. It does so on ostree systems
+# too, where a key made here would change the gateway's host key on every OS
+# update.
+if [ -z "$ostree" ] && [ ! -f /etc/orion-belt/ssh_host_key ]; then
   if command -v ssh-keygen >/dev/null 2>&1; then
     ssh-keygen -q -t ed25519 -f /etc/orion-belt/ssh_host_key -N "" -C "orion-belt-host"
     chown orionbelt:orionbelt /etc/orion-belt/ssh_host_key /etc/orion-belt/ssh_host_key.pub 2>/dev/null || true
     chmod 600 /etc/orion-belt/ssh_host_key
   fi
+fi
+
+reboot_step=
+if [ -n "$ostree" ]; then
+  reboot_step='
+  0. Reboot into the new deployment: systemctl reboot
+'
 fi
 
 svc=/usr/lib/orion-belt/orion-belt-server-service
@@ -59,7 +81,7 @@ cat <<EOF
 Orion Belt server installed.
 ────────────────────────────────────────
 Next steps (setup wizard):
-
+${reboot_step}
   1. Edit /etc/orion-belt/server.yaml
      - server.public_url          (UI/API origin agents and browsers use)
      - server.public_ssh_host/port (optional; defaults from public_url)

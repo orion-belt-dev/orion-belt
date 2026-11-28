@@ -76,6 +76,10 @@ detect() {
 		echo "$ORION_INIT"
 	elif [ -d "$ROOT/run/systemd/system" ]; then
 		echo systemd
+	# rpm-ostree runs package scripts in a sandbox without /run/systemd;
+	# ostree systems always boot systemd.
+	elif [ -e "$ROOT/run/ostree-booted" ]; then
+		echo systemd
 	elif [ -d "$ROOT/run/openrc" ] || { have openrc-run && have rc-update; }; then
 		echo openrc
 	elif [ -d "$ROOT/run/runit" ] || [ -d "$ROOT/etc/runit/runsvdir" ]; then
