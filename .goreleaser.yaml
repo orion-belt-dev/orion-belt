@@ -395,6 +395,10 @@ nfpms:
       - {dst: /var/lib/orion-belt/recordings, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
       - {dst: /var/log/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
       - {dst: /etc/orion-belt, type: dir, packager: apk, file_info: {mode: 0750, owner: orionbelt, group: orionbelt}}
+      - src: packaging/tmpfiles/orion-belt.conf
+        dst: /usr/lib/tmpfiles.d/orion-belt.conf
+        packager: rpm
+        file_info: {mode: 0644}
       - src: LICENSE
         dst: /usr/share/licenses/orion-belt/LICENSE
         file_info: {mode: 0644}
