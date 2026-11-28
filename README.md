@@ -199,6 +199,23 @@ sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
 </details>
 
 <details>
+<summary><b>Fedora Atomic: Silverblue, Kinoite, CoreOS</b> (rpm-ostree)</summary>
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo
+sudo rpm-ostree install orion-belt
+sudo systemctl reboot
+
+sudoedit /etc/orion-belt/server.yaml
+sudo systemctl enable --now orion-belt-server
+sudo -u orionbelt orion-belt-server -c /etc/orion-belt/server.yaml setup
+```
+
+The server creates its SSH host key on first start.
+
+</details>
+
+<details>
 <summary><b>openSUSE</b> (zypper)</summary>
 
 ```bash

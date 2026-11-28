@@ -33,11 +33,19 @@ The repositories by hand:
 |--------------|-------|
 | Debian, Ubuntu, Raspberry Pi OS | `curl -fsSLo /usr/share/keyrings/orion-belt.gpg https://pkgs.orion-belt.dev/orion-belt.gpg`<br>`deb [signed-by=/usr/share/keyrings/orion-belt.gpg] https://pkgs.orion-belt.dev stable main` |
 | Fedora, RHEL, Rocky, Alma, Amazon Linux | `curl -fsSLo /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo` |
+| Fedora Atomic (Silverblue, Kinoite, CoreOS) | the same repository file, then `rpm-ostree install orion-belt` and a reboot |
 | openSUSE, SLES | `zypper addrepo https://pkgs.orion-belt.dev/orion-belt.repo` |
 | Alpine | key `https://pkgs.orion-belt.dev/apk/orion-belt.rsa.pub` in `/etc/apk/keys/`, then `https://pkgs.orion-belt.dev/apk` in `/etc/apk/repositories` |
 | Arch Linux, Arch Linux ARM, Arch Linux 32 | `pacman-key --add` the key and `--lsign-key` its fingerprint, then `[orion-belt]` with `Server = https://pkgs.orion-belt.dev/archlinux/$arch` |
 
 The site's front page lists the same commands with the key fingerprint.
+
+On rpm-ostree systems the server package's directories under `/var` come
+from `/usr/lib/tmpfiles.d/orion-belt.conf` at boot, because package scripts
+cannot write to `/var` there. The script also leaves the SSH host key to the
+server's first start: it runs again for every new deployment, and a key it
+made would change on each OS update. `install.sh` finds no `dnf` on these
+systems and installs the release archive instead.
 
 ## What a release contains
 
