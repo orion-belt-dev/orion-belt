@@ -4,10 +4,43 @@
         <title>Orion Belt Blog</title>
         <link>https://orion-belt.dev/blog</link>
         <description>Orion Belt Blog</description>
-        <lastBuildDate>Wed, 18 Nov 2026 14:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 28 Nov 2026 14:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Orion Belt v1.5.1 — installs on Fedora Atomic]]></title>
+            <link>https://orion-belt.dev/blog/orion-belt-v1-5-1</link>
+            <guid>https://orion-belt.dev/blog/orion-belt-v1-5-1</guid>
+            <pubDate>Sat, 28 Nov 2026 14:00:00 GMT</pubDate>
+            <description><![CDATA[Orion Belt 1.5.1 fixes server package installs on Fedora Silverblue, Kinoite and CoreOS, where rpm-ostree rejected the package, keeps the gateway SSH host key stable across OS updates there, and takes in dependency updates.]]></description>
+            <content:encoded><![CDATA[<p><strong>Orion Belt 1.5.1</strong> is a packaging fix for Fedora's image-based systems:
+Silverblue, Kinoite and the other Atomic desktops, and Fedora CoreOS.</p>
+<!-- -->
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-went-wrong">What went wrong<a href="https://orion-belt.dev/blog/orion-belt-v1-5-1#what-went-wrong" class="hash-link" aria-label="Direct link to What went wrong" title="Direct link to What went wrong" translate="no">​</a></h2>
+<p><code>rpm-ostree install orion-belt</code> stopped with
+<code>mkdir: cannot create directory '/var/lib/orion-belt': Read-only file system</code>.
+rpm-ostree runs package scripts in a sandbox where <code>/var</code> is empty and
+read-only, and the server package created its data and log directories there.</p>
+<p>The package now ships a <code>tmpfiles.d</code> entry, so systemd creates
+<code>/var/lib/orion-belt</code> and <code>/var/log/orion-belt</code> at boot.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="a-host-key-that-changed-with-every-update">A host key that changed with every update<a href="https://orion-belt.dev/blog/orion-belt-v1-5-1#a-host-key-that-changed-with-every-update" class="hash-link" aria-label="Direct link to A host key that changed with every update" title="Direct link to A host key that changed with every update" translate="no">​</a></h2>
+<p>On these systems a package's scripts run again for each new OS deployment,
+in a fresh copy of <code>/etc</code>. The SSH host key the package generated would have
+been replaced on every <code>rpm-ostree upgrade</code>, and agents and clients would
+have seen a different gateway key each time. There the package now leaves
+the key to the server, which creates it on first start in the live <code>/etc</code>,
+where it stays.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="installing">Installing<a href="https://orion-belt.dev/blog/orion-belt-v1-5-1#installing" class="hash-link" aria-label="Direct link to Installing" title="Direct link to Installing" translate="no">​</a></h2>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token function" style="color:#d73a49">sudo</span><span class="token plain"> </span><span class="token function" style="color:#d73a49">curl</span><span class="token plain"> </span><span class="token parameter variable" style="color:#36acaa">-fsSLo</span><span class="token plain"> /etc/yum.repos.d/orion-belt.repo https://pkgs.orion-belt.dev/orion-belt.repo</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token function" style="color:#d73a49">sudo</span><span class="token plain"> rpm-ostree </span><span class="token function" style="color:#d73a49">install</span><span class="token plain"> orion-belt postgresql-server</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token function" style="color:#d73a49">sudo</span><span class="token plain"> systemctl </span><span class="token function" style="color:#d73a49">reboot</span><br></div></code></pre></div></div>
+<p>Then continue with <a class="" href="https://orion-belt.dev/docs/quickstart/get-started">Get started</a>. Nothing
+changes on other distributions.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="also-in-151">Also in 1.5.1<a href="https://orion-belt.dev/blog/orion-belt-v1-5-1#also-in-151" class="hash-link" aria-label="Direct link to Also in 1.5.1" title="Direct link to Also in 1.5.1" translate="no">​</a></h2>
+<p>Dependency updates, among them the gorilla/websocket fix for GO-2026-6278.
+The <a href="https://github.com/orion-belt-dev/orion-belt/releases/tag/v1.5.1" target="_blank" rel="noopener noreferrer" class="">release notes</a>
+list everything.</p>]]></content:encoded>
+            <category>Self-hosted</category>
+        </item>
         <item>
             <title><![CDATA[Orion Belt v1.5 — SDKs, agent remote management and an AGPL license]]></title>
             <link>https://orion-belt.dev/blog/orion-belt-v1-5</link>
@@ -1354,46 +1387,6 @@ write to. A gateway does this by design.</p>
             <category>PAM</category>
             <category>Architecture</category>
             <category>Ops</category>
-        </item>
-        <item>
-            <title><![CDATA[Shipping deb/rpm/apk packages and a Docker lab for SSH PAM]]></title>
-            <link>https://orion-belt.dev/blog/linux-packages-and-labs</link>
-            <guid>https://orion-belt.dev/blog/linux-packages-and-labs</guid>
-            <pubDate>Fri, 12 Jun 2026 00:00:00 GMT</pubDate>
-            <description><![CDATA[Why Orion Belt ships native Linux packages and a Docker quickstart — two audiences for self-hosted SSH bastion installs, signed repos, and reproducible bug reports.]]></description>
-            <content:encoded><![CDATA[<p>Real gateways want <strong>systemd</strong> and signed package repos. First-time evaluators want <code>docker compose</code> and a browser. Orion Belt ships both on purpose. This post explains the split for operators installing a <strong>self-hosted SSH bastion / PAM</strong> stack.</p>
-<!-- -->
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="two-audiences-two-artifacts">Two audiences, two artifacts<a href="https://orion-belt.dev/blog/linux-packages-and-labs#two-audiences-two-artifacts" class="hash-link" aria-label="Direct link to Two audiences, two artifacts" title="Direct link to Two audiences, two artifacts" translate="no">​</a></h2>
-<table><thead><tr><th>Audience</th><th>Success looks like</th><th>Artifact</th></tr></thead><tbody><tr><td>Security / platform eng</td><td>Survives reboot, upgrades, SELinux</td><td>deb / rpm / apk + docs</td></tr><tr><td>Curious SRE on a laptop</td><td>Recorded session in 10 minutes</td><td><code>docker-quickstart.sh</code></td></tr></tbody></table>
-<p>If you only ship packages, blog traffic bounces. If you only ship Docker, production teams bounce. Document them as <strong>siblings</strong>, not one confused path — see <a class="" href="https://orion-belt.dev/blog/ten-minute-install-path">10-minute install path</a>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-make-packages-is-for">What “make packages” is for<a href="https://orion-belt.dev/blog/linux-packages-and-labs#what-make-packages-is-for" class="hash-link" aria-label="Direct link to What “make packages” is for" title="Direct link to What “make packages” is for" translate="no">​</a></h2>
-<p>From the product repo:</p>
-<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="color:#393A34;background-color:#f6f8fa"><code class="codeBlockLines_e6Vv"><div class="token-line" style="color:#393A34"><span class="token function" style="color:#d73a49">make</span><span class="token plain"> packages</span><br></div><div class="token-line" style="color:#393A34"><span class="token plain"></span><span class="token comment" style="color:#999988;font-style:italic"># optional signed repos with ORION_REQUIRE_SIGN=1</span><br></div></code></pre></div></div>
-<p>You get installable <strong>server</strong>, <strong>agent</strong>, and <strong>tools</strong> packages for common Linux distros. First-run after packages: server YAML, <code>setup</code>, Add agent — covered in <a class="" href="https://orion-belt.dev/docs/quickstart/server">Server setup</a> and the main repo <code>SETUP.md</code> / <code>PACKAGING.md</code>.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="what-docker-is-for">What Docker is for<a href="https://orion-belt.dev/blog/linux-packages-and-labs#what-docker-is-for" class="hash-link" aria-label="Direct link to What Docker is for" title="Direct link to What Docker is for" translate="no">​</a></h2>
-<ul>
-<li class="">Marketing conversion</li>
-<li class="">Reproducing GitHub issues</li>
-<li class="">Homelabs and CI smoke tests</li>
-<li class="">Demoing reverse agents without cloud VMs</li>
-</ul>
-<p>When someone says “agent won’t connect,” asking for a Docker quickstart repro saves days of “what’s in your custom unit file?”</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="signed-repos-and-supply-chain">Signed repos and supply chain<a href="https://orion-belt.dev/blog/linux-packages-and-labs#signed-repos-and-supply-chain" class="hash-link" aria-label="Direct link to Signed repos and supply chain" title="Direct link to Signed repos and supply chain" translate="no">​</a></h2>
-<p>GPG-signed APT/RPM trees matter once you leave the lab. Treat packaging keys like release keys: generate, backup, publish the public key, and document fingerprint verification. The scripts in-tree (<code>gen-packaging-key.sh</code>, <code>publish-repos.sh</code>) exist so you are not inventing that ceremony under pressure.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="faq">FAQ<a href="https://orion-belt.dev/blog/linux-packages-and-labs#faq" class="hash-link" aria-label="Direct link to FAQ" title="Direct link to FAQ" translate="no">​</a></h2>
-<p><strong>Can I run production on Docker Compose?</strong><br>
-<!-- -->You can. Many teams still prefer packages + systemd for host networking and upgrade habits. Compose is not immoral; just own backup/restore for volumes.</p>
-<p><strong>Do agents need the same package format as the server?</strong><br>
-<!-- -->Match the target OS. The UI install script path is built around that.</p>
-<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="related">Related<a href="https://orion-belt.dev/blog/linux-packages-and-labs#related" class="hash-link" aria-label="Direct link to Related" title="Direct link to Related" translate="no">​</a></h2>
-<ul>
-<li class=""><a class="" href="https://orion-belt.dev/docs/quickstart/try-in-10-minutes">Try in 10 minutes</a></li>
-<li class=""><a class="" href="https://orion-belt.dev/blog/lessons-building-self-hosted-pam">Lessons building PAM</a></li>
-<li class=""><a href="https://github.com/orion-belt-dev/orion-belt" target="_blank" rel="noopener noreferrer" class="">GitHub</a></li>
-</ul>]]></content:encoded>
-            <category>Ops</category>
-            <category>Self-hosted</category>
-            <category>Linux</category>
         </item>
     </channel>
 </rss>
